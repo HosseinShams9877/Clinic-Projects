@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "permissions": {
+    "allow": [
+      "Bash(npm run typecheck)",
+      "Bash(npm run lint)",
+      "Bash(npm run test:*)",
+      "Bash(npm run verify)",
+      "Bash(npm run build)",
+      "Bash(npm run dev)",
+      "Bash(npm run worker)",
+      "Bash(npm run db:generate)",
+      "Bash(npm run db:migrate)",
+      "Bash(npm run db:studio)",
+      "Bash(npm run check:files)",
+      "Bash(npm run check:i18n)",
+      "Bash(npm run check:a11y)",
+      "Bash(npx prisma generate)",
+      "Bash(npx prisma migrate status)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Read(**)",
+      "Glob(**)",
+      "Grep(**)"
+    ],
+
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(secrets/**)",
+
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(git remote set-url:*)",
+
+      "Bash(npm run db:reset)",
+      "Bash(npx prisma migrate reset:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(rm -rf:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -fd:*)"
+    ],
+
+    "ask": [
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm run db:migrate:pg)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git restore:*)"
+    ],
+
+    "additionalDirectories": [],
+
+    "defaultMode": "acceptEdits"
+  },
+
+  "env": {
+    "NODE_ENV": "development",
+    "NEXT_TELEMETRY_DISABLED": "1"
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{let c='';try{c=(JSON.parse(s).tool_input||{}).command||''}catch(e){process.exit(0)}const bad=[[/git\\s+push/,'BLOCKED: the repository is local only - no remote, no push. (docs/knowledge/05-conventions.md section 13)'],[/(git\\s+remote\\s+add|git\\s+remote\\s+set-url)/,'BLOCKED: do not configure a git remote. The repository stays local.'],[/(prisma\\s+migrate\\s+reset|npm\\s+run\\s+db:reset)/,'BLOCKED: this destroys data. db:reset is development-only and never runs against PostgreSQL.'],[/git\\s+add[^&|;]*(\\.env[^.]|dev\\.db|\\.sqlite)/,'BLOCKED: never stage secrets, .env files, or database files.']];for(const p of bad){if(p[0].test(c)){console.error(p[1]);process.exit(2)}}}\""
+          }
+        ]
+      }
+    ],
+
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{let f='';try{f=(JSON.parse(s).tool_input||{}).file_path||''}catch(e){process.exit(0)}if(!f||/\\.(md|json|txt)$/.test(f))process.exit(0);const fs=require('fs');try{const t=fs.readFileSync(f,'utf8');if(t.split('\\n').length>1000){const n=t.split('\\n').length;console.error('BLOCKED: '+f+' is '+n+' lines. The limit is 1000 - split it by responsibility, not by taking the bottom half. (docs/knowledge/05-conventions.md section 4)');process.exit(2)}}catch(e){process.exit(0)}})\""
+          }
+        ]
+      }
+    ]
+  },
+
+  "includeCoAuthoredBy": true
+}
