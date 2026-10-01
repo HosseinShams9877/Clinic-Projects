@@ -148,10 +148,22 @@ references, times, dates expressed as `YYYY/MM/DD`, URLs, and email addresses.
 
 Every date shown is Jalali (Solar Hijri). Gregorian is never displayed to a user.
 
-### 6.1 Implementation: in-house, in `src/core/localization`
+### 6.1 Implementation: `date-fns-jalali`, with display owned by `src/core/localization`
 
-The conversion is implemented in this repository. It is a pure, dependency-free,
-deterministic function with no reliance on the runtime's ICU data.
+> **Superseded in part by ADR-0022.** Phase 0 decided the conversion itself would
+> be in-house (ADR-0010). That decision is now **superseded**: the conversion and
+> the calendar arithmetic are provided by **`date-fns-jalali`**, pinned exactly,
+> and `src/core/localization/calendar.ts` owns the week-start and month-grid
+> rules on top of it. **Everything this section says about the *display* layer
+> still holds unchanged** — Persian digits, the `٬` separator, the month and
+> weekday names and the relative-date wording are ours, and a date formatted
+> outside `src/core/localization` remains a finding. §6.2 below is retained as the
+> specification of what the conversion must **do**; it is no longer the
+> specification of what we write. See `01-tech-stack.md` §8.6 and ADR-0022.
+
+The conversion must be **deterministic and independent of the runtime's ICU
+data**. This is the requirement that survives the supersession, and it is why
+`Intl` is still refused:
 
 **Why not `Intl.DateTimeFormat('fa-IR-u-ca-persian')`:** it is convenient but its
 output depends on the ICU version bundled with the Node runtime, which varies
@@ -161,11 +173,17 @@ the clinic's machine is exactly the failure this product cannot afford. `Intl`
 **is** used — as a cross-check inside the test suite, not as the runtime
 implementation.
 
-**Why not a third-party plugin:** the specification rejects jQuery-era plugin
-dependencies. The conversion is a few hundred lines of well-tested pure
-arithmetic, and it is core to every screen in the product.
+**Why not a jQuery-era plugin** (`moment`, `jalali-moment`): large, mutable, and
+loads locale data at runtime. The specification rejects that class of dependency,
+and `date-fns-jalali` is not in it — it is tree-shakeable, immutable and carries
+its own calendar data.
 
 ### 6.2 The algorithm
+
+> **Read as behaviour, not as code to write (ADR-0022).** The shapes and rules
+> below are what the conversion must satisfy, and they are what the tests in §6.3
+> assert. The implementation is `date-fns-jalali`; these names are not functions
+> this repository exports.
 
 Conversion goes through the **Julian Day Number**, which avoids the accumulated
 drift that direct Gregorian↔Jalali arithmetic suffers:

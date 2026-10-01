@@ -444,7 +444,196 @@ per-tenant code-execution mechanism (ADR-0019).
 
 ---
 
+## 16. Client data fetching with React Query
+
+The split between Server Components and React Query is decided by `01-tech-stack.md`
+§8.1.1. This section is how it is applied.
+
+### 16.1 When to use which
+
+**A Server Component** fetches when the data is needed to render the route:
+
+- the initial load of a page or route segment;
+- an SEO-critical surface — all of `public-site`;
+- data that does not change while the user is on the screen — service copy,
+  clinic identity, working hours, the staff list;
+- a value that must be correct at the moment of render and is never re-read — a
+  receipt, a booking confirmation;
+- anything behind a permission check that must run **before** the render.
+
+**React Query** fetches when the user will interact with the data repeatedly
+within one session:
+
+- a list the user filters, sorts, steps through, or works down;
+- data another actor can change while the user is looking at it;
+- polled data — the notification feed;
+- a count that depends on a filter the user is still editing — the campaign
+  preview;
+- anything requiring an optimistic update — a reschedule, a contact result, a
+  payment.
+
+The five surfaces that qualify are named in `01-tech-stack.md` §8.1: the
+appointment day grid, the cycle contact list, the debt list, the campaign builder
+preview, and the notification feed.
+
+**A surface never uses both for the same data.** Seeding a React Query cache from
+a Server Component is a finding: it creates two sources of truth for one value and
+the hydration mismatch arrives later, in production.
+
+**Reads only.** React Query fetches. **Writes go through Server Actions**
+(§6) — there is no `useMutation` that posts to a bespoke API route, and a
+mutation hook exists to wrap a Server Action call, to invalidate keys, and to
+roll back an optimistic update. Nothing else.
+
+### 16.2 Query keys are tenant-scoped, always
+
+Every key is built by a helper in `src/core/query/keys.ts`. **No hook writes a key
+array by hand**, and no key omits the tenant.
+
+```ts
+// src/core/query/keys.ts — the only place a key is constructed
+export const queryKeys = {
+  appointments: {
+    all:  (tenantId: TenantId) => ['t', tenantId, 'appointments'] as const,
+    day:  (tenantId: TenantId, doctorId: UserId, localDate: LocalDate) =>
+            [...queryKeys.appointments.all(tenantId), 'day', doctorId, localDate] as const,
+  },
+  cycles: {
+    contactList: (tenantId: TenantId, filters: ContactListFilters) =>
+            ['t', tenantId, 'cycles', 'contact-list', filters] as const,
+  },
+} as const
+```
+
+The rules:
+
+1. **`tenantId` is the second element of every key**, immediately after a literal
+   `'t'` marker. It is not optional and there is no variant without it.
+2. **`tenantId` comes from the server-resolved context**, never from a component
+   prop, a URL, or client state.
+3. **Keys are hierarchical** — `['t', tenantId, 'appointments', 'day', …]` — so an
+   invalidation can target one day, all days, or the whole module by prefix.
+4. **Filters and pagination are part of the key, as a stable object.** An object
+   literal built inline at every render changes identity and defeats the cache;
+   the helper takes the filter object and serialises it deterministically.
+5. **Keys never contain a customer id, a name, or a mobile number.** A key is
+   observable in devtools and in error reports. Identifiers only.
+
+**Why tenant-scoping is not a formality.** Two tenants share one browser only in
+the operator's case, but a single tenant's user switching tenancy — a visiting
+doctor with two memberships (`02-architecture.md` §2) — is ordinary. A key
+without `tenantId` serves tenant A's cached rows to tenant B from memory, with no
+query executed and no RLS predicate evaluated. **This is a cross-tenant leak that
+the database cannot catch**, because the database is never asked. It is the single
+most important rule in this section, and it is why the key builder is in `core`
+rather than in each module.
+
+### 16.3 Invalidation
+
+**Invalidation is declared by the mutation that changes the data**, not by a timer
+and not by a manual refetch in a component.
+
+| Change | Invalidates |
+|---|---|
+| A reschedule or cancel | that doctor's affected days, and the appointment's own key |
+| A payment recorded | the debt list, the customer's payment key, the affected buckets |
+| A contact result recorded | the cycle contact list, and that cycle |
+| A campaign filter edited | only the preview count key — nothing else |
+| A service price changed | the service key and the `priceAtBooking`-dependent views, never a historical payment |
+
+Rules:
+
+- **Invalidate by prefix, as narrowly as correctness allows.** Invalidating
+  `['t', tenantId]` is correct and wasteful; it is the fallback, not the default.
+- **`staleTime` is set deliberately per query**, not globally to zero. A day grid
+  the receptionist is working in has a short `staleTime`; a service list has a
+  long one. A blanket `staleTime: 0` refetches on every focus and removes most of
+  the benefit of having the cache.
+- **No polling as a substitute for invalidation.** The notification feed polls
+  because it has no mutation to key off. A list that could be invalidated and is
+  instead polled is a finding.
+- **Cross-module invalidation is expressed in keys, not by importing another
+  module's hook.** A `payments` mutation invalidates a `debts` key through the
+  shared key helper in `core`, which is legal because `core` is domain-free.
+
+### 16.4 Optimistic updates
+
+An optimistic update is allowed only when **all five** of these hold:
+
+1. **The change is a single, local, reversible write.** Moving an appointment in
+   the day grid qualifies. A campaign dispatch does not.
+2. **The server is the authority and the response replaces the optimistic value.**
+   On success the cache is updated with the server's answer, not left at the
+   guess — the server may have recorded a different time, id, or price.
+3. **A rollback is implemented, not assumed.** `onError` restores the exact
+   previous cache snapshot, captured in `onMutate`, and then invalidates so the
+   next read is authoritative. A missing rollback is a blocking finding.
+4. **The user is told.** A silent rollback leaves the screen showing one thing and
+   the database holding another. The failure surfaces as a Persian message
+   (`07-localization.md` §8), naming what did not happen.
+5. **Concurrency is handled.** The previous snapshot is cancelled (`cancelQueries`)
+   before the optimistic write, so an in-flight refetch cannot overwrite it.
+
+**Optimistic updates are tested on both paths** — success *and* failure/rollback
+(`10-testing-strategy.md` §16.4). A test that only covers the happy path does not
+cover the half of this feature that runs when something is wrong.
+
+### 16.5 Error and loading states
+
+- **Loading** uses the design system's own states (`08-ui-design-system.md` §22
+  empty state, and the table/skeleton conventions), never a bare spinner in the
+  middle of a page. A first load and a background refetch are **different states**:
+  a refetch does not blank the screen.
+- **Errors are Persian and specific** (§7). «فهرست نوبتهای امروز دریافت نشد» and a
+  retry — not «خطا» and not an internal message.
+- **Internal detail never reaches the UI** (§7). A query error's status, URL and
+  payload go to the logger (§11) with the correlation id.
+- **A failed query does not render an empty list.** "No data" and "could not
+  load" look identical to a user and are completely different facts; rendering an
+  empty state for a failure tells a receptionist the day is clear when it is not.
+- **`retry` is bounded** — a small number of attempts with backoff — and never
+  applied to a 4xx, which will not succeed on retry.
+- **Every query has an error boundary above it** that renders the fallback for the
+  surface, not the whole page.
+
+---
+
+## 17. UI component rules
+
+**Every component is built from the design system.** `08-ui-design-system.md`
+defines each component and each of its states. A component that is not in that
+document is a new component, and a new component must look as though it belongs
+to the same system (§45).
+
+| Rule | |
+|---|---|
+| **Every component is built from the design system.** | Its colours, radii, shadows, spacing and font sizes come from the `:root` token block (§46). No component invents a value. |
+| **Headless primitives are allowed for behaviour only.** | Radix and cmdk supply focus management, ARIA wiring and keyboard interaction. They supply no appearance. |
+| **No styled component library.** | shadcn/ui, Material UI, Chakra, Ant Design and every equivalent are forbidden (`01-tech-stack.md` §8.8, ADR-0021). No component-framework theme may override a token. |
+| **No icon font.** | Icons are Lucide components or inline SVG (`01-tech-stack.md` §8.2). A `@font-face` for an icon set is a finding. |
+| **A new primitive is added to `01-tech-stack.md` §8 before it is used.** | A dependency added by a component is a stack decision, and a stack decision is recorded, not discovered in a diff. |
+| **Every component has a story or a test exercising every state the design system defines.** | Including hover, focus-visible, disabled, loading, error and empty (`08-ui-design-system.md` §A8). A component with only its default state is incomplete, not minimal. |
+| **No component imports `@radix-ui/*` or `cmdk` directly.** | They are wrapped in `src/core/components/**` and reachable only through that wrapper, so the token styling and the Persian-aware filter cannot be bypassed. |
+| **Every component that renders a number renders Persian digits.** | Through the display primitives (`07-localization.md` §4), never by hand. |
+| **Every interactive element has a visible focus state.** | `focus-visible` is an accessibility requirement, not a nicety. |
+
+**The wrapper obligation.** A wrapper around a headless primitive is not a
+pass-through. It owns the design system's styling for that component, the Persian
+labels and `aria-label`s, the RTL behaviour, and — for cmdk — the Persian-aware
+normalisation filter (`01-tech-stack.md` §8.4). A wrapper that forwards arbitrary
+props which could defeat any of those is a finding.
+
+**Keyboard and focus are tested, not assumed.** Every headless wrapper carries a
+test for focus trapping, focus restoration, escape handling and keyboard
+navigation (`10-testing-strategy.md` §17). These are precisely the behaviours a
+headless primitive is adopted for, so they are precisely the behaviours that must
+be proven — an untested wrapper around a tested library proves nothing about the
+component the product ships.
+
+---
+
 *Related: `02-architecture.md` §10 (module and import rules) and §13 (the
 override mechanism), `09-security.md` §18 (override isolation),
 `07-localization.md` (the localization layer), `10-testing-strategy.md` (the
-test obligations), `08-ui-design-system.md` (the token rule).*
+test obligations), `08-ui-design-system.md` (the token rule),
+`01-tech-stack.md` §8 (the UI and data libraries).*

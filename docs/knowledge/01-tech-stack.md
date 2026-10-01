@@ -16,12 +16,18 @@
 | Database (production / on-premise) | **PostgreSQL** |
 | UI | **React Server Components + Client Components**, CSS variables from the design system |
 | Styling | CSS Modules + the token block in `docs/knowledge/08-ui-design-system.md` |
+| Client data fetching | **TanStack Query (React Query) v5** — see §8.1 |
+| Icons | **Lucide (`lucide-react`)** — outline only, stroke overridden to 1.7 — see §8.2 |
+| Headless UI primitives | **Radix UI** — behaviour and accessibility only — see §8.3 |
+| Searchable select / command palette | **cmdk** — see §8.4 |
+| Forms | **React Hook Form**, paired with Zod — see §8.5 |
+| Animation | **Framer Motion**, used sparingly — see §8.7 |
 | Background jobs | **A separate lightweight Node.js worker process** (see §4) |
 | Authentication | Session-based, httpOnly cookie, `next-auth` (Credentials + OTP) |
 | Validation | **Zod**, shared between client and server |
 | Tests | **Vitest** (unit/integration), **Playwright** (e2e/a11y/responsive) |
 | Fonts | **Vazirmatn**, self-hosted with `next/font/local` |
-| Dates | **Jalali**, computed in-house in `src/core` (no jQuery-era plugins) |
+| Dates | **Jalali.** Arithmetic through **`date-fns-jalali`** (pinned); **all display formatting** through `src/core/localization` — see §8.6 |
 
 **Decision: Option B — Next.js full-stack — is adopted, with exactly one
 exception: a separate background worker process.**
@@ -197,11 +203,234 @@ Adopting Option B creates these standing obligations. They are checks in
 - Next.js, React, Prisma, TypeScript: pinned exactly (no `^`) in
   `package.json`; upgraded deliberately, one dependency at a time, with the
   full test suite green.
+- **Every library in §8 is pinned exactly**, for the same reason: a build must be
+  reproducible and a compromised patch release must not arrive silently
+  (`09-security.md` §15). This includes TanStack Query, Lucide, the Radix
+  primitives, cmdk, React Hook Form, Zod, date-fns-jalali and Framer Motion.
+- **Lucide is additionally pinned by stroke width**, not only by version: the
+  wrapper in §8.2 asserts `stroke-width: 1.7`, so a Lucide minor release that
+  changed its default would not silently change the product's icon language.
 - Vazirmatn: pinned version, self-hosted, no Google Fonts CDN request at
   runtime (see `07-localization.md`).
 
 ---
 
+## 8. UI and data libraries
+
+> **The rule.** The design system in `docs/knowledge/08-ui-design-system.md`
+> defines every component and every state. Components are built from that
+> document. Headless primitives (Radix, cmdk) provide **behaviour only**. **No
+> styled component library is used. No component framework's theme is allowed to
+> override the design system tokens.**
+
+Every library below is chosen to satisfy one of two constraints: it does work the
+product would otherwise rewrite and get subtly wrong (behaviour, accessibility,
+cache invalidation, calendar arithmetic), or it supplies nothing at all and
+therefore cannot disagree with the design system. **A library that ships a visual
+opinion is disqualified**, which is why shadcn/ui, Material UI, Chakra and Ant
+Design are rejected in ADR-0021.
+
+Every entry here is **pinned exactly** (§7), and **a new primitive is added to
+this document before it is used in a component** (`05-conventions.md` §17).
+
+### 8.1 TanStack Query (React Query) v5 — client-side data fetching
+
+**Used for:** interactive surfaces, client-side caching, optimistic updates,
+background refetching, polling, and dependent queries.
+
+**Not used for:** initial page load, SEO-critical pages, and data that does not
+change during the session. Those are Server Components — see §8.1.1.
+
+**The surfaces that need it** — five, and they are the reason the library is in
+the stack at all:
+
+| Surface | Why it needs a client cache |
+|---|---|
+| **The appointment day grid** | The receptionist moves between days and doctors continuously. Every move must not be a full server round trip, and a reschedule must appear instantly. |
+| **The cycle contact list** | A secretary works down it, recording a contact result per row. Each result must update the row in place and leave the list's counts correct, without a refetch per row. |
+| **The debt list** | Bucket counts and the filtered list change as payments are recorded elsewhere in the panel. The list must be invalidated by the mutation that changes it, not reloaded on a timer. |
+| **The campaign builder preview** | The audience count updates as the filter changes. This is the definition of a dependent query, and it is debounced. |
+| **The notification feed** | Polls, and must be able to refetch on focus so a manager returning to the tab sees the current state. |
+
+These are the surfaces where a Server-Components-only approach produces either a
+full-page reload per interaction or a hand-rolled client cache. Both are worse
+than a maintained one.
+
+#### 8.1.1 Server Components vs React Query
+
+The two are not alternatives and neither replaces the other. The split is by
+**what the data is for**, not by where it comes from:
+
+| Use a **Server Component** | Use **React Query** |
+|---|---|
+| The initial load of a page or a route segment | A surface the user interacts with repeatedly within one session |
+| SEO-critical pages — all 8 of `public-site` | A list the user filters, sorts, or steps through without navigating |
+| Data that does not change during the session — service copy, clinic identity, working hours | Data another actor can change while the user is looking at it |
+| Data that must be correct at render time and is never re-read — a receipt, a confirmation | Polled data — the notification feed |
+| Anything reachable only after a permission check that must happen before render | A count that depends on a filter the user is editing — the campaign preview |
+| | Anything requiring an optimistic update — a reschedule, a contact result, a payment |
+
+**The obligation this creates** is stated in `05-conventions.md` §16: the two
+patterns must stay clearly separated, and a surface does not use both for the
+same data. A Server Component that seeds a React Query cache is a finding, not a
+convenience — it produces two sources of truth for one value.
+
+### 8.2 Lucide (`lucide-react`) — the icon library
+
+**Outline only, `fill: none`, `stroke: currentColor`, rounded linecap and
+linejoin — matching `08-ui-design-system.md` §42 exactly.**
+
+**The stroke width is overridden.** Lucide's default is `stroke-width: 2`; the
+design system requires **1.7** (`08-ui-design-system.md` §42 and rule A7). Every
+icon is therefore rendered through a single wrapper in
+`src/core/components/icons` that sets `strokeWidth={1.7}`, `strokeLinecap="round"`,
+`strokeLinejoin="round"`, `fill="none"`, and a size from the design system's size
+scale (14 / 15–16 / 17 / 19 / 20 / 22–30). **A Lucide icon imported directly into
+a component is a finding** — it would carry the default stroke and break the icon
+language in a way that is visible but easy to miss in review.
+
+| Design-system requirement | How Lucide satisfies it |
+|---|---|
+| Outline, `fill: none` | Lucide's default; asserted by the wrapper |
+| `stroke-width: 1.7` | **Overridden** from Lucide's default of 2, in the wrapper only |
+| Rounded linecap and linejoin | Lucide's default |
+| Single colour via `currentColor` | Lucide's default; the wrapper adds no colour |
+| **No filled, 3D, or multicolour icons** | Enforced by the wrapper's typed props — it exposes no `fill` or colour override |
+| Inline SVG, not an icon font | Lucide renders React components producing inline `<svg>` |
+
+**No icon font.** Rejected in ADR-0021: an icon font is a blocking network
+request, cannot be tree-shaken, renders as text before the font loads, and cannot
+carry per-icon stroke properties.
+
+**Direction-aware mirroring** (`07-localization.md` §3.3) is applied by the
+wrapper: direction icons (arrow, chevron, back, next) mirror in RTL; object icons
+(phone, camera, clock face) never do.
+
+### 8.3 Radix UI — headless behaviour primitives
+
+**Used for:** dialog, popover, select, tooltip, dropdown menu, tabs — the
+components whose *behaviour* is genuinely hard to get right: focus trapping,
+focus restoration, escape handling, collision-aware positioning, typeahead,
+`aria-*` wiring, and keyboard navigation.
+
+**No styling comes from Radix.** Every Radix primitive is unstyled by design;
+each is wrapped in `src/core/components/**`, given a CSS Module that consumes
+only design-system tokens, and exported as the product's own component. Nothing
+in `src/modules/**` or `src/app/**` imports `@radix-ui/*` directly.
+
+**Only the primitives actually needed are installed** — not the full set, and not
+a package that bundles one. Each installed package is the single primitive it
+provides.
+
+**This is not a component library.** Radix supplies the behaviour; the design
+system supplies the appearance; `08-ui-design-system.md` §21 defines the modal's
+560px max-width and 24px radius, and that is what the wrapper implements — not a
+Radix default.
+
+### 8.4 cmdk — the searchable select
+
+**The product's searchable select is built on top of `cmdk`.** The design system
+defines the control; cmdk supplies the filtering model, the keyboard interaction,
+and the ARIA combobox wiring.
+
+**Persian-aware search is added by us, on top of it.** cmdk's default filter is a
+substring match on the raw string, which is wrong for this product in three ways
+that `src/core/localization/normalize.ts` corrects before the filter runs:
+
+- **Persian and Arabic letter variants.** A user typing `ي` (Arabic Yeh) or `ك`
+  (Arabic Kaf) must find a record stored with `ی` and `ک`. Brand-name search
+  forms actually produce the Arabic variants on some keyboards.
+- **ZWNJ.** «سهشنبه» and «سه شنبه» are the same word to a reader and different
+  strings to a filter.
+- **Digits.** A user typing `۱۲۳` must find `123`. Typing either must work.
+
+cmdk is **headless**; all styling comes from the design system tokens. The
+component does not accept a custom `filter` prop from a module — the
+Persian-aware filter is fixed inside the wrapper, so no caller can regress it.
+
+### 8.5 React Hook Form and Zod — forms and validation
+
+**React Hook Form is used for all forms**, paired with **Zod** for validation.
+The Zod schema is defined once and **shared between the client and the server**,
+so a form and its handler cannot disagree about what is valid.
+
+- The client-side validation is a **convenience**: it gives the user immediate,
+  Persian feedback. It is never the enforcement.
+- **The server always re-validates** the same schema. A Server Action that trusts
+  client validation is a defect (`05-conventions.md` §5).
+- Schemas live in the module's `validation/` folder and are resolved through
+  `@hookform/resolvers/zod`.
+- **No input schema contains `tenantId`, `clinicId`, `userId` or `role`**
+  (`05-conventions.md` §5). They are not fields.
+- The shared Persian form shell (`src/core/components/form`) wraps both: field
+  layout, the Persian label, the error slot, and RTL are defined once, and a
+  module's form composes it rather than restating it.
+
+Zod appears in the summary table under **Validation** because that is its primary
+role in the stack; it is described here because its client-half obligation is a UI
+concern.
+
+### 8.6 date-fns-jalali — Jalali calendar arithmetic
+
+**Used for conversion and arithmetic only.** Every date the product *displays* is
+formatted by `src/core/localization`, so that Persian digits, the `٬` separator,
+the month and weekday names, and the relative-date wording are identical on every
+surface.
+
+| Concern | Owner |
+|---|---|
+| Gregorian ↔ Jalali conversion, day/month/year arithmetic, month grids, week ranges | **`date-fns-jalali`**, pinned |
+| Rendering a date as `۱۴۰۵/۰۶/۲۹` or «۲۹ شهریور ۱۴۰۵» | **`src/core/localization/format.ts`** |
+| Persian digits and separators | **`src/core/localization/digits.ts`** |
+| The week starting on **شنبه** | **`src/core/localization/calendar.ts`** |
+
+**This supersedes ADR-0010.** Phase 0 decided the conversion would be in-house,
+rejecting both `Intl` (ICU data varies by runtime) and third-party plugins. The
+decision is revised in **ADR-0022**: `date-fns-jalali` is a pinned, pure-JavaScript,
+tree-shakeable implementation with its own calendar data, so it does not carry
+`Intl`'s runtime-dependence, and it is not the jQuery-era plugin class ADR-0010
+rejected. ADR-0010's requirement that the *display* layer be ours is retained and
+is the reason the table above splits conversion from formatting.
+
+ADR-0010's test obligations are retained in full (`10-testing-strategy.md` §3.5):
+the round-trip property test across 200 years, the anchor vectors, the explicit
+۱۳۹۰–۱۴۵۰ supported range, and the `Intl` cross-check — the cross-check now
+guarding the library's output rather than our own arithmetic.
+
+### 8.7 Framer Motion — animation
+
+**Used sparingly**, in exactly three places:
+
+- modal open and close
+- popup transitions (the three-step booking popup)
+- list reordering (a day-grid row moving after a reschedule)
+
+**Never used for decorative motion.** The design system specifies a calm,
+premium feel (`08-ui-design-system.md` §44); an animation that draws attention to
+itself is a finding against it. Two further constraints:
+
+- **Animation never carries meaning.** A state change must be legible with motion
+  disabled, which is also required for `prefers-reduced-motion` — the wrapper
+  honours it, and a component that animates without honouring it is a finding.
+- **Animation never delays data.** A transition wraps a state change; it does not
+  gate the render of fetched content.
+
+### 8.8 What is deliberately absent
+
+| Not used | Why |
+|---|---|
+| shadcn/ui | Its default theme would override the design system tokens. Adapting it costs more than building the component. ADR-0021. |
+| Material UI, Chakra, Ant Design | Heavy, opinionated, and the wrong visual language for a Persian clinic product. ADR-0021. |
+| Any icon font | Blocking request, no tree-shaking, no per-icon stroke control. §8.2. |
+| A CSS-in-JS runtime | CSS Modules and CSS variables already express the design system; a runtime adds cost and a hydration surface. |
+| `moment` / `jalali-moment` | Deprecated, large, mutable, and locale data loaded at runtime. Superseded by §8.6. |
+| A state-management library (Redux, Zustand) | There is no global client state to manage. Server data belongs in React Query; everything else is local to a component. |
+
+---
+
 *Related: `02-architecture.md` (multi-tenant and module architecture),
+`05-conventions.md` §16 (client data fetching and the UI component rules),
+`08-ui-design-system.md` (the components these libraries serve),
 `09-security.md` (isolation and enforcement), `roadmap/decisions.md`
-(ADR-0001 the stack, ADR-0002 the worker boundary).*
+(ADR-0001 the stack, ADR-0002 the worker boundary, ADR-0020 React Query,
+ADR-0021 headless primitives, ADR-0022 date-fns-jalali).*

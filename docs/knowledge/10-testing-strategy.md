@@ -533,9 +533,118 @@ Persian localization — against PostgreSQL.
 
 ---
 
+## 16. Client data fetching tests (React Query)
+
+The five surfaces that use React Query (`01-tech-stack.md` §8.1) are the most
+interactive in the product, and every one of them holds data that another actor
+can change. Their hooks are tested directly, with a mock client — never through a
+running browser, and never against the network.
+
+### 16.1 The test harness
+
+Every hook test renders against a **fresh `QueryClient` per test**, through a
+shared `renderHookWithClient` helper in `src/core/query/tests/`:
+
+```ts
+// The three settings that make a hook test deterministic.
+new QueryClient({
+  defaultOptions: {
+    queries: { retry: false, gcTime: 0, staleTime: 0 },
+    mutations: { retry: false },
+  },
+})
+```
+
+- **`retry: false`** — with the production retry count, an error test takes
+  seconds of backoff and can pass by eventually succeeding.
+- **`gcTime: 0`** — no cache survives the test, so test order cannot matter.
+- **A fresh client per test** — a shared client leaks cached rows between tests,
+  which is exactly the failure mode the tenant-scoped key rule exists to prevent,
+  and a shared client would hide it.
+
+**No network in a unit test.** The Server Action or query function is a `vi.fn()`.
+A test that reaches a real endpoint is an integration test and belongs in `e2e/`.
+
+### 16.2 The mandatory cases per hook
+
+Each hook has all six. A hook with only the first three is untested:
+
+| # | Case | The assertion |
+|---|---|---|
+| 1 | **Loading** | The loading state is set before the promise settles, and the surface renders the design system's loading state — not a blank frame. |
+| 2 | **Success** | The data is returned, shaped as the component expects. |
+| 3 | **Error** | The error surfaces as the Persian message, not as a raw status or a stack. |
+| 4 | **Empty is not error** | A successful empty result renders the **empty** state; a failure renders the **error** state. These are different states and a hook that collapses them is a finding — it tells a receptionist the day is clear when the request failed. |
+| 5 | **Refetch does not blank the screen** | A background refetch keeps the previous data rendered while it runs. |
+| 6 | **No retry on a 4xx** | A client error is not retried; a 5xx is, within the bound. |
+
+### 16.3 The tenant-scoped key test
+
+**One test enumerates every key builder in `src/core/query/keys.ts` and asserts
+the tenant is present.** It is a single test guarding a whole class of bug, and it
+is written as a property over the exported builders rather than one assertion per
+key — so a key builder added later is covered without anyone remembering to add a
+case.
+
+Alongside it:
+
+- **A cache-isolation test:** with a client holding data for tenant A, a hook
+  rendered for tenant B **does not** return A's rows before its own query
+  resolves. This is the client-side mirror of the cross-tenant suite in §6.2 — the
+  database cannot catch this leak because no query is made.
+- **A test that no key contains a name, a mobile number, or a customer id**
+  (`05-conventions.md` §16.2 rule 5). Keys are observable in devtools and in error
+  reports.
+
+### 16.4 Optimistic updates: success **and** rollback
+
+**An optimistic update is tested on both paths. The success test alone is half a
+test**, and it is the half that runs when nothing is wrong.
+
+| Test | What it asserts |
+|---|---|
+| **Success** | The cache shows the optimistic value immediately, before the mutation resolves; then the **server's** value replaces it — not the guess. A hook that leaves the optimistic value in place after success is a finding, because the server may have recorded a different time, id or price. |
+| **Rollback** | The cache is restored to the **exact** pre-mutation snapshot on failure, the user sees the Persian failure message, and an invalidation follows so the next read is authoritative. |
+| **Cancel-then-write** | An in-flight refetch is cancelled before the optimistic write, so it cannot overwrite the optimistic value mid-flight. |
+| **Failure with a concurrent change** | The rollback does not discard a change another part of the cache received while the mutation was in flight. |
+
+A mutation that mutates the cache optimistically and has **no** `onError`
+rollback fails the suite. That is a blocking finding, not a coverage gap.
+
+### 16.5 Invalidation tests
+
+For each mutation, the test asserts **which keys were invalidated** — not merely
+that a refetch happened. The invalidation map in `05-conventions.md` §16.3 is the
+expected answer, and the assertion names the keys, so an over-broad invalidation
+is caught as well as a missing one.
+
+---
+
+## 17. Headless primitive wrapper tests
+
+Every wrapper around a Radix primitive or cmdk carries its own interaction tests
+(`05-conventions.md` §17). A headless library is adopted *for* these behaviours,
+so an untested wrapper proves nothing about the component the product ships — it
+proves something about the library, which is not what a clinic uses.
+
+| Behaviour | Test |
+|---|---|
+| **Keyboard navigation** | Arrow keys move through the items; Home/End reach the ends; Enter selects; the pattern matches the ARIA authoring practice for that role. |
+| **Focus trap** | Opening a modal moves focus inside it, and Tab cycles within it without escaping to the page behind. |
+| **Focus restoration** | Closing restores focus to the element that opened it — not to `<body>`. |
+| **Escape** | Escape closes the surface, and does not close a nested one out of order. |
+| **RTL keyboard direction** | Arrow keys move in the direction the layout reads: in RTL, the "next" arrow is the inline-end one. A wrapper that only works left-to-right is a finding (`07-localization.md` §3). |
+| **Persian-aware filtering** | In the searchable select: `ي`/`ك` find `ی`/`ک`; ZWNJ-insensitive matching works; `۱۲۳` finds `123`; and a caller cannot override the filter. |
+| **Focus is visible** | `focus-visible` renders the design system's focus ring on every interactive element. |
+| **Accessible names are Persian** | Every `aria-label`, every field label, and every `alt` is a catalog string (`07-localization.md` §8). An English `aria-label` fails. |
+| **axe per state** | The wrapper is scanned with axe in **every** state the design system defines — default, hover, focus, disabled, loading, error, empty — not only in its default state. |
+
+---
+
 *Related: `09-security.md` (what the isolation suites protect),
 `04-roles-permissions.md` (the matrix the suite verifies),
 `07-localization.md` §9 (the localization assertions),
 `08-ui-design-system.md` (§9 the states, §43 the breakpoints),
 `03-data-model.md` (the indexes the query tests assume),
+`01-tech-stack.md` §8 (the libraries these suites cover),
 `roadmap/phases.md` (which phase owns which suite).*
