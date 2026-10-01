@@ -1,0 +1,321 @@
+/* ==========================================================================
+   panel.css
+   شل مشترک پنل‌ها: سایدبار، تاپ‌بار، ناحیه محتوا
+   دو تم سایدبار: روشن (.app) و تیره (.app.dark-nav)
+   ========================================================================== */
+
+.app { display: flex; min-height: 100vh; }
+
+/* --------------------------------------------------------------------------
+   SIDEBAR
+   -------------------------------------------------------------------------- */
+.sidebar {
+  width: var(--sidebar-w);
+  flex: none;
+  background: var(--surface);
+  border-inline-start: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh;
+  z-index: 40;
+}
+
+/* بلوک برند سایدبار — عمداً محدود به سایدبار، وگرنه کلاس «brand» روی
+   badge و kpi هم می‌نشیند و آن‌ها را تمام‌عرض می‌کند. */
+.sidebar > .brand {
+  padding: var(--s-6) var(--s-5) var(--s-5);
+  display: flex; align-items: center; gap: var(--s-3);
+}
+.brand-mark {
+  width: 38px; height: 38px; border-radius: var(--r-md);
+  display: grid; place-items: center; flex: none;
+  background: var(--brand-50); color: var(--brand);
+}
+.brand-mark svg { width: 22px; height: 22px; }
+.brand-name { font-size: var(--fs-xl); font-weight: 800; letter-spacing: -.5px; line-height: 1.2; }
+.brand-sub { font-size: var(--fs-xs); color: var(--ink-3); }
+
+.nav { flex: 1; overflow-y: auto; padding: var(--s-2) var(--s-3) var(--s-5); }
+.nav-label {
+  font-size: var(--fs-xs); color: var(--ink-3); font-weight: 600;
+  padding: var(--s-4) var(--s-3) var(--s-2);
+}
+.nav a {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 10px var(--s-3);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2);
+  margin-bottom: 2px;
+  transition: .16s;
+}
+.nav a svg { width: 19px; height: 19px; flex: none; opacity: .8; }
+.nav a:hover { background: var(--surface-sunken); color: var(--ink); }
+.nav a.active { background: var(--brand-50); color: var(--brand-700); }
+.nav a.active svg { opacity: 1; color: var(--brand); }
+.nav a .count {
+  margin-inline-start: auto;
+  background: var(--danger); color: #fff;
+  font-size: 10.5px; font-weight: 700;
+  min-width: 19px; height: 19px; padding: 0 5px;
+  border-radius: var(--r-pill); display: grid; place-items: center;
+}
+
+.sidebar-foot { padding: var(--s-5); border-top: 1px solid var(--line); }
+.sidebar-slogan { text-align: center; color: var(--brand-300); font-size: var(--fs-sm); line-height: 1.9; }
+.sidebar-slogan b { display: block; color: var(--brand); font-size: var(--fs-md); }
+
+/* --- تم تیره سایدبار (پنل منشی) ------------------------------------------ */
+.app.dark-nav .sidebar { background: var(--sidebar-dark); border-inline-start-color: rgba(255,255,255,.07); }
+.app.dark-nav .brand-mark { background: rgba(255,255,255,.08); color: var(--brand-300); }
+.app.dark-nav .brand-name { color: #fff; }
+.app.dark-nav .brand-sub { color: rgba(255,255,255,.45); }
+.app.dark-nav .nav-label { color: rgba(255,255,255,.35); }
+.app.dark-nav .nav a { color: rgba(255,255,255,.66); }
+.app.dark-nav .nav a:hover { background: rgba(255,255,255,.06); color: #fff; }
+.app.dark-nav .nav a.active { background: rgba(255,255,255,.10); color: #fff; }
+.app.dark-nav .nav a.active svg { color: var(--brand-300); }
+.app.dark-nav .sidebar-foot { border-top-color: rgba(255,255,255,.08); }
+.app.dark-nav .sidebar-foot .nav a { margin: 0; }
+
+/* --------------------------------------------------------------------------
+   MAIN
+   -------------------------------------------------------------------------- */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.topbar {
+  height: var(--topbar-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: var(--s-4);
+  padding: 0 var(--s-6);
+  position: sticky; top: 0; z-index: 30;
+}
+.topbar .search { flex: 1; max-width: 560px; }
+.topbar .search .input { border-radius: var(--r-pill); padding-block: 10px; }
+
+.icon-btn {
+  position: relative;
+  width: 38px; height: 38px; border-radius: var(--r-sm);
+  display: grid; place-items: center; color: var(--ink-2);
+  transition: .16s;
+}
+.icon-btn:hover { background: var(--surface-sunken); color: var(--ink); }
+.icon-btn svg { width: 19px; height: 19px; }
+.icon-btn .dot {
+  position: absolute; top: 4px; inset-inline-end: 4px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  background: var(--danger); color: #fff;
+  font-size: 10px; font-weight: 700;
+  border-radius: var(--r-pill); display: grid; place-items: center;
+  border: 2px solid var(--surface);
+}
+
+.userchip {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 5px 6px 5px var(--s-3); border-radius: var(--r-pill);
+  transition: .16s;
+}
+.userchip:hover { background: var(--surface-sunken); }
+.userchip .u-name { font-size: var(--fs-sm); font-weight: 700; line-height: 1.4; }
+.userchip .u-role { font-size: var(--fs-xs); color: var(--ink-3); line-height: 1.3; }
+
+.datechip {
+  display: flex; align-items: center; gap: var(--s-2);
+  font-size: var(--fs-sm); color: var(--ink-2); font-weight: 600;
+  padding: 8px var(--s-3); border-radius: var(--r-sm); background: var(--surface-sunken);
+}
+.datechip svg { width: 17px; height: 17px; color: var(--ink-3); }
+
+/* --------------------------------------------------------------------------
+   CONTENT
+   -------------------------------------------------------------------------- */
+.content { padding: var(--s-6); flex: 1; }
+.page-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--s-4); flex-wrap: wrap; margin-bottom: var(--s-6);
+}
+.page-head h1 { font-size: var(--fs-2xl); }
+.page-head .sub { font-size: var(--fs-sm); color: var(--ink-3); margin-top: 2px; }
+
+.crumb { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); color: var(--ink-3); margin-bottom: var(--s-2); }
+.crumb a:hover { color: var(--brand); }
+
+.toolbar {
+  display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;
+  margin-bottom: var(--s-4);
+}
+.toolbar .search { min-width: 240px; flex: 1; max-width: 340px; }
+.toolbar .select { width: auto; min-width: 150px; }
+
+/* دکمه عملیات داخل جدول */
+.table .icon-btn { background: var(--brand-50); color: var(--brand-700); width: 34px; height: 30px; }
+.table .icon-btn:hover { background: var(--brand-100); }
+
+/* filter chips */
+.chips { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.chips button {
+  padding: 7px 15px; border-radius: var(--r-pill);
+  font-size: var(--fs-sm); font-weight: 600;
+  background: var(--surface); border: 1px solid var(--line); color: var(--ink-2);
+  transition: .16s;
+}
+.chips button:hover { border-color: var(--brand-300); color: var(--brand-700); }
+.chips button.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.chips button .n { opacity: .7; font-size: var(--fs-xs); }
+
+/* pagination */
+.pager { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.pager .pages { display: flex; gap: var(--s-1); }
+.pager .pages button {
+  width: 34px; height: 34px; border-radius: var(--r-sm);
+  font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2);
+  border: 1px solid var(--line); background: var(--surface);
+}
+.pager .pages button.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+/* calendar strip / day grid */
+.cal-head { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s-2); margin-bottom: var(--s-2); }
+.cal-head div { text-align: center; font-size: var(--fs-xs); color: var(--ink-3); font-weight: 600; padding: 6px 0; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s-2); }
+.cal .day {
+  min-height: 62px; padding: 8px 4px; border-radius: var(--r-sm); border: 1px solid var(--line);
+  background: var(--surface); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px;
+  font-size: var(--fs-sm); font-weight: 600; transition: .16s;
+}
+.cal .day:hover { border-color: var(--brand-300); background: var(--brand-50); }
+.cal .day.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.cal .day.off { color: var(--ink-3); background: var(--surface-sunken); border-color: transparent; }
+.cal .day .free { font-size: 10px; font-weight: 600; color: var(--ok); }
+.cal .day.active .free { color: rgba(255,255,255,.88); }
+
+/* تاریخ کوتاه داخل جدول‌های پنل */
+.daychip {
+  width: 62px; flex: none; text-align: center;
+  background: var(--brand-50); color: var(--brand-700);
+  border-radius: var(--r-sm); padding: 6px 4px; line-height: 1.3;
+}
+.daychip b { display: block; font-size: var(--fs-lg); }
+.daychip span { font-size: var(--fs-xs); }
+
+/* day timeline (appointments board) */
+.daygrid { display: grid; grid-template-columns: 62px 1fr; }
+.daygrid .hour { font-size: var(--fs-xs); color: var(--ink-3); padding-top: 10px; border-top: 1px solid var(--line); }
+.daygrid .lane { border-top: 1px solid var(--line); padding: 6px 0; min-height: 58px; display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.appt {
+  border-radius: var(--r-sm); padding: 8px 12px; font-size: var(--fs-xs);
+  background: var(--brand-50); border-inline-start: 3px solid var(--brand);
+  min-width: 186px; line-height: 1.6;
+}
+.appt b { display: block; font-size: var(--fs-sm); }
+.appt.ok    { background: var(--ok-bg);     border-inline-start-color: var(--ok); }
+.appt.warn  { background: var(--warn-bg);   border-inline-start-color: var(--warn); }
+.appt.dang  { background: var(--danger-bg); border-inline-start-color: var(--danger); }
+.appt.free  { background: var(--surface-sunken); border-inline-start-color: var(--line-2); color: var(--ink-3); }
+
+/* --------------------------------------------------------------------------
+   SCHEDULER — جدول روزانه نوبت‌ها (ساعت × پزشک)
+   -------------------------------------------------------------------------- */
+.sched-wrap { overflow-x: auto; }
+.sched-wrap.tall { max-height: 720px; overflow: auto; }
+.sched { width: 100%; min-width: 620px; border-collapse: separate; border-spacing: 0; }
+.sched th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface); text-align: center;
+  font-size: var(--fs-xs); font-weight: 600; color: var(--ink-2);
+  padding: 10px 8px; border-bottom: 1px solid var(--line-2);
+}
+.sched th small { display: block; font-weight: 400; color: var(--ink-3); }
+.sched td { border-bottom: 1px solid var(--line); padding: 4px; vertical-align: top; }
+.sched .t {
+  width: 66px; white-space: nowrap; text-align: center;
+  background: var(--bg-alt); color: var(--ink-3);
+  font-size: var(--fs-xs); padding-top: 14px;
+}
+.sched tr.brk td {
+  background: var(--bg-alt); color: var(--ink-3); text-align: center;
+  font-size: var(--fs-xs); padding: 7px; border-bottom: 1px solid var(--line-2);
+}
+
+.cel {
+  display: block; min-height: 46px; line-height: 1.55;
+  border-radius: var(--r-sm); padding: 7px 9px;
+  font-size: var(--fs-xs); border: 1px solid transparent;
+}
+.cel b { display: block; font-size: var(--fs-sm); }
+.cel .via { float: left; opacity: .75; }
+.cel.key { min-height: 0; padding: 4px 12px; display: inline-block; font-weight: 600; }
+.cel.busy { background: var(--brand-50); border-color: var(--brand-100); border-inline-start: 3px solid var(--brand); }
+.cel.ok   { background: var(--ok-bg);     border-inline-start: 3px solid var(--ok);     border-color: var(--ok-bg); }
+.cel.warn { background: var(--warn-bg);   border-inline-start: 3px solid var(--warn);   border-color: var(--warn-bg); }
+.cel.dang { background: var(--danger-bg); border-inline-start: 3px solid var(--danger); border-color: var(--danger-bg); }
+.cel.free {
+  display: grid; place-items: center; width: 100%; cursor: pointer; color: var(--ink-3);
+  background: transparent; border: 1px dashed var(--line-2); transition: .15s;
+}
+.cel.free:hover { background: var(--brand-50); color: var(--brand-700); border-color: var(--brand-300); }
+.cel.blocked { background: repeating-linear-gradient(135deg, var(--danger-bg) 0 7px, transparent 7px 14px); border: 1px dashed var(--danger); color: var(--danger); }
+.cel.off {
+  background: repeating-linear-gradient(135deg, var(--surface-sunken) 0 7px, transparent 7px 14px);
+  border: 1px solid var(--line); color: var(--ink-3);
+  display: grid; place-items: center; font-size: 10px;
+}
+
+/* ریل کناری: جدول اصلی + ستون باریک یادآوری */
+.g-rail { grid-template-columns: minmax(0, 1fr) 316px; align-items: start; }
+@media (max-width: 1100px) { .g-rail { grid-template-columns: 1fr; } }
+
+/* ردیف یادآوری در ریل کناری */
+.rail-item { display: flex; gap: var(--s-3); padding: var(--s-3) 0; border-top: 1px solid var(--line); }
+.rail-item:first-child { border-top: 0; }
+.rail-item .rt { flex: none; width: 46px; text-align: center; font-size: var(--fs-xs); color: var(--brand-700); font-weight: 600; }
+.rail-item .rb { min-width: 0; line-height: 1.6; }
+.rail-item .rb b { display: block; font-size: var(--fs-sm); margin-bottom: 6px; }
+.rail-item .rb > .badge, .rail-item .rb > .btn { display: inline-flex; width: auto; vertical-align: middle; }
+.rail-item .rb > .btn { margin-inline-start: var(--s-2); }
+
+/* donut (pure CSS conic-gradient) */
+.donut {
+  width: 168px; height: 168px; border-radius: 50%;
+  display: grid; place-items: center; margin-inline: auto;
+  position: relative;
+}
+.donut::after {
+  content: ''; position: absolute; inset: 26px;
+  background: var(--surface); border-radius: 50%;
+}
+.donut .dn { position: relative; z-index: 1; text-align: center; line-height: 1.4; }
+.donut .dn b { font-size: var(--fs-2xl); display: block; }
+.donut .dn span { font-size: var(--fs-xs); color: var(--ink-3); }
+
+/* mini bar chart */
+.barchart { display: flex; align-items: flex-end; gap: var(--s-3); height: 150px; }
+.barchart .b { flex: 1; display: flex; flex-direction: column; align-items: center; gap: var(--s-2); height: 100%; justify-content: flex-end; }
+.barchart .b i { display: block; width: 100%; max-width: 34px; border-radius: 6px 6px 0 0; background: var(--brand-300); transition: .2s; }
+.barchart .b:hover i { background: var(--brand); }
+.barchart .b span { font-size: var(--fs-xs); color: var(--ink-3); }
+
+/* --------------------------------------------------------------------------
+   RESPONSIVE
+   -------------------------------------------------------------------------- */
+/* تقویم در موبایل: برچسب زیر روز جا نمی‌شود و عرض حداقلی تحمیل می‌کند */
+@media (max-width: 560px) {
+  .cal { gap: var(--s-1); }
+  .cal .day { font-size: var(--fs-xs); }
+  .cal .day .free { display: none; }
+  .cal-head div { font-size: 10px; }
+}
+
+@media (max-width: 1000px) {
+  .sidebar {
+    position: fixed; inset-inline-end: 0; top: 0;
+    transform: translateX(100%);
+    transition: transform .25s ease;
+    box-shadow: var(--sh-3);
+  }
+  .sidebar.open { transform: none; }
+  .nav-toggle { display: grid !important; }
+  .content { padding: var(--s-4); }
+  .topbar { padding-inline: var(--s-4); }
+  .topbar .datechip, .topbar .u-meta { display: none; }
+}
+.nav-toggle { display: none; }

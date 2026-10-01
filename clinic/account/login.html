@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ورود — کلینیک زیبایی</title>
+  <meta name="description" content="کلینیک زیبایی و پوست — زیبایی، سلامت، اعتماد">
+  <link rel="stylesheet" href="../assets/css/theme.css">
+  <link rel="stylesheet" href="../assets/css/brand.css">
+  <link rel="stylesheet" href="../assets/css/site.css">
+  
+</head>
+<body class="site">
+
+<header class="site-header">
+  <div class="container">
+    <a class="logo" href="../index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-4.5 0-8-3-8.5-6.5 2-1 4-.8 5.5.3M12 21c4.5 0 8-3 8.5-6.5-2-1-4-.8-5.5.3"/><path d="M12 21c-2.5-2-3.8-4.6-3.8-7.4S9.6 8 12 6c2.4 2 3.8 4.8 3.8 7.6S14.5 19 12 21Z"/></svg><b>کلینیک زیبایی</b></a>
+    <nav class="menu"><a href="../index.html">خانه</a><a href="../services.html">خدمات</a><a href="../doctors.html">پزشکان</a><a href="../about.html">درباره ما</a><a href="../contact.html">تماس</a></nav>
+    <div class="header-cta">
+      <a class="btn btn-sm" href="../account/dashboard.html">ورود</a>
+      <a class="btn btn-primary btn-sm" href="../booking.html">رزرو نوبت</a>
+      <button class="btn btn-icon burger" data-toggle-nav aria-label="منو"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+</header>
+<section class="section">
+  <div class="container" style="max-width:440px">
+    <div class="card card-pad" data-wizard>
+      <div data-step>
+        <div class="center mb-5">
+          <span class="brand-mark" style="margin-inline:auto;width:48px;height:48px;border-radius:var(--r-md);display:grid;place-items:center;background:var(--brand-50);color:var(--brand)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-4.5 0-8-3-8.5-6.5 2-1 4-.8 5.5.3M12 21c4.5 0 8-3 8.5-6.5-2-1-4-.8-5.5.3"/><path d="M12 21c-2.5-2-3.8-4.6-3.8-7.4S9.6 8 12 6c2.4 2 3.8 4.8 3.8 7.6S14.5 19 12 21Z"/></svg></span>
+          <h2 class="mt-3">ورود به پنل مشتری</h2>
+          <p class="small mute">شماره موبایل خود را وارد کنید</p>
+        </div>
+        <div class="field mb-4"><span class="label">شماره موبایل</span><input class="input" placeholder="۰۹۱۲ ۰۰۰ ۰۰۰۰"></div>
+        <button class="btn btn-primary btn-lg btn-block" data-step-go="next">دریافت کد تأیید</button>
+      </div>
+      <div class="hide" data-step>
+        <div class="center mb-5">
+          <h3>کد تأیید را وارد کنید</h3>
+          <p class="small mute">کد ۵ رقمی به شماره ۰۹۱۲۳۴۵۶۷۸۹ ارسال شد</p>
+        </div>
+        <div class="grid mb-4" style="grid-template-columns:repeat(5,1fr);direction:ltr">
+          <input class="input center" maxlength="1"><input class="input center" maxlength="1"><input class="input center" maxlength="1"><input class="input center" maxlength="1"><input class="input center" maxlength="1">
+        </div>
+        <a class="btn btn-primary btn-lg btn-block mb-3" href="dashboard.html">ورود</a>
+        <div class="row-between small mute"><button class="btn btn-ghost btn-sm" data-step-go="prev">تغییر شماره</button><span>ارسال مجدد تا ۰۱:۵۹</span></div>
+      </div>
+    </div>
+    <p class="hint center mt-4">نسخه دمو — ورود بدون احراز هویت واقعی انجام می‌شود.</p>
+  </div>
+</section>
+<script src="../assets/js/app.js"></script>
+</body>
+</html>
