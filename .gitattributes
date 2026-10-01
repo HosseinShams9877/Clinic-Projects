@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Normalise line endings so the repository behaves identically on Windows,
+# macOS and Linux. Without this, every file shows as modified on a machine
+# with a different core.autocrlf setting, and diffs become unreadable.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Default: normalise to LF in the repository, working tree as the OS prefers.
+* text=auto eol=lf
+
+# ── Source ───────────────────────────────────────────────────────────────────
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.css   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.prisma text eol=lf
+
+# ── Windows scripts must stay CRLF ───────────────────────────────────────────
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# ── Shell scripts must stay LF ───────────────────────────────────────────────
+*.sh    text eol=lf
+
+# ── Binary — never converted, never diffed ───────────────────────────────────
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.svg   text eol=lf
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.pdf   binary
+
+# ── Lockfile — generated, but worth diffing ──────────────────────────────────
+package-lock.json  text eol=lf -diff linguist-generated
+
+# ── Vendored reference material — excluded from language statistics ──────────
+# The UI demo is reference material, not this project's source.
+clinic/**            linguist-vendored
+*.html               linguist-documentation

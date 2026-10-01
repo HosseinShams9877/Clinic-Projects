@@ -1,0 +1,175 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# سامانه مدیریت کلینیک زیبایی — .gitignore
+#
+# Rules, in the order they matter:
+#   1. Secrets never enter the repository.        (SECURITY)
+#   2. Database files never enter the repository. (SECURITY)
+#   3. Build output is never committed.           (hygiene)
+#   4. Everything else is judgement.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+# Every .env variant is ignored, in every directory, EXCEPT the example file.
+# The example carries variable NAMES and shapes, never values.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Credentials and key material, wherever they land.
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+secrets/
+credentials.json
+service-account*.json
+
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+jspm_packages/
+
+# ── Build output ─────────────────────────────────────────────────────────────
+.next/
+out/
+build/
+dist/
+.turbo/
+.swc/
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Database files ───────────────────────────────────────────────────────────
+# The SQLite development database and everything it leaves behind.
+# A committed database file is a data leak and a merge conflict at once.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+dev.db*
+test.db*
+prisma/*.db
+prisma/*.db-journal
+prisma/migrations/**/dev.db
+
+# Local dumps — a backup is not source code.
+*.dump
+*.sql
+*.sql.gz
+pg_backup/
+
+# ── Testing ──────────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+playwright-report/
+playwright/.cache/
+test-results/
+blob-report/
+.vitest/
+__snapshots__/*.snap.new
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+
+# ── Caches ───────────────────────────────────────────────────────────────────
+.eslintcache
+.stylelintcache
+.cache/
+.parcel-cache/
+.npm-cache/
+
+# ── Uploaded media ───────────────────────────────────────────────────────────
+# Before/after images are customer medical media and are never committed.
+# They live in the database or a configured path outside the repository.
+uploads/
+public/uploads/
+storage/
+
+# ── Operating system ─────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── Editors and IDEs ─────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# ── Claude Code ──────────────────────────────────────────────────────────────
+# Project-level agent configuration IS committed (see .claude/).
+# Local, per-developer state is not.
+.claude/settings.local.json
+.claude/*.local.json
+.claude/.cache/
+
+# ── Environment tooling ──────────────────────────────────────────────────────
+.nvmrc.local
+.node-version.local
+
+# ── Temporary files ──────────────────────────────────────────────────────────
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+tmp/
+temp/
+.crdownload
+.part
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Source materials — kept deliberately, with a note
+#
+# The product specification and the UI demo are the product's inputs and are
+# tracked, so that every decision in docs/knowledge/ can be traced back to them:
+#
+#   سناریوی کام.txt                      the specification, نسخه ۳
+#   clinic/                              the UI demo (HTML reference)
+#   clinic_demo_ui_design_system_*.md    the design system source
+#
+# The compressed archives and the original PDF are NOT tracked — they are large
+# binaries whose contents are already represented by the extracted files above.
+# ─────────────────────────────────────────────────────────────────────────────
+*.rar
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.pdf
+!docs/**/*.pdf
+
+# ── Local scratch ────────────────────────────────────────────────────────────
+scratch/
+notes.local.md
