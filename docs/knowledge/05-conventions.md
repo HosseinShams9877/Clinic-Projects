@@ -273,7 +273,178 @@ A single place to check. None of these appear in this codebase:
 
 ---
 
-*Related: `02-architecture.md` §10 (module and import rules),
-`07-localization.md` (the localization layer), `09-security.md` (the isolation
-rules these conventions protect), `10-testing-strategy.md` (the test
-obligations), `08-ui-design-system.md` (the token rule).*
+## 15. Naming for overridable modules
+
+The mechanism is specified in `02-architecture.md` §13. This section is the
+naming and validation contract an override must satisfy — the part a developer
+writing one has to get exactly right.
+
+### 15.1 Vocabulary
+
+| Term | Meaning |
+|---|---|
+| **Default module** | `src/modules/<name>` — the implementation in the module list of `02-architecture.md` §7. Every tenant uses it unless an override is declared. |
+| **Override module** | An implementation of the same module, contributed by a customer requirement, selected per tenant. |
+| **Implementation id** | The stable, lowercase, kebab-case name an override is registered and declared under. |
+
+"Override" is the word for the *thing*; the code never calls a module
+"custom" — that implies a fork, which this is not.
+
+### 15.2 Naming
+
+| Thing | Convention | Example |
+|---|---|---|
+| Override module folder | `kebab-case`, named for the **tenant group it serves**, never for the module it replaces | `clinic-group-a/` — not `dashboard-custom/` |
+| Implementation id | the folder name, exactly | `clinic-group-a` |
+| Registry key | `"<module>/<implementationId>"` | `"dashboard/clinic-group-a"` |
+| Exported interface type | `<Module>Module` in the default module's `types/` | `DashboardModule` |
+
+**Why the folder is named for the tenant group and not the module.** The name is
+the identity of an implementation, and an implementation belongs to a customer
+relationship. `dashboard-custom` names a variation with no owner, so a second
+customer's dashboard override has nowhere to go and the first folder quietly
+becomes two customers' code. `clinic-group-a` can only ever mean one thing.
+
+**A folder named after a customer is not a leak of their identity into the
+build.** The name is a stable internal slug, chosen at the start of the
+engagement; it is not the customer's legal name, and it never appears in a URL,
+a log line, or the interface. Where the slug itself is commercially sensitive,
+it is a neutral identifier agreed with the customer, not a disguised real name.
+
+### 15.3 Location in the module tree
+
+Overrides live **inside the module they replace**, in a sibling folder, so that
+the default and every override are read together and a reviewer cannot approve a
+change to one without seeing the other:
+
+```
+src/modules/<module>/
+  components/            ┐
+  lib/                   │
+  validation/            ├─ the DEFAULT implementation
+  types/                 │
+  hooks/                 │
+  api/                   ┘
+  index.ts               ← the default's public surface
+  overrides/
+    <implementation-id>/
+      components/
+      lib/
+      validation/
+      types/
+      hooks/
+      api/
+      tests/
+      module.ts          ← the declaration (§15.4)
+      index.ts           ← the override's public surface (§15.5)
+```
+
+Rules:
+
+1. **An override is a full module tree**, with the same subfolder contract as
+   every other module. It is not a single file, and not a monkey-patch of the
+   default's internals.
+2. **An override never imports the default's private modules.** It may import
+   `@/modules/<module>` — the default's barrel — exactly as any other module
+   would, but never `./lib/thing` from the parent. If it needs behaviour both
+   implementations share, that behaviour moves into the default's **barrel** or
+   into `src/core`, and the duplication is removed at the source rather than
+   copied.
+3. **`overrides/` is not part of the module's public surface.** The barrel at
+   `src/modules/<module>/index.ts` does not re-export it. Only the registry
+   references an override, and the registry is the only file that names one.
+4. `overrides/` is covered by the module's own `tests/` obligation: every
+   registered override runs the module's suite (`02-architecture.md` §13.5).
+
+### 15.4 Declaring which module it replaces
+
+An override declares its identity in `module.ts`, and the declaration is the
+input to validation — not a comment, and not documentation:
+
+```ts
+import type { DashboardModule } from '../../types'
+
+export const declaration = {
+  module: 'dashboard',          // must exist in the module list (02-architecture §7)
+  implementation: 'clinic-group-a',
+  version: '1.0.0',
+  exposes: 'DashboardModule',   // the interface in the default module's types/
+} as const
+```
+
+Four fields, four jobs:
+
+| Field | Validated against | Failure |
+|---|---|---|
+| `module` | the closed 20-module list | An override for a module that does not exist is a build error — the module list is a closed set, and an override never introduces a 21st module. |
+| `implementation` | the folder name and the registry key | A mismatch means the registry entry and the declaration disagree about which code is running. |
+| `version` | semver format, **platform-versioned** | Recorded for support, not resolved against: an override ships with the platform's release and is never upgraded independently (ADR-0019). |
+| `exposes` | the interface name the override is typed as | This is the field that makes the contract checkable — see §15.5. |
+
+The tenant's settings row (`02-architecture.md` §13.2) declares the *selection*:
+
+```jsonc
+{ "dashboard": { "implementation": "clinic-group-a", "version": "1.0.0" } }
+```
+
+A settings row may name only an `(module, implementation)` pair that exists in
+the build's registry. A row naming anything else resolves to the default and
+records an incident — it is never an error a customer sees.
+
+### 15.5 What a valid override must export
+
+The override's `index.ts` exports **exactly the default module's public
+surface** — the same names, the same types, the same thrown error classes — and
+the registry types it as that interface:
+
+```ts
+import type { DashboardModule } from '../../types'
+import * as implementation from './implementation'
+
+// A missing or mistyped export fails to compile. This is the contract check.
+const override: DashboardModule = implementation
+export default override
+```
+
+This is the whole validation strategy: **the contract is a TypeScript interface,
+so conformance is a compile error rather than a runtime discovery.**
+
+The interface in the default module's `types/` therefore has to be:
+
+- **explicit** — a named, exported interface, not an inferred shape, so an
+  override cannot accidentally satisfy it by exporting something adjacent;
+- **total** — every function a caller may reach, with no optional member an
+  override could simply omit;
+- **free of implementation detail** — no parameter type that only the default's
+  internals can construct;
+- **stable** — changing it is a breaking change for every override of that
+  module, and is treated as one in review.
+
+### 15.6 How the core validates before loading
+
+Validation is layered, cheapest first, and **every layer falls back to the
+default rather than failing a request**:
+
+| # | When | Check | On failure |
+|---|---|---|---|
+| 1 | **Compile time** | The registry types every override as its module's interface (§15.5); `module` is a member of the module-list union; `implementation` matches the folder. | The build fails. This is the only layer that can. |
+| 2 | **Build time** | A CI check asserts every folder under `overrides/` has a `module.ts`, that its `declaration.implementation` equals its folder name, and that every entry in the registry resolves to a real barrel. | CI fails. |
+| 3 | **Test time** | Every registered override runs its module's own suite plus the permission matrix and the cross-tenant isolation suite (`02-architecture.md` §13.5, `10-testing-strategy.md` §6.2). | CI fails. An override with no isolation test is unverified and is not registered. |
+| 4 | **Startup** | The registry is built once; each entry's declaration is parsed by a Zod schema. A malformed declaration marks that entry invalid and it is not offered to the resolver. | The entry is dropped with a startup warning; the default serves that module. |
+| 5 | **Resolution time** | `resolveModule()` looks up `(module, implementationId)`; a miss, an invalid entry, or a disabled entry resolves to the default (`02-architecture.md` §13.3). | The default runs. Never a blank page. |
+| 6 | **Runtime** | An override that throws is contained: the tenant is served by the default, the override is disabled, and the tenant is notified (`09-security.md` §18). | The tenant is degraded, not down. |
+
+**What validation deliberately does not do:** it does not load code the build
+does not contain. There is no path-based dynamic import, no `eval`, no runtime
+compilation, and no plugin loaded from disk. An override is a module that was
+compiled, lint-bounded, and tested as part of this release; the database row
+selects from a fixed set of names in that release's registry. That single
+constraint is what keeps a per-tenant customisation mechanism from becoming a
+per-tenant code-execution mechanism (ADR-0019).
+
+---
+
+*Related: `02-architecture.md` §10 (module and import rules) and §13 (the
+override mechanism), `09-security.md` §18 (override isolation),
+`07-localization.md` (the localization layer), `10-testing-strategy.md` (the
+test obligations), `08-ui-design-system.md` (the token rule).*

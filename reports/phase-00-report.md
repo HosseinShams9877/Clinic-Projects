@@ -261,6 +261,13 @@ All 35 pages are assigned to exactly one phase, with a coverage check summing to
 35. The four specification scenarios are each the definition of done for the
 phase that completes them, and all four are re-run in full in Phase 11.
 
+> **Revised after Phase 0, in the Phase 0 addendum.** The module override
+> mechanism (ADR-0019) added a real deliverable to Phase 1 — the registry, the
+> resolver and their fail-closed tests — so Phase 1 moved from **18–25** to
+> **20–27** days and the total from **152–209** to **154–211**. The rest of the
+> roadmap is unchanged. This note is retained rather than the figure being
+> silently edited, so the revision is visible.
+
 Phase 11 carries the required final-phase verification: full end-to-end testing of
 all four scenarios on PostgreSQL, accessibility across all 35 pages, responsive
 across all 35 pages, Persian localization across all 35 pages, and the permission

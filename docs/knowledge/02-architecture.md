@@ -1,7 +1,8 @@
 # 02 — Architecture
 
-> Two decisions live here: **the multi-tenant data boundary** (§1–§5) and
-> **the module architecture** (§6–§11). Both are binding.
+> Three decisions live here: **the multi-tenant data boundary** (§1–§5),
+> **the module architecture** (§6–§12), and **the module override mechanism**
+> (§13). All are binding.
 
 ---
 
@@ -88,15 +89,22 @@ The tenant context is set **inside the transaction**, so it cannot leak across
 a pooled connection:
 
 ```sql
-SET LOCAL app.tenant_id = '<uuid>';
+SELECT set_config('app.tenant_id', $1, true);
 ```
 
-`SET LOCAL` (not `SET`) is mandatory: it is scoped to the transaction and
-automatically reverts when the transaction ends, which is what makes it safe
-with connection pooling.
+**`set_config(..., true)`, never `SET LOCAL`.** The third argument scopes the
+setting to the transaction, which is what makes it safe with connection pooling.
+The reason it is a function call rather than a statement is decisive: `SET LOCAL`
+**cannot take a bind parameter**, so using it would mean interpolating the tenant
+id into SQL text — reintroducing exactly the injection surface this design
+exists to remove. `set_config` is an ordinary function, so the value binds as a
+parameter.
+
+Under `MULTI_TENANT=false` the same call is made with the single seeded tenant.
+There is no second code path.
 
 Full policy text, the `WITH CHECK` clauses, and the SQLite fallback are in
-`09-security.md`.
+`09-security.md` §4.
 
 ### 4. Single-tenant mode for on-premise
 
@@ -338,7 +346,7 @@ Request
   → getTenantContext()       membership → { tenantId, clinicId, role, overrides }
   → module function          can(role, permission, overrides) → throw if denied
   → prisma transaction
-        SET LOCAL app.tenant_id = ...
+        set_config('app.tenant_id', $1, true)
         query (RLS active)
   → render / return
 ```
@@ -370,8 +378,198 @@ broker, because on-premise must install with nothing beyond PostgreSQL. The
 worker resolves a tenant per job explicitly and sets `app.tenant_id` the same
 way the web tier does.
 
+### 13. Module override mechanism
+
+**The problem.** Modules are global — every tenant runs the same code. That is
+correct for almost every tenant, and it is what makes one release train, one
+migration path and one test suite possible. But a module is also the unit a
+customer eventually asks to change: a clinic group with its own reporting
+standard wants a different `dashboard`; a clinic with an unusual booking policy
+wants a different `appointments` entry screen. The two obvious answers are both
+wrong:
+
+- **Fork the codebase per tenant.** Every later fix must be applied N times, and
+  every fork drifts. The maintenance cost grows with the customer count, which is
+  the opposite of what a SaaS is supposed to do. Rejected in ADR-0019.
+- **Add a feature flag for every variation.** A flag can toggle behaviour that
+  already exists. It cannot change a module's *structure* — its screens, its
+  queries, its composition. A dashboard behind 30 flags is still one dashboard.
+
+The mechanism below is the third answer: **substitution, declared as data, with
+the default retained as the fallback.**
+
+#### 13.1 The design
+
+1. **Modules stay global.** `src/modules/<name>` remains the default
+   implementation of every module, and remains the only implementation that
+   exists in the repository's own tree for the 20 modules in §7.
+2. **A tenant may declare an override for a specific module.** The declaration
+   names one module and points at one override implementation.
+3. **The core resolves which implementation to load.** Resolution happens at the
+   module boundary, once per request, from the resolved tenant context — never
+   from anything the client sends.
+4. **The default is always the fallback.** An override that is absent, invalid,
+   failing its validation, or disabled resolves to the default module. There is
+   no state in which a module has *no* implementation.
+
+#### 13.2 Where overrides are declared
+
+**In the tenant's settings row, in the database.** Concretely, the tenant's
+settings record carries an overrides map — a `String` column holding JSON,
+parsed through a Zod schema on read, exactly as `03-data-model.md` §5 requires
+for every JSON-shaped column on both engines:
+
+```jsonc
+{
+  "dashboard": { "implementation": "clinic-group-a", "version": "1.0.0" }
+}
+```
+
+Three prohibitions, each for a different reason:
+
+| Never | Why |
+|---|---|
+| **In code** — a `switch` on the tenant slug | The tenant list then lives in the repository, so onboarding a customer is a code change and a deploy. It also puts a customer's identity in the build artefact. |
+| **In an environment variable** | Environment is per *process*, not per tenant. One process serves all tenants, so an env var cannot express "tenant A overrides `dashboard` and tenant B does not" — and in single-tenant mode it would make the on-premise install's behaviour depend on a file the installer edits by hand rather than on data the product manages. |
+| **From the client** — a header, a query string, a cookie | It would let a caller select its own implementation. Same rule as `tenantId` (§1 rule 3): the override is part of the tenant's identity and is therefore resolved, never received. |
+
+Because the declaration is a row, it is covered by the same RLS policy as every
+other tenant-scoped table (`09-security.md` §4.1) and cannot be read or written
+across tenants.
+
+#### 13.3 How the core resolves an override at load time
+
+Resolution is a **registry lookup**, not dynamic execution:
+
+```
+request
+  → resolveSession()            userId
+  → getTenantContext()          { tenantId, clinicId, role, overrides }
+  → resolveModule('dashboard', ctx)      ← the only place an override is chosen
+        override declared?  ── no ──→  the default implementation
+                │ yes
+        registered + validated?  ── no ──→  the default, and an incident is recorded
+                │ yes
+        enabled for this tenant? ── no ──→  the default
+                │ yes
+        the registered override implementation
+```
+
+The properties that matter:
+
+- **It is synchronous and total.** `resolveModule` always returns an
+  implementation. It has no failure mode in which a page renders nothing.
+- **It is a lookup in a static registry, never a dynamic import by path.**
+  The registry is a module built at build time, mapping
+  `(module, implementation) → the module's barrel`. A database row can therefore
+  only ever select a **name that exists in the build**; it can never cause the
+  process to load code that was not compiled, signed and tested as part of this
+  release. This is the difference between configuration and code injection, and
+  it is the whole reason the mechanism is safe (ADR-0019).
+- **Resolution happens at the module boundary, next to the permission check.**
+  Not in a page, not in a component. Every caller — Server Component, Server
+  Action, Route Handler, worker job — goes through the same resolver, so there is
+  no path that reaches an implementation the tenant did not declare.
+- **The resolved implementation is called through the same interface as the
+  default.** An override replaces a module's public surface; it does not add a
+  parallel one. Callers import `@/modules/dashboard` and never learn which
+  implementation ran.
+- **Resolution is per request, not cached across tenants.** A
+  process-lifetime cache keyed by module name alone would serve tenant A's
+  override to tenant B. Any cache is keyed by `(tenantId, module)` and
+  invalidated when the tenant's settings row changes.
+
+#### 13.4 How the default remains the fallback
+
+The default module is the **floor**, in four specific situations:
+
+| Situation | Result |
+|---|---|
+| No override declared | The default runs. This is the state of every tenant at onboarding. |
+| An override is declared but not present in the build's registry | The default runs, and the mismatch is recorded as an incident — a settings row naming an implementation this release does not contain is an operational error, not a tenant-facing one. |
+| An override fails the contract validation of §13.5 | The default runs; the override is marked invalid and is not attempted again until it changes. |
+| An override throws at runtime | The failure is contained: the tenant is served by the default, the override is disabled, and the tenant is notified (§13.6). A broken override must not be able to take the platform down (ADR-0019). |
+
+**The default implementation is never removed and never becomes dead code.** It
+is the implementation every tenant uses, so it stays exercised by the full test
+suite and by the default path in production — which is what keeps it from rotting
+the way a "legacy" branch does.
+
+#### 13.5 What an override must satisfy
+
+An override is a **module**, held to the same contract as the default. The
+naming, location, declaration and validation rules are in `05-conventions.md`
+§15; the security constraints are in `09-security.md` §18. The architectural
+requirements are:
+
+1. **It exports the same public surface** as the module it replaces — the same
+   names, the same types, the same error behaviour. TypeScript enforces this:
+   the override is typed as the module's public interface, so a missing or
+   mismatched export is a compile error rather than a runtime surprise.
+2. **It obeys every rule in this document.** Barrel-only imports (§10), the
+   1000-line limit (§10 rule 4), no business logic in `src/app/`, tenant context
+   resolved server-side (§1), permissions enforced in the module (§11).
+3. **It passes the same tests as the default.** The permission matrix, the
+   cross-tenant isolation suite, and the module's own unit tests run against
+   every registered override. An override that is not in the test matrix is
+   unverified, and an unverified override is a cross-tenant leak waiting for its
+   first request.
+
+#### 13.6 Coexistence with single-tenant mode
+
+**`MULTI_TENANT=false` changes nothing about this mechanism, and that is
+deliberate.** In single-tenant mode there is exactly one `Tenant` row
+(§4), and that row carries the overrides map like any other. The resolution
+path, the registry, the fallback and the isolation rules are identical; the
+effective tenant is simply always the same one.
+
+This is the same reasoning as §4's: an override mechanism that only exists in
+SaaS mode would be a second code path, exercised by no test in the on-premise
+channel and therefore broken in it. An on-premise clinic is in fact the *more*
+likely candidate for an override, because it is the customer with the most
+idiosyncratic workflow — so the mechanism has to work in exactly the mode where
+it is most needed.
+
+#### 13.7 Coexistence with the module architecture
+
+The mechanism is additive; it does not weaken §6–§12.
+
+| Rule | How it still holds |
+|---|---|
+| **Barrel-only imports** (§10 rule 1) | A caller imports `@/modules/dashboard`. It never imports an override path, and it never learns which implementation it received. The resolver is the only code that knows both names. |
+| **Every module has an `index.ts`** (§10 rule 2) | An override has its own barrel, and that barrel **is** the contract it satisfies. The registry holds the barrel reference, not a deep path. |
+| **1000-line limit** (§10 rule 4) | An override is a module tree, not one large file. It is split by responsibility like any other module, and the CI file-length check covers it with no exception. |
+| **No cross-module deep imports** (§10 rule 1) | Unchanged. An override may import another module only through that module's barrel — and if it depends on a module that is itself overridden, it receives the overridden implementation through the resolver like any other caller. |
+| **`core` never imports `modules`** (§10 rule 3) | The registry lives in the module layer, not in `core`. `core` defines the *shape* of a resolution result as a type; it does not know any module's name. |
+| **`app` stays thin** (§6) | A page resolves the module and calls it. Choosing the implementation is not the page's job, so a page is not where an override becomes visible. |
+| **The 20 modules of §7** | Unchanged. An override substitutes an implementation of an existing module; it never introduces a 21st. The module list is a closed set, and an override declaration naming a module outside it fails validation. |
+
+#### 13.8 What this costs
+
+Recorded honestly, because the mechanism is not free:
+
+- **A second implementation of a module doubles that module's maintenance and
+  test surface**, for as long as the tenant exists. This is why overrides are
+  declared per tenant and never offered as a self-service control.
+- **The override ships with the platform's release cadence**, not its own
+  (ADR-0019). A tenant wanting a change to its override waits for a platform
+  release. That is the price of never forking.
+- **A registry entry is a build-time artefact**, so adding the first override for
+  a tenant is a code change plus a settings-row change. Only the *selection* is
+  data; the *implementation* is always part of the release.
+
+**Implementation phasing** is in `roadmap/phases.md`: the registry, the
+resolver, the validation contract and the fail-closed behaviour are built in
+**Phase 1**, because they are part of the foundation and because the isolation
+tests that prove them can only be written while the test harness is being built.
+The first real override ships in a later phase, against a customer who has asked
+for one.
+
 ---
 
 *Related: `01-tech-stack.md` (why one deployable plus a worker),
-`03-data-model.md` (the entities and indexes), `09-security.md` (RLS policies
-and the SQLite fallback), `roadmap/decisions.md` (ADR-0003 … ADR-0006).*
+`03-data-model.md` (the entities and indexes), `09-security.md` (RLS policies,
+the SQLite fallback, and the override isolation rules),
+`05-conventions.md` §15 (naming and validating an overridable module),
+`roadmap/decisions.md` (ADR-0003 … ADR-0006, ADR-0015, ADR-0019 the override
+mechanism).*

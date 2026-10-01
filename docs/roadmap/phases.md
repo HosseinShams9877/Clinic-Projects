@@ -16,7 +16,7 @@
 | Phase | Name | Days | Pages delivered |
 |---|---|---|---|
 | 0 | Foundation and architecture | 5–8 | — |
-| 1 | Platform foundation | 18–25 | 1 |
+| 1 | Platform foundation | 20–27 | 1 |
 | 2 | Appointments and scheduling | 14–18 | 3 |
 | 3 | Customers, services, staff | 16–22 | 7 |
 | 4 | Treatment cycles | 10–14 | 3 |
@@ -27,7 +27,7 @@
 | 9 | Customer panel | 10–14 | 4 |
 | 10 | Reports, settings, tenancy, licensing | 14–18 | 3 |
 | 11 | Hardening and full verification | 15–22 | — |
-| | **Total** | **152–209** | **35** |
+| | **Total** | **154–211** | **35** |
 
 **Dependency shape:** 0 → 1 → 2 → {3, 4, 5} → 6 → 7 → {8, 9, 10} → 11.
 Phase 3, 4 and 5 may be reordered among themselves. Phases 8, 9 and 10 may be
@@ -94,6 +94,7 @@ later phase has to invent them.
 - `src/worker/` as a running process with the database-backed job table and claim semantics, and a health check.
 - `account/login.html` — the customer login surface (mobile + OTP) and the staff login.
 - The four panel shells (manager, doctor, secretary, customer) with their navigation, rendered from the permission set rather than hard-coded.
+- **The module override registry** (`02-architecture.md` §13, ADR-0019): the static build-time registry, the `resolveModule()` resolver at the module boundary, the typed contract every override is checked against, the Zod-validated declaration schema, the tenant settings-row declaration field, and the fail-closed behaviour when an override is absent, invalid, or disabled. **No override is written in this phase** — the mechanism is built and tested with a test-only override fixture.
 - CI: typecheck, lint, unit tests, coverage gate, file-length gate, axe on rendered shells.
 
 **Definition of done.**
@@ -108,10 +109,11 @@ later phase has to invent them.
 8. The worker starts, claims a job, and completes it; killing it mid-job releases the claim after the timeout.
 9. No file exceeds 1000 lines; the CI gate proves it.
 10. A production boot against SQLite, or with RLS disabled on a tenant table, **refuses to start**.
+11. The override resolver is proven fail-closed: a module with no declared override, a declaration naming an implementation absent from the registry, a malformed declaration, and an override that throws all resolve to the **default** implementation — and an override that fails the permission matrix or the cross-tenant suite is refused registration.
 
 **Dependencies.** Phase 0.
 
-**Effort.** 18–25 days.
+**Effort.** 20–27 days.
 
 ---
 
@@ -406,6 +408,18 @@ three pages.
 - `admin/dashboard.html` — «داشبورد من» for the manager.
 - `admin/reports.html`.
 - `admin/settings.html`.
+- **The override administration surface**: the operator path that sets a tenant's override declaration on its settings row, with the audit entry and the validation that only an `(module, implementation)` pair present in the build's registry may be selected. This completes the mechanism specified in `02-architecture.md` §13 and built in Phase 1.
+
+**The first real override is not scheduled.** No phase in this roadmap writes
+one, and none should: an override exists because a named customer asked for a
+different implementation of a named module, and building one speculatively would
+create a second implementation of a module with no tenant to serve and no
+requirement to satisfy. When that request arrives it is scoped as its own piece
+of work — a full module tree under the default's `overrides/` folder
+(`05-conventions.md` §15.3), typed against the module's interface, and passing
+the module's suite plus the permission matrix and the cross-tenant isolation
+suite before it is registered (ADR-0019). It ships with the platform's release,
+not on its own cadence.
 
 **Definition of done.**
 

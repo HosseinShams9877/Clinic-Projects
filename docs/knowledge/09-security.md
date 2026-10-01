@@ -417,9 +417,148 @@ that becomes an incident.
 
 ---
 
-*Related: `02-architecture.md` (the tenant boundary and request lifecycle),
-`04-roles-permissions.md` (the matrix and the `can()` primitive),
-`03-data-model.md` (which tables carry `tenantId`),
+## 18. Override isolation
+
+`02-architecture.md` §13 lets a tenant declare a different implementation of a
+module. That mechanism hands a customer-influenced artefact a place inside a
+process that serves every tenant's medical and financial data. This section is
+the set of constraints that makes that acceptable — and the reason the mechanism
+is a *registry* rather than a plugin system.
+
+### 18.1 The primary control: an override cannot be arbitrary code
+
+Everything below is defence in depth around one structural fact:
+
+> **An override is a module that was compiled, boundary-checked and tested as
+> part of this release. The database selects from a fixed set of names in that
+> release's registry. There is no dynamic import by path, no `eval`, no runtime
+> compilation, and no plugin loaded from disk or from a network location.**
+
+That is why "runtime code injection" was rejected in ADR-0019 and why the
+mechanism is safe: a tenant can choose **which** of the shipped implementations
+runs, and cannot introduce one that was never reviewed. A settings row is
+therefore not an execution surface — it is a selector over an allow-list that
+exists at build time.
+
+### 18.2 An override cannot access another tenant's data
+
+| Constraint | Where it holds |
+|---|---|
+| The override runs inside the **same request, the same module boundary and the same transaction** as the default — it is not a separate process, a sandbox, or a service. | `02-architecture.md` §13.3 |
+| Every query it issues goes through **the same Prisma client extension** that injects the tenant predicate and rejects a query with no tenant context. There is no second client an override can construct. | §5 mitigation 2 |
+| **RLS is active in the same transaction**, so even a query that omits the predicate returns zero rows rather than another tenant's. | §4.1, §4.3 |
+| The tenant context is **resolved from `Membership` per request** and is never a parameter an override can set, receive, or widen. `set_config('app.tenant_id', …)` is issued by the framework, not by the module. | §3, §4.2 |
+| An override has **no path to a second database connection.** The application's data access is a single exported client; opening one's own connection is a review-blocking finding, and the application role is least-privilege with no DDL and no RLS bypass. | §14 |
+
+The consequence: an override is exactly as isolated as the default module —
+**no more and no less.** It cannot see another tenant because nothing in the
+process can, and it cannot opt out of the mechanism because it does not
+construct the mechanism.
+
+### 18.3 An override cannot bypass the permission model
+
+- **`requirePermission` is called by the caller, not by the implementation.**
+  The resolver chooses an implementation *after* the tenant and role are
+  resolved, and the module entry point that performs the check is part of the
+  contract the override satisfies (`05-conventions.md` §15.5). An override that
+  omits the check does not compile, because the interface it is typed as
+  includes it.
+- **An override cannot change the matrix.** The 16 permissions, the three roles,
+  the role defaults and the manager column lock (`04-roles-permissions.md`) live
+  in `roles-permissions`, a separate module. Overriding `dashboard` cannot alter
+  a permission, and there is no override of `roles-permissions` that could be
+  written without the same test matrix passing against it.
+- **Ownership scoping still applies.** A doctor using an overridden dashboard
+  still receives only their own patients, because the ownership predicate is
+  applied inside the module query (§6.3) and the override implements that query.
+- **The worker is not exempt.** A job whose module is overridden runs the
+  override, under the same per-job tenant scope and the same declared-capability
+  assertion (§8).
+
+### 18.4 An override cannot bypass the tenant context
+
+| Attempt | Why it fails |
+|---|---|
+| Read `tenantId` from a request body, header, cookie or query string | Nothing reads a client-supplied tenant (§3, rule 2 of `02-architecture.md` §1). |
+| Declare an override that omits the tenant predicate | The client extension rejects a query on a tenant-scoped model with no tenant context rather than returning nothing (§5 mitigation 2) — and RLS fails closed underneath (§4.3). |
+| Resolve a module for a tenant other than the caller's | Resolution reads the **server-resolved** context (`02-architecture.md` §13.3). The client sends nothing that participates in the choice. |
+| Cache a resolution across tenants | Any cache is keyed by `(tenantId, module)` and invalidated when the tenant's settings row changes; a module-name-only cache is a cross-tenant leak and is a blocking finding in review. |
+| Use the override to reach a module it does not replace | The registry maps an override to exactly one module. There is no wildcard, no inheritance, and no "applies to all modules" entry. |
+
+### 18.5 How the core sandboxes an override
+
+The word "sandbox" here is precise: **the containment is process-level, not
+container-level.** An override is not isolated in a separate runtime — it is
+contained by the same boundaries every module already has, plus four specific to
+overrides:
+
+1. **Static registry.** The only way to be selected is to be in the build's
+   registry (`05-conventions.md` §15.6 layer 4). Nothing outside the build can
+   become an override.
+2. **Typed contract.** The override is typed as the default module's exported
+   interface, so it cannot widen an input type, add a parameter, or return a
+   shape callers do not expect to receive data it should not have
+   (`05-conventions.md` §15.5).
+3. **No privileged reach.** An override has no access to sessions, to the
+   resolver, to the permission matrix, or to the database client's construction.
+   Its imports are ordinary module imports, subject to the same ESLint boundary
+   rule (`02-architecture.md` §10.6).
+4. **Contained failure.** An exception inside an override is caught at the
+   resolution boundary and the request continues on the default. The blast radius
+   of a defect is **one module for one tenant for the duration of one incident**,
+   not one request, and never another tenant.
+
+**Stated honestly:** an override is trusted code, held to the same standard as
+the default module, not untrusted code held at arm's length. The isolation it
+gets is the isolation every module gets. The reason this is acceptable is that
+the override is written, reviewed and tested by the platform's own team as part
+of a release — the customer states the requirement, they do not supply the code.
+
+### 18.6 How a bad override is detected and disabled
+
+| Detected by | When | What happens |
+|---|---|---|
+| **The compiler** | Build | A missing or mistyped export against the module interface fails the build. |
+| **CI boundary and structure checks** | CI | A missing `module.ts`, a declaration whose `implementation` does not match its folder, a registry entry pointing at a nonexistent barrel, or a file over 1000 lines fails CI. |
+| **The test suite** | CI | The module's own tests, the permission matrix and the cross-tenant isolation suite run against every registered override. An override with no isolation test is not registered. |
+| **Startup validation** | Process start | Each declaration is parsed by Zod. A malformed entry is marked invalid and never offered to the resolver. |
+| **A circuit breaker** | Runtime | An override that throws is caught at the resolution boundary. After repeated failures within a short window it is **disabled for that tenant** and the default serves the module. |
+| **The audit log** | On every state change | Enabling, disabling, and changing an override declaration is written to `AuditLog` with the actor (§13). The original declaration is preserved in the audit record, so a revert is a recorded fact rather than a guess. |
+
+**Disabling is never silent, and it is never automatic forever.** An override
+disabled by the circuit breaker stays disabled until a human re-enables it after
+the cause is fixed — an override that flaps between enabled and disabled would
+serve a tenant two different products on alternating requests, which is worse
+than either failure alone.
+
+### 18.7 How the tenant is notified
+
+A tenant whose override has been disabled must not discover it by noticing that
+a screen looks different. Notification is tiered by severity:
+
+| Event | Channel |
+|---|---|
+| Override disabled by the circuit breaker | The tenant's managers receive an in-product notice on next login, in the notification feed, naming the module and stating that the default implementation is now in use. |
+| Override disabled, and the module is one the tenant depends on operationally | The same notice, plus an operator-to-customer notification through the support channel — the tenant is being served a different product than the one they were promised, and that is a conversation, not a banner. |
+| Declaration invalid at startup | The operator is alerted; the tenant sees the default with the same in-product notice. |
+| Declaration changed (enabled, disabled, or reverted) | Recorded in the audit log, visible to the tenant's managers, with the actor and the timestamp. |
+
+**The notification is Persian and specific**, like every other user-facing
+message (§7 and `07-localization.md` §8): it names the module in the tenant's own
+vocabulary and states what is happening, rather than reporting an internal
+identifier. It never says "error"; it says which part of the product has
+reverted to the standard behaviour and that support has been informed.
+
+**What the tenant is never told, and never needs to be:** the internal
+implementation id, the registry key, or the exception. Those go to the operator's
+log with the correlation id (§13), not to the clinic's screen.
+
+---
+
+*Related: `02-architecture.md` (the tenant boundary, the request lifecycle and
+the override mechanism), `04-roles-permissions.md` (the matrix and the `can()`
+primitive), `05-conventions.md` §15 (the override naming and validation
+contract), `03-data-model.md` (which tables carry `tenantId`),
 `setup/deployment.md` (RLS and secrets in practice),
 `setup/database-migration.md` (the SQLite dev fallback),
 `10-testing-strategy.md` (the isolation and permission suites).*
