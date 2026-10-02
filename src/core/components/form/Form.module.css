@@ -1,0 +1,190 @@
+/* ───────────────────────────────────────────────────────────────────────────
+ * The form shell — `08-ui-design-system.md` §13 (inputs and forms) and
+ * `01-tech-stack.md` §8.5 (the shared Persian form shell).
+ *
+ * ## One CSS Module for the family
+ *
+ * §B asks `src/core/components/**` for "one CSS Module per component". This
+ * directory holds six components and one module, which is a reading of that line
+ * and worth stating: `form` is a single component **family**, §8.5 calls it "the
+ * shared Persian form shell", and §13 gives the whole family one table. Splitting
+ * it would put the control geometry in `TextInput.module.css`, `TextArea.module.css`
+ * and — later — `Select.module.css` and the date picker's module, which is exactly
+ * the duplication §8.5 exists to prevent: "field layout, the Persian label, the
+ * error slot, and RTL are defined once, and a module's form composes it rather
+ * than restating it". One module is what makes "once" true. The rule's own
+ * example, `button/Button.module.css`, is a directory with one component in it,
+ * so it cannot distinguish the two readings.
+ *
+ * ## Token discipline
+ *
+ * Every colour, radius, shadow and font size here is a §46 token; there is no hex
+ * in this file and rule A1 is asserted against it. The literal numbers are the
+ * control's own geometry, quoted from §13, and they follow the same reading as
+ * `Button.module.css`:
+ *
+ *   field gap            7px            §13 "Field | vertical layout, gap: 7px"
+ *   control padding      11px …         §13 "padding: 11px 16px"
+ *   textarea height      96px           §13 "min-height: 96px"
+ *   focus ring           3px            §13 "box-shadow: 0 0 0 3px #FBF1EE"
+ *
+ * The demo's own stylesheet does exactly this split — `clinic/assets/css/theme.css`
+ * has `.field { gap: 7px }` beside `.input { padding: 11px var(--s-4) }`, token
+ * where the scale reaches and a literal where it does not — so the reading is the
+ * reference artifact's own. It is recorded as an open question in the Phase 1
+ * report; see `Button.module.css` for the argument in full.
+ *
+ * ## The focus treatment, and why there are two rules for it
+ *
+ * §13 fixes focus as "border `#D9A7A7`, `box-shadow: 0 0 0 3px #FBF1EE`, no
+ * default browser outline", and both of those are honoured below. What the section
+ * does not account for is that `outline: none` on `:focus` also cancels the
+ * product's **own** global rule — `globals.css` carries
+ * `:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px }` — since
+ * a class plus a pseudo-class outranks a bare pseudo-class.
+ *
+ * The §13 ring cannot replace it. `--brand-50` on `--surface` is about 1.1:1 and
+ * the border step from `--line-2` to `--brand-300` is about 1.5:1, so a keyboard
+ * user tabbing through a form would have no focus indicator meeting WCAG 2.1
+ * SC 1.4.11's 3:1 for non-text contrast — on the one control type where a lost
+ * focus ring matters most, because the user is about to type into it. The brand
+ * outline is 3.98:1 on white.
+ *
+ * So `:focus-visible` restores it, and only for the input modality that needs it:
+ * a pointer focus still gets §13's treatment exactly as written, and a keyboard
+ * focus gets §13's treatment **and** the outline. This is an addition to §13, not a
+ * contradiction of it — "no default browser outline" is about the UA's ring, and
+ * the brand ring is the product's.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  /* The demo spaces fields with `.grid`'s `var(--s-4)`; its `.col`, at
+     `var(--s-3)`, is the tighter gap it uses between *groups* inside a card body.
+     A form is a sequence of fields, so it takes the field gap. */
+  gap: var(--s-4);
+}
+
+/* §13's field. The demo's `.field` is the same rule — `display: flex;
+   flex-direction: column; gap: 7px` — and its children are the label, the control
+   and any hint, so all three sit 7px apart. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* §13: "Label | 13px, weight 600, `#6E5F5B`". The demo agrees exactly:
+   `.label { font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }`.
+   It is a real `<label>` here rather than the demo's `<span class="label">`,
+   because the span is associated with nothing: axe's `label` rule requires a
+   form control to have an accessible name, and a `<label for>` is what supplies
+   one for a single-input field. It also makes the label clickable, which is a
+   target-size win on a phone. */
+.label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+/* §13: "Required marker | `#C25B62`". The demo's glyph is `*`
+   (`.label .req`), and §13 gives the colour and no glyph, so the demo's is the
+   one used. */
+.required {
+  color: var(--danger);
+}
+
+/* §13: "Input / select / textarea | width 100%, `padding: 11px 16px`, white bg,
+   border `#E3D5D0`, radius 10px, font 13px" — and the demo's own rule is
+   `.input, .select, .textarea { width: 100%; padding: 11px var(--s-4); ... }`,
+   which is where `--s-4` for the horizontal half comes from. `width` becomes
+   `inline-size` for A9. The demo's `transition: .16s` on this rule is the one
+   value not carried over: `--transition-control` is `.18s ease` and is the
+   product's single control transition, and a second value 20ms away would be a
+   second thing to keep in step for no visible difference. */
+.control {
+  inline-size: 100%;
+  padding: 11px var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  transition: var(--transition-control);
+}
+
+/* §13: "Placeholder | `#817169`". */
+.control::placeholder {
+  color: var(--ink-3);
+}
+
+/* §13's focus. See the file header for the `:focus-visible` rule below it. */
+.control:focus {
+  outline: none;
+  border-color: var(--brand-300);
+  box-shadow: 0 0 0 3px var(--brand-50);
+}
+
+/* The global ring §13's `outline: none` would otherwise cancel, restored for the
+   one modality that cannot see §13's low-contrast ring. Also follows
+   `globals.css`'s `border-radius: var(--r-xs)` on the same rule. */
+.control:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* §13 gives no error state, and a form with one bad field among twenty needs to
+   show which one without being read line by line. The border takes the status
+   colour, which is what §A13 reserves it for; the message below is the primary
+   signal, so nothing here depends on colour alone. */
+.control[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+/* §13 gives no disabled state either. The demo's recessed surface is the token
+   whose name says "sunken", which is what an unusable field is. */
+.control:disabled {
+  background: var(--surface-sunken);
+  cursor: not-allowed;
+}
+
+/* §13: "Textarea | `min-height: 96px`, line-height 1.8". `resize: vertical` is
+   the demo's `.textarea` rule: a corner drag wider than the column breaks the
+   form's layout, and shorter than three lines makes the value unreadable. */
+.textarea {
+  min-height: 96px;
+  line-height: 1.8;
+  resize: vertical;
+}
+
+/* The demo's `.hint { font-size: var(--fs-xs); color: var(--ink-3); }`. §13 has no
+   hint row, so the demo's values are the values. */
+.hint {
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+
+/* A field error, with the icon `Icon` maps to `error`.
+
+   `gap: var(--s-1)` is 4px — the demo's own gap for an icon beside small text
+   (`.link-more { gap: 4px }`) — and `--fs-xs` matches the hint, so the two
+   message slots under a control share one type size and an error appearing does
+   not change the text's weight or rhythm. */
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-size: var(--fs-xs);
+  color: var(--danger);
+}
+
+/* The form-level slot. One step larger than a field error, because it is the only
+   thing on the screen saying nothing was saved. */
+.formError {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--danger);
+}

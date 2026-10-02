@@ -1,0 +1,103 @@
+/*
+ * The icon wrapper's stylesheet.
+ *
+ * Three rules, and each of them is a rule the design system states rather than a
+ * style somebody chose.
+ *
+ * Every value here is a token or a literal shape — there is no colour, no radius
+ * and no spacing in this file, because an icon takes its colour from
+ * `currentColor` and its size from the `size` prop. Rule A1 ("no component
+ * hard-codes a hex value") and rule A9 ("layout uses logical properties only")
+ * are both satisfied by having nothing to satisfy them with.
+ */
+
+.icon {
+  /*
+   * `block` rather than the SVG default of `inline`.
+   *
+   * An inline SVG sits on the text baseline, so it adds the font's descender to
+   * the line box: a 19px icon inside a 68px topbar (§28) becomes 19px plus
+   * whatever `line-height` the surrounding text has, and the icon stops being
+   * vertically centred in the control it was placed in. `block` removes the
+   * baseline contribution, which is what makes every `align-items: center`
+   * container in the design system behave.
+   */
+  display: block;
+
+  /*
+   * An icon inside a flex row is a flex item, and a flex item shrinks. A 19px
+   * sidebar icon (§26) next to a long Persian nav label would be squeezed to a
+   * sliver by the label's minimum content width without this. `flex: none` keeps
+   * the icon at the size §42 assigns it and lets the label wrap instead, which is
+   * the correct loser in that trade.
+   */
+  flex: none;
+}
+
+/*
+ * The RTL mirror of §42: "icons that encode direction (arrow, chevron, back,
+ * next) follow the RTL layout."
+ *
+ * Written with the **individual** `scale` property rather than with
+ * `transform: scaleX(-1)`, and that is not a stylistic preference — it is what
+ * lets an icon be mirrored and spinning at the same time. `transform` is a single
+ * property, so a `rotate()` keyframe and a `scaleX(-1)` declaration on the same
+ * element would overwrite one another: whichever won, the other's effect would
+ * vanish. `scale` and `transform` are independent, and CSS applies them in the
+ * order translate → rotate → scale, so both survive.
+ *
+ * No `[dir="rtl"]` selector, because there is no other direction to select
+ * against (`07-localization.md` §3: RTL is a hard constraint and there is no LTR
+ * mode). A conditional guard here would be a guard that is never false, which
+ * reads as though an LTR mode were being supported.
+ */
+.mirrored {
+  scale: -1 1;
+}
+
+/*
+ * The §9 loading state's rotation.
+ *
+ * §8.7 allows motion for a state change and forbids motion that carries meaning
+ * on its own: "A state change must be legible with motion disabled." A spinner is
+ * the case that tests that sentence, because a spinner *is* its motion — stop it
+ * and it reads as a static circle, which looks like a broken icon rather than
+ * like progress.
+ */
+.spinning {
+  animation: icon-spin 0.8s linear infinite;
+}
+
+@keyframes icon-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/*
+ * The answer to that, and the reason §8.7's sentence is satisfiable: under
+ * `prefers-reduced-motion` the rotation is replaced by a fade, which carries the
+ * same meaning — "something is happening and it has not finished" — without
+ * moving anything. The rotation itself is exactly the kind of small continuous
+ * motion the media query exists to suppress.
+ *
+ * The fade is not a fallback to nothing on purpose. Removing the animation
+ * entirely would leave a static icon, which is the one outcome that loses the
+ * meaning rather than merely the motion.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: icon-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes icon-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.45;
+    }
+  }
+}

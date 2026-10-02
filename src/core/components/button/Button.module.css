@@ -1,0 +1,281 @@
+/* ───────────────────────────────────────────────────────────────────────────
+ * Button — `08-ui-design-system.md` §8 (anatomy and variants) and §9 (states).
+ *
+ * Every colour, radius, shadow, font size and gap here is a §46 token. The
+ * values that are written as numbers are the control's own geometry, quoted from
+ * §8's "Sizes" line and from §13's input row, and they are the one place this
+ * file departs from A3's "every spacing value comes from the `--s-*` scale":
+ *
+ *   default  10px 18px      large  14px 26px      small  6px 12px
+ *   icon     36 × 36
+ *
+ * None of 10, 18, 26, 6 and 36 is a step of the `--s-*` scale (4 · 8 · 12 · 16 ·
+ * 20 · 24 · 32 · 40 · 56 · 72), and neither is the 11px vertical padding or the
+ * 96px min-height of §13. So the two cannot both be satisfied.
+ *
+ * The reading taken here is that A3 governs the space *between* things — the
+ * layout rhythm of a page — while a control's own geometry belongs to the section
+ * that states it. The demo's stylesheet is the evidence, and it does exactly this
+ * split: `clinic/assets/css/theme.css` has `.field { gap: 7px }` and
+ * `.input { padding: 11px var(--s-4) }` — the 16px horizontal padding *is* the
+ * token, because 16 is on the scale, and the 11px beside it is a literal, because
+ * it is not. `.btn { padding: 10px 18px }` and `.textarea { min-height: 96px }` are
+ * literal for the same reason. So the demo — which §B makes the reference artifact
+ * for a question the document does not settle — uses tokens wherever the scale
+ * reaches and never snaps a control to the nearest step.
+ *
+ * Snapping instead would silently resize every control in the product away from
+ * the demo it is meant to reproduce. The reading is recorded as an open question in
+ * the Phase 1 report; resolving it the other way is a change to §46 and needs an
+ * ADR.
+ *
+ * §8's stated properties are all present and none is re-derived: `gap: 8px` is
+ * `--s-2`, `radius: 10px` is `--r-sm`, `font-size: 13px` is `--fs-sm`, and
+ * `transition: .18s ease` is `--transition-control`, which `globals.css` already
+ * defines for exactly this pair of sections.
+ *
+ * §8 states no `line-height` for a button, so none is invented: `globals.css`
+ * sets `button { font: inherit }`, which leaves §3's body line-height in place.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px; /* §8 base */
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  appearance: none;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+
+/* §9 requires every button to carry a visible focus state, and the design system
+   fixes it: `2px solid brand`, offset 2px. `globals.css` has the same rule as a
+   fallback for elements no component styles; it is restated here because §17
+   makes the focus state part of the component's own contract, and a component
+   that depends on a global for its accessibility is a component whose
+   accessibility is one refactor away from being lost. */
+.button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* §9: "Reduce contrast; preserve the shape; cursor: not-allowed." Opacity rather
+   than a greyed-out colour pair, so the disabled treatment is the same for every
+   variant and no new colour is introduced. */
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Variants (§8, plus the demo's base) ──────────────────────────────────── */
+
+/* `.neutral` is the demo's `.btn` with no modifier, and it is this component's
+   default. §8's table gives five variants and its "Base" line gives geometry
+   with no colour, so the table has no row for the appearance a bare
+   `<button class="btn">` has — and the demo uses that appearance for
+   essentially every secondary action. `08-ui-design-system.md` §B makes the demo
+   the reference for exactly this case: "The source demo files under `clinic/`
+   remain in the repository as the reference artifact for any visual question this
+   document does not settle."
+
+   The values are `clinic/assets/css/theme.css` `.btn` and `.btn:hover`, with the
+   two hard-coded colours it contains replaced by their tokens — `--line` and
+   `--line-2` are already tokens there, and the demo's own `.btn` needs no
+   substitution at all beyond `width` → `inline-size` for A9. */
+.neutral {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.neutral:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--line-2);
+}
+
+/* The next step down the surface ramp. `--surface` → `--surface-2` is the demo's
+   hover, so the press continues to `--surface-sunken`, the token whose name says
+   it is a recessed surface. */
+.neutral:active:not(:disabled) {
+  background: var(--surface-sunken);
+  transform: scale(0.97);
+}
+
+/* §9 requires an `:active` treatment that is "distinct from hover". The document
+   states that requirement and no value, so each variant takes the next step on
+   the ramp it already uses — where the ramp has one — and every variant
+   contracts very slightly. The contraction is what makes the press visible on
+   Soft, Ghost and Danger, whose hover colours have nowhere darker to go that
+   keeps the text readable: `--brand-300` behind `--brand-700` text is 3.6:1,
+   which fails AA, and `--dark-danger` behind `--danger` is worse. A transform
+   does not affect layout, so §9's "must not cause layout shift" still holds. */
+
+.primary {
+  background: var(--brand-btn);
+  border-color: var(--brand-btn);
+  color: var(--ink-inverse);
+}
+
+/* §8's table puts the brand shadow on the hover row, so it is not on the default
+   state — which is where the demo has it (`box-shadow` sits on `.btn-primary`
+   itself). The table settles this one, so the table wins. */
+.primary:hover:not(:disabled) {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  box-shadow: var(--sh-brand);
+}
+
+.primary:active:not(:disabled) {
+  background: var(--brand-700);
+  border-color: var(--brand-700);
+  transform: scale(0.97);
+}
+
+.soft {
+  background: var(--brand-50);
+  border-color: transparent;
+  color: var(--brand-700);
+}
+
+.soft:hover:not(:disabled) {
+  background: var(--brand-100);
+}
+
+.soft:active:not(:disabled) {
+  background: var(--brand-100);
+  transform: scale(0.97);
+}
+
+.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-2);
+}
+
+/* §8's hover column gives the background alone; the demo's `.btn-ghost:hover`
+   also promotes the text to `--ink`. Two declarations where the table has one
+   column, so the demo supplies the second — its text colour is the same
+   `--ink-2` the table gives for the default state, which is what makes the
+   promotion legible as the demo's intent rather than an accident. */
+.ghost:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+/* `--neutral-bg` rather than `--line`: the ramp's next step after
+   `--surface-sunken`, and the token that names itself a background. */
+.ghost:active:not(:disabled) {
+  background: var(--neutral-bg);
+  transform: scale(0.97);
+}
+
+.outline {
+  background: transparent;
+  border-color: var(--brand-300);
+  color: var(--brand-700);
+}
+
+/* As with Ghost: §8 gives the background, the demo's `.btn-outline:hover` also
+   completes the border from `--brand-300` to the full `--brand`. */
+.outline:hover:not(:disabled) {
+  background: var(--brand-50);
+  border-color: var(--brand);
+}
+
+.outline:active:not(:disabled) {
+  background: var(--brand-100);
+  transform: scale(0.97);
+}
+
+.danger {
+  background: var(--danger-bg);
+  border-color: transparent;
+  color: var(--danger);
+}
+
+/* §8: "slightly darker danger bg". The demo draws it as a hard-coded `#f4d7d9`
+   (`.btn-danger:hover`), which A1 forbids and §46 does not carry; the closest
+   token is `--dark-danger-bg`, the darker of the two danger backgrounds. The two
+   are within a few percent of each other in lightness and the token is the one
+   that survives a review with the rule intact. */
+.danger:hover:not(:disabled) {
+  background: var(--dark-danger-bg);
+}
+
+.danger:active:not(:disabled) {
+  background: var(--dark-danger-bg);
+  transform: scale(0.97);
+}
+
+/* ── Sizes (§8) ───────────────────────────────────────────────────────────── */
+
+/* The size classes carry the radius and the font size as well as the padding,
+   because §8 gives all three per size — `large` and `small` change the corner
+   and the type as well as the box. `.button` therefore states none of them, so
+   there is no declaration for a size class to have to override. */
+
+.default {
+  padding: 10px 18px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+
+.large {
+  padding: 14px 26px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+}
+
+.small {
+  padding: 6px 12px;
+  border-radius: var(--r-xs);
+  font-size: var(--fs-xs);
+}
+
+.icon {
+  padding: 0;
+  inline-size: 36px;
+  block-size: 36px;
+  border-radius: var(--r-sm);
+}
+
+.block {
+  inline-size: 100%;
+}
+
+/* ── Loading (§9) ─────────────────────────────────────────────────────────── */
+
+/* §9: "Preserve the button's dimensions; replace the icon/text area with a
+   compact spinner; must not cause layout shift."
+ *
+ * The label is made transparent rather than removed. `display: none` would drop
+ * the box and resize the button; `visibility: hidden` would keep the box but take
+ * the label out of the accessibility tree, leaving a button whose accessible name
+ * is empty — which is an axe critical violation. `opacity: 0` keeps both: the
+ * width is unchanged and the name the button already had is the name it still
+ * has while it loads. `aria-busy` on the button is what announces the state. */
+
+.content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+}
+
+.is-loading .content {
+  opacity: 0;
+}
+
+.spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
