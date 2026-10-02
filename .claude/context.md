@@ -78,11 +78,29 @@ does not need to be thought about again.
 
 ## 4. Current phase
 
-**Phase 0 — Foundation and architecture — is complete.** The repository contains
-documentation only; there is no application code, no `package.json` and no
-schema. That is the intended state.
+**Phase 1 — Platform foundation — is in progress**, started ۱۴۰۵/۰۷/۰۹. The
+repository now contains the project skeleton, the design tokens, the
+localization layer, the Prisma schema, the PostgreSQL RLS migration, the
+permission primitive, the React Query configuration, the shared components and
+the self-hosted Vazirmatn fonts.
 
-**Next: Phase 1 — Platform foundation.**
+**`npm run verify` passes end to end** — generate, typecheck, lint, the five
+check scripts and 886 tests, exit 0. The 96-case permission matrix is green.
+All of it is committed on `main`; no remote is configured.
+
+**What is not written yet** — each is unblocked now that the shell works, and
+each is listed in `docs/roadmap/progress.md`:
+
+- the SQLite migration list, `getTenantContext()` and the tenant-injecting Prisma
+  extension, `prisma/seed.ts`;
+- `auth` — password login for staff, mobile + OTP for customers;
+- `src/worker/`, and `src/app/page.tsx` with the panel shells;
+- the module override registry, whose owner OQ-6 settles.
+
+**Before writing any further Phase 1 code, read `reports/phase-01-report.md`.**
+Its §6 holds the ten open questions that must be answered before the phase
+closes, and its Appendix A is the register of every deviation and defect found
+so far.
 
 Its definition of done, restated (full version in `docs/roadmap/phases.md`):
 
@@ -100,6 +118,9 @@ Its definition of done, restated (full version in `docs/roadmap/phases.md`):
 **Start Phase 1 in this order:** token block → localization layer → Prisma schema
 → RLS migrations → `getTenantContext()` → `auth` → the permission primitive →
 the worker process. The permission matrix passes before any feature work begins.
+
+**Not one of those ten has been demonstrated.** Item 1 alone cannot pass until
+the font files exist.
 
 ---
 

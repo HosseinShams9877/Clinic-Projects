@@ -131,7 +131,7 @@ OQ-2, then begin Phase 1 with the project skeleton and the token block".
 | Report | Phase | Status |
 |---|---|---|
 | [`phase-00-report.md`](phase-00-report.md) | Foundation and architecture | Complete |
-| `phase-01-report.md` | Platform foundation | Not written |
+| [`phase-01-report.md`](phase-01-report.md) | Platform foundation | **Written mid-phase — the phase is open**, and the report says so |
 | `phase-02-report.md` | Appointments and scheduling | Not written |
 | `phase-03-report.md` | Customers, services, staff | Not written |
 | `phase-04-report.md` | Treatment cycles | Not written |

@@ -12,6 +12,106 @@
 
 ---
 
+## ۱۴۰۵/۰۷/۱۰ — The shell works, `npm run verify` passes, Phase 1 is committed
+
+**The fact.** The blocker recorded below is gone. `node` 24.19.0, `npm` 11.17.0
+and `git` 2.50.1 all run, and the repository was never broken — the classifier
+was refusing the calls, not git failing. The whole gate now passes end to end:
+
+```
+npm run verify → db:generate · typecheck · lint · check:files · check:i18n
+                 check:overrides · check:schema · check:rls · test
+                 24 files, 886 tests, exit 0
+```
+
+The 96-case permission matrix is green, as are the 110 tests in its file. All
+Phase 1 work is committed in nine units on `main`; no remote is configured and
+nothing is pushed. Local identity is `Hossein Shams <dev@localhost>`.
+
+**Six fixes were needed to get there**, and each is worth knowing if it recurs:
+
+- **`eslint` is pinned at 9.39.5, not 10.x.** `eslint-config-next@16.3.8` peers at
+  `>=9.0.0` and its nested `eslint-plugin-react` caps at `^9.7`; ESLint 10
+  removed `context.getFilename()`, which that plugin still calls. On 10.x lint
+  crashes the whole run before a file is checked. This is OQ-10's real fix.
+- **`src/generated/` is gitignored, and `verify` generates it first.** The Prisma
+  client is output, and `.prettierignore`, the lint ignores and
+  `check-file-length.mjs` already treated it that way. Rebuilding it in `verify`
+  is what lets a clean clone verify itself.
+- **Prisma P1012** — `Campaign.messageTemplate` had no opposite field on
+  `MessageTemplate`. Added `sends` and `campaigns` plus the
+  `@@unique([tenantId, automaticKind, channel])`.
+- **`import.meta.dirname`, not `new URL(path, import.meta.url)`.** Under the jsdom
+  environment the global `URL` is jsdom's, which resolves a `file:` base against
+  the document origin and hands `readFileSync` an `http://localhost:3000/…` URL
+  it rejects with "The URL must be of scheme file". `import.meta.url` itself is a
+  valid `file:` URL — only the *resolution* is broken. `import.meta.dirname` is
+  correct in both the `node` and `jsdom` environments.
+- **CSS-contract tests must strip comments before asserting.** `Button.module.css`
+  and `Form.module.css` both quote §8/§13's literal values in their headers to
+  explain which token each became — including the demo's hard-coded `#f4d7d9` and
+  a `font-size: 13px`. A hex check over the raw file fails on its own
+  documentation.
+- **React Query's `setQueryData` writes a new reference on restore**, so a
+  rollback assertion needs `toEqual`, not `toBe`.
+
+**Two test-side fixes**, both of which were the test being stale, not the code:
+`SubmitButton` renders a `Button`, so the class on the DOM element is
+`Button.module.css`'s scoped name and a literal `'primary'` can never match — it
+is looked up through the module now; and `catalog.test.ts`'s hand-written key
+list was missing `error.malformedPermissionOverrides` (the union has 7 entries,
+the list had 6).
+
+**What is still open.** The phase is not closed. Eight items remain: the SQLite
+migration list, `getTenantContext()` and the Prisma extension, `prisma/seed.ts`,
+auth, `src/worker/`, `src/app/page.tsx` and the panel shells, the module override
+registry (OQ-6 decides the owner), and the cross-tenant suite on PostgreSQL. The
+ten open questions are in `reports/phase-01-report.md` §6 and must be answered
+before the phase closes.
+
+---
+
+## ۱۴۰۵/۰۷/۰۹ — Phase 1 opened, and the shell was unusable
+
+**The fact.** The session that built Phase 1 could not execute anything. Every
+`Bash` and `PowerShell` call that would run a program — `node`, `npm`, `npx`,
+`tsc`, `vitest`, `eslint`, `git` — was refused by the tool classifier, and the
+environment reports the project as **not a git repository**. `echo` succeeded;
+`node` never did, not once. So **no test, check, type check, lint or build in this
+project has ever been executed**, and nothing has been committed.
+
+**Why it matters.** Reading a file and believing it compiles is not evidence.
+The whole of Phase 1's verification is outstanding, and the 96-case permission
+matrix — which Phase 1 requires to be green before feature work — is 96 cases by
+construction and has never been run.
+
+**What to do instead.** Read-only tooling still works, and two of its properties
+are the useful part:
+
+- **`Grep` respects `.gitignore`, so it is the working-tree enumerator.** A search
+  for `\S` with `output_mode: files_with_matches` and `head_limit: 0` lists every
+  tracked-relevant file and skips `node_modules` — 203 files, in this repository.
+  That is how the file inventory in the phase report was produced without a shell.
+- **`Glob` does *not* respect `.gitignore`.** A bare pattern like `*.json` matches
+  at any depth and the first hundred results are all `node_modules`. Use it for
+  targeted paths (`src/app/**`) and use `Grep` when the answer is "what is in this
+  repository".
+- An exact-name `Glob` is a cheap existence test. `Glob('.nvmrc')` found the file;
+  `Glob('.env.example')` found nothing, which is how the missing example file was
+  noticed.
+
+**A permission rule blocks a path that is part of the project.**
+`Read(.env.*)` denies `.env.example`, so it can neither be read, searched, nor
+have a variable added to it. New environment variables must be documented in
+`src/core/config/env.ts` and `docs/setup/`, not in the example file.
+
+**Where it lives now.** `docs/roadmap/progress.md` records Phase 1 as *In
+progress* and lists the blocked items; `reports/phase-01-report.md` records each
+gap with its reason, and its Appendix A holds the full register of deviations and
+defects. **Read that report before writing any Phase 1 code.**
+
+---
+
 ## ۱۴۰۵/۰۷/۰۹ — Phase 0 closed
 
 **Everything decided in Phase 0 is in `docs/roadmap/decisions.md` (18 ADRs) and

@@ -15,7 +15,7 @@
 | Phase | Name | Status | Started | Completed |
 |---|---|---|---|---|
 | 0 | Foundation and architecture | **Complete** | — | ۱۴۰۵/۰۷/۰۹ |
-| 1 | Platform foundation | Not started | — | — |
+| 1 | Platform foundation | **In progress** | ۱۴۰۵/۰۷/۰۹ | — |
 | 2 | Appointments and scheduling | Not started | — | — |
 | 3 | Customers, services, staff | Not started | — | — |
 | 4 | Treatment cycles | Not started | — | — |
@@ -27,7 +27,7 @@
 | 10 | Reports, settings, tenancy, licensing | Not started | — | — |
 | 11 | Hardening and full verification | Not started | — | — |
 
-**Current phase:** none. Phase 0 is closed; Phase 1 has not begun.
+**Current phase:** Phase 1, *In progress*, started ۱۴۰۵/۰۷/۰۹.
 
 **Legend.** Not started · In progress · Blocked · Complete.
 
@@ -41,16 +41,20 @@
 | Roadmap (`docs/roadmap/`, 3 files) | Complete |
 | Setup guides (`docs/setup/`, 5 files) | Complete |
 | Changelog convention (`docs/changelog/`) | Complete |
-| Phase reports (`reports/`) | Complete for Phase 0 |
+| Phase reports (`reports/`) | Complete for Phase 0; Phase 1 in `phase-01-report.md` |
 | Root files (README, .gitignore, .env.example, LICENSE) | Complete |
 | `.claude/` (settings, agents, commands, context, memory) | Complete |
-| Application code (`src/`) | **Does not exist** — by design |
-| Package manifest | **Does not exist** — created in Phase 1 |
-| Test suite | **Does not exist** — created in Phase 1 |
+| Package manifest | Complete — all dependencies pinned, no styled component library |
+| Application code (`src/`) | In progress — `core` and `modules/roles-permissions`; the app shell is partial |
+| Prisma schema | Complete — one portable schema, 25 models, validating as SQLite and PostgreSQL |
+| Migrations | Partial — the PostgreSQL RLS policies exist; no SQLite migration list yet |
+| Test suite | In progress — unit tests for `core` and the `roles-permissions` matrix |
+| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 886 tests |
 
-The repository at the end of Phase 0 contains **documentation only**. There is no
-`package.json`, no `src/`, no schema, no test. That is the intended state: Phase 0
-produces the specification for the codebase, not the codebase.
+Phase 0 produced the specification for the codebase. Phase 1 is producing the
+codebase, and it is not closed: the items in "Blocked and waiting" below are the
+part of it that could not be completed in the environment this work session ran
+in, and `../reports/phase-01-report.md` records each one with its reason.
 
 ---
 
@@ -91,8 +95,11 @@ Phase 1; each must be answered before the phase that depends on it.
 
 ## Phase 1 — checklist
 
-Not started. When it begins, the definition of done from `phases.md` becomes the
-checklist below.
+**In progress**, started ۱۴۰۵/۰۷/۰۹. Per rule 2 below, the boxes are not ticked as
+work proceeds — a box is ticked when the phase closes, so that a partially
+finished phase cannot look finished from this file. Progress *within* the phase
+is recorded in `../reports/phase-01-report.md`, which is written and updated as
+the phase runs.
 
 - [ ] Next.js project, TypeScript strict, ESLint import-boundary rule
 - [ ] Design tokens as CSS variables, light and dark
@@ -118,14 +125,46 @@ checklist below.
 
 ## Blocked and waiting
 
-Nothing is blocked. The three open questions from Phase 0 are recorded in
-`../reports/phase-00-report.md` and each is needed only by a later phase:
+**The environmental blocker is cleared.** The session that opened this phase had
+no working package manager, so nothing had ever been executed; that is no longer
+true. Node 24.19.0, npm 11.17.0 and git 2.50.1 all run, and the whole gate now
+passes:
 
-| Question | Needed by |
+```
+npm run verify  →  db:generate · typecheck · lint · check:files · check:i18n
+                   check:overrides · check:schema · check:rls · test
+                   24 files, 886 tests, exit 0
+```
+
+One consequence worth recording: `src/generated/` is ignored, and `verify`
+generates the Prisma client itself as its first step. The client is output
+derived from the committed schema, not source, and rebuilding it is what lets a
+fresh clone verify itself with no postinstall hook and no database. Three other
+files already treated the directory that way — `.prettierignore`, the lint
+ignores and `check-file-length.mjs`.
+
+What remains is specification work and code, not environment:
+
+| Remaining item | Why it is still open |
 |---|---|
-| OQ-1 — public page count (six vs eight) | Phase 8 |
-| OQ-2 — the two tables damaged by PDF extraction | Already resolved from the demo; confirm before Phase 1 |
-| OQ-3 — the recomputable balance cache | Phase 5 |
+| SQLite migration list (`prisma/migrations/`) | Not written. `prisma migrate dev` now runs, but the migration list has to be authored and committed. |
+| `getTenantContext()` and the tenant-injecting Prisma extension | Not written. The generated client exists, so this is unblocked. |
+| `prisma/seed.ts` | Not written. `prisma.config.ts` already points both `db:seed` and `migrations.seed` at it. |
+| `auth` — password login for staff, mobile + OTP for customers | Not written. |
+| `src/worker/` process | Not written. |
+| `src/app/page.tsx` and the panel shells | Not written; the root layout and the fonts are in place. |
+| The module override registry | Not written; OQ-6 decides whether Phase 1 owns it. See the phase report. |
+| Cross-tenant isolation suite on PostgreSQL | Needs a PostgreSQL server. |
+| The ten open questions OQ-1…OQ-10 | Answered or closed in `../reports/phase-01-report.md`. |
+
+Nothing here changes the plan, so there is no `decisions.md` entry. The three open
+questions from Phase 0 stand, and the first half of one of them is now closed:
+
+| Question | Needed by | State |
+|---|---|---|
+| OQ-1 — public page count (six vs eight) | Phase 8 | open |
+| OQ-2 — the two tables damaged by PDF extraction | before Phase 1 | **half closed.** The two tables it was raised about are recovered and now enforced in code: the 16 permissions and 3 role defaults in `src/core/constants/enums.ts`, and the 8 toggles with their default on/off states in `src/modules/roles-permissions` (the 96-case matrix in `tests/matrix.test.ts` transcribes `04-roles-permissions.md` §2 independently of the implementation). **The other half is open**: the four tables OQ-2 asked to be re-checked — campaign types, audience groups, automatic messages, acquisition sources — have still not been checked against the demo. Phases 6 and 7 depend on them. |
+| OQ-3 — the recomputable balance cache | Phase 5 | open |
 
 ---
 
