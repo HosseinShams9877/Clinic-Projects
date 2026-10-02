@@ -45,6 +45,14 @@ dist/
 *.tsbuildinfo
 next-env.d.ts
 
+# Generated code. The Prisma client is derived from `prisma/schema.prisma` by
+# `npm run db:generate` and needs no database to build, so it is rebuilt rather
+# than tracked — `npm run verify` runs the generate first, which is what makes a
+# fresh clone able to verify itself. `.prettierignore`, the lint ignores and
+# `check-file-length.mjs` all treat the directory the same way: a generated file
+# is output, not source.
+src/generated/
+
 # ── Database files ───────────────────────────────────────────────────────────
 # The SQLite development database and everything it leaves behind.
 # A committed database file is a data leak and a merge conflict at once.
@@ -66,6 +74,15 @@ prisma/migrations/**/dev.db
 *.sql
 *.sql.gz
 pg_backup/
+
+# ...except migrations, which ARE source code.
+# `05-conventions.md` and `database-migration.md` §2: "Migrations are committed.
+# They are never generated on the deployment machine and never edited after they
+# have been applied anywhere." A bare `*.sql` above would ignore every
+# `migration.sql` Prisma writes and every policy in `prisma/migrations-pg/`, and
+# the loss would be silent — the files would simply never appear in a commit.
+!prisma/migrations/**/*.sql
+!prisma/migrations-pg/**/*.sql
 
 # ── Testing ──────────────────────────────────────────────────────────────────
 coverage/

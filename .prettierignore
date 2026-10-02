@@ -1,0 +1,54 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .prettierignore
+#
+# Prettier formats source. It does not format prose, source material, or output.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Dependencies and build output ────────────────────────────────────────────
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Generated and locked files ───────────────────────────────────────────────
+# A generated file that Prettier rewrites is a generated file that no longer
+# matches its generator.
+package-lock.json
+prisma/migrations/
+src/generated/
+
+# ── Prose ────────────────────────────────────────────────────────────────────
+# Markdown is written to a measure, by hand, and a large part of it is Persian.
+# Prettier reflows to `printWidth`, which re-wraps lines it cannot lay out
+# correctly: it has no bidi model, so a line that mixes Persian prose with a
+# Latin identifier or a code span is a line whose visual order Prettier cannot
+# see. Reflowing that text risks changing what a reader sees while the diff
+# shows only whitespace. The docs are reviewed as they are written instead.
+*.md
+docs/
+
+# ── Source material ──────────────────────────────────────────────────────────
+# The UI demo and the specification are the product's *inputs* — they are
+# tracked so that every decision in `docs/knowledge/` can be traced back to
+# them, and they are read, never edited. Formatting them would rewrite the
+# evidence.
+clinic/
+*.txt
+*.pdf
+
+# ── Agent configuration ──────────────────────────────────────────────────────
+# `.claude/` holds prompt text and hook scripts whose exact bytes matter: the
+# hooks are single-line `node -e` programs embedded in JSON, and a formatter
+# that re-wrapped one would break it silently.
+.claude/
+
+# ── Test output ──────────────────────────────────────────────────────────────
+playwright-report/
+test-results/
+blob-report/
+.vitest/
