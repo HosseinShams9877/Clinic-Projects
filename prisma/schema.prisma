@@ -1,0 +1,933 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// `03-data-model.md` — the schema.
+//
+// **One file.** `setup/database-migration.md` §8.1: "The schema is one file. A
+// second schema file is a defect (ADR-0007)." Every model is therefore here,
+// including the supporting entities `03-data-model.md` §6 lists only in summary.
+//
+// **The provider is a literal, and the literal is `sqlite`.** Prisma 7.10.0
+// refuses a computed provider ("The provider argument in a datasource must be a
+// string literal"), refuses `env()` inside it, and refuses more than one
+// datasource block — so one schema cannot select its engine at load time. The
+// URL is not here either: in Prisma 7 the `url` property is no longer supported
+// in a schema file and lives in `prisma.config.ts`. The models below are
+// engine-neutral by construction — `03-data-model.md` §5 and
+// `database-migration.md` §3 are the avoided-feature list, and every entry on it
+// is honoured here: no native enum, no array, no `Json` column, no `citext`, no
+// full-text search, no generated column, no `@db.*` native type. The provider
+// line is switched per environment by `npm run db:provider`, and
+// `scripts/check-schema-portability.mjs` validates this same file under both
+// providers in CI.
+//
+// **Every index carries the name the documents give it** (`customer_mobile_key`,
+// `appt_slot_unique`, …) through `map:`, so the index a query planner reports is
+// the index `03-data-model.md` §2 names. The query each index exists to serve is
+// stated in that section and is not repeated here.
+//
+// **The one partial index is not partial.** `appt_slot_unique` is stated in §2.2
+// as `(tenantId, doctorId, scheduledAt) WHERE isSlotBlock = false`. SQLite has no
+// partial index, so §5 and `database-migration.md` §3.1 sanction exactly one
+// escape hatch: a plain unique index over a nullable `slotKey`, which holds the
+// slot's identity for a real booking and is NULL for a slot block. NULL is not
+// compared in a unique index on either engine, so an unlimited number of blocks
+// may share a slot and exactly one booking may hold it — the same semantics as
+// the filtered index, on both engines.
+//
+// **Money is `BigInt`, in Rial** (§3.1): INTEGER on SQLite, BIGINT on PostgreSQL.
+// There is no `balance` column and no `debts` table (§4.3). `Customer`'s
+// `chargedTotal`, `discountTotal` and `paidTotal` are *recomputable caches of
+// ledger facts* — the running sums, never the derived value — and the balance is
+// computed from them at read time, which is what keeps immutable rule 8 intact.
+//
+// **Table names are snake_case plural; column names stay camelCase.** That is
+// what makes the RLS policies in `prisma/migrations-pg/` read exactly as
+// `database-migration.md` §4 writes them:
+// `ALTER TABLE "customers" … "tenantId" = current_setting('app.tenant_id', true)`.
+//
+// **Deletion is not modelled.** Immutable rule 10 keeps a service that is
+// deactivated, and §7.8 states that no hard delete exists on `Service`, `Payment`
+// or `Appointment`. Prisma's default referential action for a required relation
+// refuses the delete at the engine; the rule itself is enforced in the module
+// layer and covered by tests (§7). No application code path deletes a row from
+// those three tables, and there is none to add.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ── Tenancy ──────────────────────────────────────────────────────────────────
+// `Tenant` is the row every other tenant-scoped row points at. It carries no
+// `tenantId` of its own; its RLS policy matches on `id`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Tenant {
+  // `slug` is the tenant's stable external name (UNIQUE, §6). `isActive` is how a
+  // tenant is closed: the row stays, because every fact below it points here.
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  settings       TenantSettings?
+  clinics        Clinic[]
+  users          User[]
+  memberships    Membership[]
+  sessions       Session[]
+  customers      Customer[]
+  appointments   Appointment[]
+  services       Service[]
+  serviceDoctors ServiceDoctor[]
+  cycles         TreatmentCycle[]
+  payments       Payment[]
+  campaigns      Campaign[]
+  audienceGroups AudienceGroup[]
+  templates      MessageTemplate[]
+  sends          MessageSend[]
+  consentRecords ConsentRecord[]
+  images         BeforeAfterImage[]
+  shifts         ClinicShift[]
+  workingHours   DoctorWorkingHours[]
+  holidays       Holiday[]
+  leaveRequests  LeaveRequest[]
+  jobs           JobQueue[]
+  auditLogs      AuditLog[]
+
+  @@map("tenants")
+}
+
+// The tenant's settings row — `02-architecture.md` §13.2: "In the tenant's
+// settings row, in the database." It carries the module override declarations,
+// the eight behavioural toggles of `04-roles-permissions.md` §4, and the clinic
+// policy values `03-data-model.md` §4 refers to as `settings.*`.
+//
+// `overrides` and `toggles` are JSON in a String column, parsed through Zod on
+// read (§5, and `13.3`: "Resolution is per request"). NULL means the same thing
+// for both: nothing is declared, so every default applies — the state of every
+// tenant at onboarding (§13.4).
+model TenantSettings {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  overrides String?
+  toggles   String?
+
+  // The policy values §4 names but does not fix. NULL is the absence of a
+  // decision, not a value: a NULL `debtGraceDays` means no grace period, a NULL
+  // refund policy means a refund cannot be recorded until one is set. The
+  // product's shipped values are an open question — see the Phase 1 report.
+  debtGraceDays          Int?
+  depositRefundPolicy    String?
+  sendWindowStart        String?
+  sendWindowEnd          String?
+  dailyMessageCap        Int?
+
+  // Documented values, so these two do carry a default.
+  //   §6 of `02-architecture.md`: "no duplicate message within 90 days".
+  //   ADR-0009 and `07-localization.md`: Iran Standard Time, a fixed UTC+3:30.
+  // A fixed offset rather than a timezone name is deliberate; the Jalali date is
+  // stored, not derived, so there is no transition to observe.
+  duplicateMessageWindowDays Int @default(90)
+  utcOffsetMinutes           Int @default(210)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tenant_settings")
+}
+
+// A branch within a tenant (§6). `tenantId` scopes it; the UNIQUE name keeps two
+// branches of one clinic from sharing a label.
+model Clinic {
+  id       String  @id @default(cuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id])
+
+  name     String
+  phone    String?
+  address  String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers    Customer[]
+  appointments Appointment[]
+  services     Service[]
+  shifts       ClinicShift[]
+  memberships  Membership[]
+
+  @@unique([tenantId, name], map: "clinic_tenant_name_key")
+  @@map("clinics")
+}
+
+// A person who can log in (§6). Staff authenticate with a mobile number and a
+// password; `passwordHash` is therefore required, and the row is deactivated
+// rather than deleted so that the audit trail keeps naming it.
+//
+// The role is **not** here. It lives on `Membership`, because a person's role is
+// a fact about their relationship to a tenant, not about them.
+model User {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  mobile       String
+  firstName    String
+  lastName     String
+  passwordHash String
+
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships        Membership[]
+  sessions           Session[]
+  primaryFor         Customer[]        @relation("CustomerPrimaryDoctor")
+  appointments       Appointment[]
+  workingHours       DoctorWorkingHours[]
+  services           ServiceDoctor[]
+  cycles             TreatmentCycle[]
+  paymentsRecorded   Payment[]         @relation("PaymentRecorder")
+  paymentsDiscounted Payment[]         @relation("PaymentDiscounter")
+  campaignsCreated   Campaign[]        @relation("CampaignCreator")
+  campaignsApproved  Campaign[]        @relation("CampaignApprover")
+  groupsCreated      AudienceGroup[]
+  leaveRequests      LeaveRequest[]    @relation("LeaveRequester")
+  leavesApproved     LeaveRequest[]    @relation("LeaveApprover")
+  auditLogs          AuditLog[]
+
+  @@unique([tenantId, mobile], map: "user_tenant_mobile_key")
+  @@map("users")
+}
+
+// `User ──< Membership >── Tenant`, plus the role, the clinic scope (§3.1's
+// secondary boundary) and the per-user overrides `04-roles-permissions.md` §2.2
+// defines.
+//
+// `role` is a String, not a native enum (§5). The three values and the sixteen
+// permissions are in `src/core/constants`; `overrides` is a JSON String holding
+// `{ "granted": [...], "revoked": [...] }`, read through `parsePermissionOverrides`
+// in `src/core/tenant`, which drops a slug the release no longer knows and
+// refuses a row it cannot parse rather than silently granting nothing.
+//
+// §2.2's formula is `effective(user) = (roleDefault(role) ∪ granted) \ revoked`.
+// The manager column is locked (§2.3), and the lock is enforced on the write path
+// and on the read path — see `src/modules/roles-permissions`.
+model Membership {
+  id       String @id @default(cuid())
+  userId   String
+  tenantId String
+  user     User   @relation(fields: [userId], references: [id])
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  role     String
+  clinicId String?
+  clinic   Clinic? @relation(fields: [clinicId], references: [id])
+
+  overrides String?
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, tenantId], map: "membership_user_tenant_key")
+  @@index([tenantId, role], map: "membership_tenant_role_idx")
+  @@map("memberships")
+}
+
+// A staff session. `09-security.md`: the session lives in an HttpOnly cookie and
+// the server holds only a hash of the token, so a database disclosure does not
+// hand over a usable credential. Rotation on login revokes the previous row and
+// writes a new one; `rotatedAt` records the handover so a replayed old token is
+// visible rather than merely refused.
+model Session {
+  id       String @id @default(cuid())
+  userId   String
+  tenantId String
+  user     User   @relation(fields: [userId], references: [id])
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  tokenHash String   @unique(map: "session_token_key")
+  expiresAt DateTime
+  rotatedAt DateTime?
+  revokedAt DateTime?
+
+  ip        String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt], map: "session_user_expires_idx")
+  @@map("sessions")
+}
+
+// On-premise licence (§6). Deliberately not tenant-scoped: a licence belongs to
+// the installation, and `key` is unique across it.
+model LicenseKey {
+  id String @id @default(cuid())
+
+  key        String    @unique(map: "license_key_key")
+  issuedTo   String?
+  issuedAt   DateTime  @default(now())
+  expiresAt  DateTime?
+  maxUsers   Int?
+  activatedAt DateTime?
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("license_keys")
+}
+
+// ── Audit and jobs ───────────────────────────────────────────────────────────
+
+// Permission-sensitive actions (`09-security.md` §7). `detail` is JSON in a
+// String column; it is written, never queried in SQL.
+model AuditLog {
+  id          String  @id @default(cuid())
+  tenantId    String
+  tenant      Tenant  @relation(fields: [tenantId], references: [id])
+  actorUserId String?
+  actor       User?   @relation(fields: [actorUserId], references: [id])
+
+  action   String
+  entity   String
+  entityId String?
+  detail   String?
+  ip       String?
+
+  at DateTime @default(now())
+
+  @@index([tenantId, at(sort: Desc)], map: "audit_tenant_at_idx")
+  @@index([tenantId, actorUserId, at(sort: Desc)], map: "audit_tenant_actor_at_idx")
+  @@map("audit_logs")
+}
+
+// The worker's job table (§6) — claim semantics over a database table, with no
+// external broker (`01-tech-stack.md` §4). `tenantId` is required and non-null:
+// `09-security.md` §8 requires every job to run inside exactly one tenant's
+// scope, and a NULL here would be a job that could read every tenant at once.
+model JobQueue {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  kind    String
+  payload String?
+
+  status    String
+  runAt     DateTime
+  claimedAt DateTime?
+  claimedBy String?
+  attempts  Int       @default(0)
+  lastError String?
+  finishedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, runAt], map: "job_status_runat_idx")
+  @@index([tenantId, status, runAt], map: "job_tenant_status_runat_idx")
+  @@map("job_queues")
+}
+
+// ── Customers ────────────────────────────────────────────────────────────────
+
+// §2.1. The mobile number is the identity (Decision 1): `(tenantId, mobile)` is
+// UNIQUE, which is both the dedupe rule and the hottest lookup in the product.
+//
+// `lastVisitAt`, `firstVisitAt` and `completedSessions` are maintained
+// denormalisations — sums and counts of immutable facts, recomputable at any
+// time, and the inputs to every audience group. `chargedTotal`, `discountTotal`
+// and `paidTotal` are the same kind of thing for money (§4.3): the running sums
+// of ledger facts, never the balance.
+//
+// `birthMonth` and `birthDay` are stored beside `birthDate` so that «متولدین این
+// ماه» is answered by an integer comparison instead of a scan over dates (§2.1).
+// `searchName` is the normalised lowercase form §5 requires in place of `citext`
+// and full-text search.
+model Customer {
+  id               String  @id @default(cuid())
+  tenantId         String
+  tenant           Tenant  @relation(fields: [tenantId], references: [id])
+  primaryClinicId  String?
+  primaryClinic    Clinic? @relation(fields: [primaryClinicId], references: [id])
+  primaryDoctorId  String?
+  primaryDoctor    User?   @relation("CustomerPrimaryDoctor", fields: [primaryDoctorId], references: [id])
+
+  mobile    String
+  firstName String
+  lastName  String?
+  searchName String
+
+  birthDate  String?
+  birthMonth Int?
+  birthDay   Int?
+
+  acquisitionSource String?
+  residenceArea     String?
+  medicalHistory    String?
+  sensitivities     String?
+  doctorNote        String?
+
+  lifecycle         String
+  leadStatus        String?
+  leadNextContactAt DateTime?
+
+  lastVisitAt       DateTime?
+  firstVisitAt      DateTime?
+  completedSessions Int @default(0)
+
+  chargedTotal  BigInt @default(0)
+  discountTotal BigInt @default(0)
+  paidTotal     BigInt @default(0)
+
+  consentSms         Boolean @default(false)
+  consentWhatsApp    Boolean @default(false)
+  consentPhone       Boolean @default(false)
+  consentBeforeAfter Boolean @default(false)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments   Appointment[]
+  cycles         TreatmentCycle[]
+  payments       Payment[]
+  consentRecords ConsentRecord[]
+  images         BeforeAfterImage[]
+  messageSends   MessageSend[]
+
+  @@unique([tenantId, mobile], map: "customer_mobile_key")
+  @@index([tenantId, lastVisitAt], map: "customer_tenant_lastvisit_idx")
+  @@index([tenantId, firstVisitAt], map: "customer_tenant_firstvisit_idx")
+  @@index([tenantId, completedSessions], map: "customer_tenant_sessions_idx")
+  @@index([tenantId, lifecycle, leadStatus], map: "customer_tenant_lifecycle_idx")
+  @@index([tenantId, primaryDoctorId], map: "customer_tenant_doctor_idx")
+  @@index([tenantId, birthMonth, birthDay], map: "customer_tenant_birth_idx")
+  @@map("customers")
+}
+
+// Channel consent, with the timestamp and the source that justify it (§6).
+// `02-architecture.md` and immutable rule 5: customer consent outranks the
+// clinic, so the row is what a send is checked against, and a withdrawn consent
+// is a row with `revokedAt` set rather than a deleted row.
+model ConsentRecord {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  channel String
+  granted Boolean
+
+  source    String?
+  grantedAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, customerId, channel], map: "consent_tenant_customer_channel_idx")
+  @@map("consent_records")
+}
+
+// Before/after images, each with its own written, revocable consent (§6).
+// Immutable rule 6: the image is only publishable while `revokedAt` is NULL, and
+// the consent is per image because a customer may allow one photograph and not
+// another.
+model BeforeAfterImage {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  path        String
+  caption     String?
+  consentText String?
+  grantedAt   DateTime @default(now())
+  revokedAt   DateTime?
+  isVisible   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, customerId], map: "image_tenant_customer_idx")
+  @@map("before_after_images")
+}
+
+// ── Scheduling ───────────────────────────────────────────────────────────────
+
+// §2.2, and the row `SlotBlock` is modelled on: a closed hour is an
+// appointment-shaped row with `isSlotBlock = true`, no customer, no service and
+// a NULL `slotKey`, which is what keeps a block from colliding with the booking
+// it exists to prevent. Every lifecycle sweep filters `isSlotBlock = false`; a
+// block holds its slot and does nothing else.
+//
+// `scheduledAt` is the UTC instant, canonical for ordering and arithmetic;
+// `localDate` and `localTime` are the clinic-local Jalali values, which is what
+// a day grid compares and what makes the «۱۰:۳۰، ۲۹ شهریور» identity of the slot
+// a string rather than a timezone conversion (§3.1).
+//
+// `priceAtBooking` is snapshotted: a later price change must not alter what a
+// past appointment charged (§4.2). `slotKey` holds `scheduledAt` as an ISO-8601
+// UTC string for a real booking — see the escape-hatch note at the top.
+model Appointment {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  serviceId  String?
+  service    Service?  @relation(fields: [serviceId], references: [id])
+  doctorId   String
+  doctor     User      @relation(fields: [doctorId], references: [id])
+  cycleId    String?
+  cycle      TreatmentCycle? @relation(fields: [cycleId], references: [id])
+  campaignId String?
+  campaign   Campaign?      @relation(fields: [campaignId], references: [id])
+
+  scheduledAt DateTime
+  localDate   String
+  localTime   String
+
+  durationMinutes Int
+  status          String
+  source          String?
+  isSlotBlock     Boolean @default(false)
+  slotKey         String?
+
+  priceAtBooking BigInt  @default(0)
+  depositAmount  BigInt  @default(0)
+  depositStatus  String?
+
+  cancelledAt     DateTime?
+  cancelReason    String?
+  noShowReason    String?
+  rescheduledToId String?
+  rescheduledTo   Appointment?  @relation("AppointmentReschedule", fields: [rescheduledToId], references: [id])
+  rescheduledFrom Appointment[] @relation("AppointmentReschedule")
+  resultRecordedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments Payment[]
+
+  @@unique([tenantId, doctorId, slotKey], map: "appt_slot_unique")
+  @@index([tenantId, doctorId, localDate], map: "appt_tenant_doctor_date_idx")
+  @@index([tenantId, clinicId, localDate], map: "appt_tenant_clinic_date_idx")
+  @@index([tenantId, status, scheduledAt], map: "appt_tenant_status_sched_idx")
+  @@index([tenantId, customerId, scheduledAt(sort: Desc)], map: "appt_tenant_customer_sched_idx")
+  @@index([tenantId, cycleId], map: "appt_tenant_cycle_idx")
+  @@index([tenantId, campaignId], map: "appt_tenant_campaign_idx")
+  @@map("appointments")
+}
+
+// The clinic's working shifts, and the base the doctor's own hours are a
+// sub-range of. `weekday` is 0–6 with Saturday as 0 (`06-constants.md`), which
+// is the week's first day in Iran.
+model ClinicShift {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  weekday   Int
+  startTime String
+  endTime   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, clinicId, weekday], map: "shift_tenant_clinic_weekday_idx")
+  @@map("clinic_shifts")
+}
+
+// Per-doctor sub-ranges of the shifts (§6). A doctor works inside the clinic's
+// hours, never outside them; the two together are what the booking grid offers.
+model DoctorWorkingHours {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  doctorId String
+  doctor   User   @relation(fields: [doctorId], references: [id])
+
+  weekday   Int
+  startTime String
+  endTime   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, doctorId, weekday], map: "hours_tenant_doctor_weekday_idx")
+  @@map("doctor_working_hours")
+}
+
+// Official and clinic holidays. `localDate` is the Jalali date, so the lookup is
+// a string equality on the same representation the grid uses.
+model Holiday {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  localDate String
+  title     String
+  isOfficial Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, localDate], map: "holiday_tenant_date_idx")
+  @@map("holidays")
+}
+
+// Doctor leave, with the manager's approval (§6). A pending request must not
+// remove hours from the bookable grid; only an approved one does.
+model LeaveRequest {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  doctorId String
+  doctor   User   @relation("LeaveRequester", fields: [doctorId], references: [id])
+
+  startDate DateTime
+  endDate   DateTime
+  status    String
+  reason    String?
+
+  approvedByUserId String?
+  approvedBy       User?     @relation("LeaveApprover", fields: [approvedByUserId], references: [id])
+  approvedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, doctorId, status], map: "leave_tenant_doctor_status_idx")
+  @@map("leave_requests")
+}
+
+// ── Services ─────────────────────────────────────────────────────────────────
+
+// §2.3. `isActive` is the deactivation that replaces deletion (immutable rule
+// 10): an inactive service leaves the public list and the booking picker and
+// stays for the history of every appointment that used it. `defaultSessions` and
+// `defaultIntervalDays` seed a new cycle; the cycle then holds its own copy,
+// because §2.4.1 rule 2 reads the interval from the cycle.
+model Service {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  clinicId String?
+  clinic   Clinic? @relation(fields: [clinicId], references: [id])
+
+  name       String
+  searchName String
+  category   String
+
+  price           BigInt
+  depositAmount   BigInt @default(0)
+  durationMinutes Int
+
+  defaultSessions     Int @default(1)
+  defaultIntervalDays Int @default(0)
+
+  isActive        Boolean @default(true)
+  showPriceOnSite Boolean @default(false)
+
+  siteDescription String?
+  beforeCare      String?
+  afterCare       String?
+  notSuitableFor  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments Appointment[]
+  cycles       TreatmentCycle[]
+  doctors      ServiceDoctor[]
+
+  @@unique([tenantId, name], map: "service_tenant_name_key")
+  @@index([tenantId, isActive, category], map: "service_tenant_active_idx")
+  @@map("services")
+}
+
+// The join table §2.3 introduces in place of an array (§5: "Arrays → a join
+// table"). It decides which doctors a customer sees on the public site.
+model ServiceDoctor {
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
+  doctorId  String
+  doctor    User    @relation(fields: [doctorId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@id([serviceId, doctorId])
+  @@index([tenantId, doctorId], map: "service_doctor_tenant_doctor_idx")
+  @@map("service_doctors")
+}
+
+// ── Treatment cycles ─────────────────────────────────────────────────────────
+
+// §2.4. Created when an appointment reaches `COMPLETED` — not at booking, not at
+// arrival (§2.4.1 rule 1). `intervalDays` is snapshotted from the service at
+// creation and read from here afterwards, so a customer whose third session
+// slipped by a week has their fourth slip too (rule 2). `nextDueDate` is
+// `lastSessionAt + intervalDays` (rule 3).
+//
+// `inContactList` is the flag §2.4.1 rules 4 and 5 maintain: it is set when
+// `nextDueDate` has passed **and** no future appointment exists for the cycle —
+// the second condition is what keeps the call list worth reading.
+//
+// The UNIQUE on `(tenantId, customerId, serviceId, startedAt)` allows the same
+// customer to repeat the same service later, and refuses two identical cycles on
+// one day.
+model TreatmentCycle {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  serviceId  String
+  service    Service  @relation(fields: [serviceId], references: [id])
+  doctorId   String
+  doctor     User     @relation(fields: [doctorId], references: [id])
+
+  intervalDays         Int
+  totalSessions        Int
+  completedSessions    Int @default(0)
+  currentSessionNumber Int @default(1)
+
+  startedAt     DateTime
+  lastSessionAt DateTime?
+  nextDueDate   DateTime?
+
+  status            String
+  abandonmentReason String?
+
+  inContactList Boolean   @default(false)
+  lastContactAt DateTime?
+  nextContactAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments Appointment[]
+
+  @@unique([tenantId, customerId, serviceId, startedAt], map: "cycle_tenant_customer_service_started_key")
+  @@index([tenantId, status, nextDueDate], map: "cycle_tenant_status_due_idx")
+  @@index([tenantId, nextDueDate], map: "cycle_tenant_due_idx")
+  @@index([tenantId, customerId], map: "cycle_tenant_customer_idx")
+  @@index([tenantId, doctorId, status], map: "cycle_tenant_doctor_idx")
+  @@index([tenantId, status, lastSessionAt], map: "cycle_tenant_completed_idx")
+  @@map("treatment_cycles")
+}
+
+// ── Money ────────────────────────────────────────────────────────────────────
+
+// §2.5. Every payment attaches to **one specific appointment**, never merely to
+// the customer, which is what makes a per-appointment balance possible. A
+// discount is `discountAmount` on this row — part of the amount charged, not an
+// addition to it — and `discountByUserId` records who applied it (immutable rule
+// 7). There is no delete path: a correction is a new `REFUND` row.
+model Payment {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  customerId    String
+  customer      Customer    @relation(fields: [customerId], references: [id])
+
+  recordedByUserId String
+  recordedBy       User   @relation("PaymentRecorder", fields: [recordedByUserId], references: [id])
+  discountByUserId String?
+  discountBy       User?  @relation("PaymentDiscounter", fields: [discountByUserId], references: [id])
+
+  amount         BigInt
+  discountAmount BigInt @default(0)
+  discountReason String?
+  method         String
+  kind           String
+  note           String?
+  paidAt         DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, appointmentId], map: "payment_tenant_appt_idx")
+  @@index([tenantId, customerId, paidAt(sort: Desc)], map: "payment_tenant_customer_paid_idx")
+  @@index([tenantId, paidAt], map: "payment_tenant_paid_idx")
+  @@map("payments")
+}
+
+// ── Messaging ────────────────────────────────────────────────────────────────
+
+// The editable text of the seven automatic messages (§6). One row per kind per
+// channel, so an SMS and a WhatsApp template of the same moment are separate
+// rows and can be worded differently.
+model MessageTemplate {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  automaticKind String
+  channel       String
+  text          String
+  isActive      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sends    MessageSend[]
+  campaigns Campaign[]
+
+  @@unique([tenantId, automaticKind, channel], map: "template_tenant_kind_channel_key")
+  @@map("message_templates")
+}
+
+// §2.6. `status` cannot reach `ACTIVE` without `approvedByUserId` and
+// `approvedAt` — immutable rule 4 ("no bulk send without human approval") is a
+// schema-level constraint, not a UI convention, and the module layer refuses the
+// transition that would break it.
+//
+// `audienceGroupId` points at a **query** (§2.7), not a list. `audienceLockedAt`
+// records the moment the audience was frozen for a one-time send.
+model Campaign {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  audienceGroupId String
+  audienceGroup   AudienceGroup @relation(fields: [audienceGroupId], references: [id])
+
+  messageTemplateId String?
+  messageTemplate   MessageTemplate? @relation(fields: [messageTemplateId], references: [id])
+
+  createdByUserId String
+  createdBy       User   @relation("CampaignCreator", fields: [createdByUserId], references: [id])
+  approvedByUserId String?
+  approvedBy       User? @relation("CampaignApprover", fields: [approvedByUserId], references: [id])
+
+  name        String
+  type        String
+  channel     String
+  messageText String
+
+  audienceLockedAt DateTime?
+
+  isRecurring   Boolean @default(false)
+  scheduleKind  String
+  scheduledAt   DateTime?
+  scheduledTime String?
+  dailyCap      Int?
+
+  status     String
+  approvedAt DateTime?
+
+  sentCount                Int @default(0)
+  resultingAppointmentCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments Appointment[]
+  sends        MessageSend[]
+
+  @@index([tenantId, status, scheduledAt], map: "campaign_tenant_status_idx")
+  @@index([tenantId, type], map: "campaign_tenant_type_idx")
+  @@map("campaigns")
+}
+
+// The delivery ledger (§2.6). This is what makes "a person receives no duplicate
+// message within 90 days" enforceable, and what lets the customer profile list
+// every message ever sent. `suppressedReason` is why a message was **not** sent —
+// no consent, the daily cap, outside the send window, or inside the duplicate
+// window — and §7.6 makes the row rather than the send the unit of record: a
+// message without consent exists here as `SUPPRESSED`, so the decision is
+// auditable instead of invisible.
+model MessageSend {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+  templateId String?
+  template   MessageTemplate? @relation(fields: [templateId], references: [id])
+
+  automaticKind String?
+  channel       String
+  renderedText  String
+  sentAt        DateTime?
+  status        String
+  suppressedReason String?
+
+  providerMessageId String?
+  error             String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, customerId, sentAt(sort: Desc)], map: "send_tenant_customer_sent_idx")
+  @@index([tenantId, status, sentAt], map: "send_tenant_status_queued_idx")
+  @@index([tenantId, campaignId], map: "send_tenant_campaign_idx")
+  @@map("message_sends")
+}
+
+// §2.7, and Decision 3: a saved **query**, re-evaluated nightly, never a member
+// list. A stored list goes stale within two weeks and messages people who have
+// already visited; a query is always current, which is what makes a recurring
+// campaign correct a year later.
+//
+// `predicate` is JSON in a String column, parsed through Zod on read, and
+// `predicateVersion` lets a predicate's meaning change without silently
+// reinterpreting the rows written against the old one. `lastCount` is a cache;
+// membership is computed.
+model AudienceGroup {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  createdByUserId String?
+  createdBy       User?  @relation(fields: [createdByUserId], references: [id])
+
+  key         String
+  name        String
+  isBuiltIn   Boolean @default(false)
+  predicate   String
+  predicateVersion Int @default(1)
+
+  lastRefreshedAt DateTime?
+  lastCount       Int      @default(0)
+  isActive        Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaigns Campaign[]
+
+  @@unique([tenantId, key], map: "group_tenant_key_key")
+  @@index([tenantId, isActive, lastRefreshedAt], map: "group_tenant_refresh_idx")
+  @@map("audience_groups")
+}
