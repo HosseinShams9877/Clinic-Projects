@@ -1,0 +1,221 @@
+/* ───────────────────────────────────────────────────────────────────────────
+ * globals.css
+ *
+ * The token block below is the implementation contract of
+ * `docs/knowledge/08-ui-design-system.md` §46, copied without modification.
+ * It is the only place in this codebase where a literal colour, radius, shadow,
+ * spacing step or font size is written. Every component consumes these
+ * variables through a CSS Module and never restates a value.
+ *
+ * Changing any value in this file requires an ADR
+ * (`docs/knowledge/08-ui-design-system.md`, preamble).
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --brand: #b56b6b;
+  --brand-btn: #af5d5d;
+  --brand-600: #a35c5c;
+  --brand-700: #8e4c4c;
+  --brand-300: #d9a7a7;
+  --brand-100: #f4e3e0;
+  --brand-50: #fbf1ee;
+
+  --bg: #f7f2f0;
+  --bg-alt: #fbf7f5;
+  --surface: #ffffff;
+  --surface-2: #fdfaf9;
+  --surface-sunken: #f6efec;
+
+  --sidebar-dark: #241c1b;
+  --sidebar-dark-2: #171111;
+
+  --ink: #2e2524;
+  --ink-2: #6e5f5b;
+  --ink-3: #817169;
+  --ink-inverse: #ffffff;
+
+  --line: #ede2de;
+  --line-2: #e3d5d0;
+
+  --ok: #3f8f68;
+  --ok-bg: #e6f3ec;
+
+  --warn: #b88424;
+  --warn-bg: #fbf0da;
+
+  --danger: #c25b62;
+  --danger-bg: #f9e5e6;
+
+  --dark-danger: #8b3941;
+  --dark-danger-bg: #f2dedf;
+
+  --info: #4f7fa8;
+  --info-bg: #e6eef5;
+
+  --neutral-bg: #f0ebe9;
+
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+  --r-pill: 999px;
+
+  --sh-1: 0 1px 2px rgba(46,37,36,.04);
+  --sh-2: 0 2px 10px rgba(46,37,36,.06);
+  --sh-3: 0 10px 30px rgba(46,37,36,.10);
+  --sh-brand: 0 8px 20px rgba(181,107,107,.22);
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 40px;
+  --s-9: 56px;
+  --s-10: 72px;
+
+  --fs-xs: 11.5px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 19px;
+  --fs-2xl: 24px;
+  --fs-3xl: 32px;
+  --fs-4xl: 42px;
+
+  --sidebar-w: 228px;
+  --topbar-h: 68px;
+  --container: 1240px;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Tokens for values the design system documents outside the §46 block.
+ *
+ * These are not new values — every one is quoted from the section named in the
+ * comment, which the §46 block does not enumerate. Nothing here overrides a
+ * §46 token, and no component may name one of these instead of its §46
+ * equivalent.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* §1, §3 — the family itself is injected by next/font/local in layout.tsx;
+     the fallback stack is §1. */
+  --font-fallback: IRANSansX, IRANSans, IRANYekan, 'Segoe UI', Tahoma, sans-serif;
+
+  /* §3 — base body metrics. */
+  --lh-base: 1.75;
+  --ls-heading: -0.2px;
+
+  /* §7 — layout constants the block omits. */
+  --public-header-h: 76px;
+  --content-pad: 24px;          /* page content padding, desktop */
+  --content-pad-sm: 16px;       /* ≤ 1000px (§43) */
+  --breakpoint-panel: 1000px;   /* §43 — the only breakpoint */
+
+  /* §21 — the modal. */
+  --modal-max-w: 560px;
+  --overlay: rgba(46, 37, 36, .45);
+
+  /* §9, §8 — the shared control transition. */
+  --transition-control: .18s ease;
+
+  /* Layering. Radix portals need an explicit order; the values are ordered so
+     that popovers sit above dialogs' overlays and tooltips sit above both. */
+  --z-sticky: 10;
+  --z-overlay: 100;
+  --z-modal: 110;
+  --z-popover: 120;
+  --z-tooltip: 130;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Reset and document defaults.
+ *
+ * RTL is a hard constraint (`07-localization.md` §3): the document root carries
+ * `dir="rtl"` and no LTR mode exists. Every rule below uses logical properties
+ * so that no physical side is ever named.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-vazirmatn), var(--font-fallback);
+  font-size: var(--fs-md);
+  line-height: var(--lh-base);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: var(--ls-heading);
+  line-height: 1.45;
+}
+
+h1 { font-size: var(--fs-3xl); }
+h2 { font-size: var(--fs-2xl); }
+h3 { font-size: var(--fs-xl); }
+h4 { font-size: var(--fs-lg); }
+
+p {
+  margin: 0;
+}
+
+img,
+svg {
+  display: block;
+  max-inline-size: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* §9 — focus is part of every component's contract. The global rule is a
+   fallback for the elements no component styles; a component that draws its own
+   focus treatment does so with the same two properties. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Both are design-system facts, not preferences: the interface is calm (§44),
+   and animation never carries meaning (`01-tech-stack.md` §8.7). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
