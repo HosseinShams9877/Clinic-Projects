@@ -16,7 +16,7 @@
 |---|---|---|---|---|
 | 0 | Foundation and architecture | **Complete** | — | ۱۴۰۵/۰۷/۰۹ |
 | 1 | Platform foundation | **Complete** | ۱۴۰۵/۰۷/۰۹ | ۱۴۰۵/۰۷/۱۲ |
-| 2 | Appointments and scheduling | Not started | — | — |
+| 2 | Appointments and scheduling | **Complete** | ۱۴۰۵/۰۷/۱۲ | ۱۴۰۵/۰۷/۱۲ |
 | 3 | Customers, services, staff | Not started | — | — |
 | 4 | Treatment cycles | Not started | — | — |
 | 5 | Payments and debts | Not started | — | — |
@@ -27,7 +27,7 @@
 | 10 | Reports, settings, tenancy, licensing | Not started | — | — |
 | 11 | Hardening and full verification | Not started | — | — |
 
-**Current phase:** Phase 1 is **complete**. Phase 2 has not started.
+**Current phase:** Phase 2 is **complete**. Phase 3 has not started.
 
 **Legend.** Not started · In progress · Blocked · Complete.
 
@@ -41,21 +41,22 @@
 | Roadmap (`docs/roadmap/`, 3 files) | Complete |
 | Setup guides (`docs/setup/`, 5 files) | Complete |
 | Changelog convention (`docs/changelog/`) | Complete |
-| Phase reports (`reports/`) | Complete for Phases 0 and 1 |
+| Phase reports (`reports/`) | Complete for Phases 0, 1 and 2 |
 | Root files (README, .gitignore, .env.example, LICENSE) | Complete |
 | `.claude/` (settings, agents, commands, context, memory) | Complete |
 | Package manifest | Complete — all dependencies pinned, no styled component library |
-| Application code (`src/`) | Complete for Phase 1's scope — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, the app shell and the four panel shells |
+| Application code (`src/`) | Complete for Phases 1 and 2 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, the app shell, the four panel shells, and the three scheduling pages |
 | Prisma schema | Complete — one portable schema, 25 models, validating as SQLite and PostgreSQL |
 | Migrations | Complete — the SQLite migration list and the PostgreSQL RLS policies |
 | Vazirmatn | Complete — five weights self-hosted in `src/app/fonts/` with the OFL 1.1 licence and authors file |
-| Test suite | Complete for Phase 1 — 40 files, 1073 tests |
-| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1073 tests |
-| End-to-end suite | Written but **not executed** — Playwright's pinned Chromium cannot be downloaded on the build machine. See `../reports/phase-01-report.md` §7 |
+| Test suite | Complete for Phases 1 and 2 — 44 files, 1098 tests |
+| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1098 tests |
+| End-to-end suite | Written but **not executed** — Playwright's pinned Chromium cannot be downloaded on the build machine. See `../reports/phase-02-report.md` §4 |
 
 Phase 0 produced the specification for the codebase. Phase 1 produced the
-codebase. What did not run in this environment is recorded in
-`../reports/phase-01-report.md` §7 — the e2e execution and the behavioural
+codebase. Phase 2 produced the appointment lifecycle, the slot engine and the three
+scheduling pages. What did not run in this environment is recorded in
+`../reports/phase-02-report.md` §4 — the e2e execution and the behavioural
 cross-tenant suite against a live PostgreSQL. Neither is a code gap.
 
 ---
@@ -128,6 +129,35 @@ gate behind them passed:
 
 ---
 
+## Phase 2 — what was delivered
+
+**Complete**, started and completed ۱۴۰۵/۰۷/۱۲. The closing report is
+`../reports/phase-02-report.md`; §2 records the three defects the WIP commit left and
+the fix for each, and §4 records what could not run.
+
+- [x] The entity and the **8-state lifecycle**, every illegal transition refused
+- [x] Slot generation from shifts, doctor hours, service duration, blocks and holidays
+- [x] The three booking modes and the settings that select them
+- [x] Slot blocks and holiday handling behind the settings toggle
+- [x] Auto-transitions: `AWAITING_ARRIVAL` on the day, `RESULT_NOT_RECORDED` two hours past
+- [x] Reschedule and cancel, with the deposit policy on cancellation
+- [x] `reception/appointments.html` — day and week grid, the booking popup, arrival marking
+- [x] `admin/appointments.html` — read-only oversight with doctor and status filters
+- [x] `doctor/dashboard.html` — «برنامه من», the quick-book shortcut behind its toggle
+- [x] The lifecycle worker job
+- [x] **DoD 1–7 and 9 green** — asserted, not eyeballed
+- [ ] DoD 8 — the axe and responsive pass over the three pages. The pages are written
+      to the design system's breakpoints; Playwright's Chromium cannot be downloaded
+      here, so the gate has not been observed. Same blocker as Phase 1.
+
+The WIP commit that closed Phase 1 left three defects, all in the appointments
+module and none of them where its commit message said. The syntax error was in
+`lifecycle.test.ts`, `booking.test.ts` held 42 type errors from unbranded date and
+time strings, and `lifecycle.test.ts`'s clock constant was six months off the Jalali
+day it was labelled as. The report's §2 names each one and its fix.
+
+---
+
 ## Nothing is blocked
 
 The session that opened this phase had no working package manager, so nothing had
@@ -135,10 +165,10 @@ ever been executed. That is no longer true, and nothing has been blocked since.
 Node 24.19.0, npm 11.17.0 and git 2.50.1 all run, and the whole gate passes:
 
 ```
-npm run build    →  9 routes, exit 0
+npm run build    →  11 routes, exit 0
 npm run verify   →  db:generate · typecheck · lint · check:files · check:i18n
                    check:overrides · check:schema · check:rls · test
-                   40 files, 1073 tests, exit 0
+                   44 files, 1098 tests, exit 0
 ```
 
 One consequence worth recording: `src/generated/` is ignored, and `verify`
@@ -149,11 +179,11 @@ files already treated the directory that way — `.prettierignore`, the lint
 ignores and `check-file-length.mjs`.
 
 Two things could not run on this machine, neither of which is a code gap. Both
-are in the phase report's §7:
+are in the phase report's §4:
 
 | Not run | Why |
 |---|---|
-| The e2e suite | Playwright's pinned Chromium cannot be downloaded here. The specs are written and `--list` resolves; a machine that can fetch the browser should run `npm run e2e` before Phase 2 closes |
+| The e2e suite and the axe pass | Playwright's pinned Chromium cannot be downloaded here. The specs are written and `--list` resolves; a machine that can fetch the browser should run `npm run e2e` and the axe pass over the three scheduling pages before Phase 11 |
 | The cross-tenant suite on PostgreSQL | Needs a PostgreSQL server. `check:rls` covers the policies statically and fails closed — the check exists because the unit suite runs on SQLite, which has no RLS — but the behavioural confirmation has not been observed against a live database |
 
 Two Phase 1 relaxations are still in place and are restored in Phase 11: the

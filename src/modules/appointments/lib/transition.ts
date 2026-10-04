@@ -30,7 +30,7 @@
 import { AppointmentStatus } from '@/core/constants'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
-import { NotFoundError, type AppErrorOptions } from '@/core/types'
+import { NotFoundError } from '@/core/types'
 import { requirePermission } from '@/modules/roles-permissions'
 
 import type { AppointmentsMessageKey } from '../catalog'

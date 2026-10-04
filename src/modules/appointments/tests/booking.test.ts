@@ -43,18 +43,23 @@ import {
   deleteTestDatabase,
   type TestDatabase,
 } from '@/core/db/tests/database'
+import {
+  asLocalDate,
+  asLocalTime,
+  type LocalTime,
+} from '@/core/localization'
 
 /** The clock the booking reads, so the cancellation's instant is a named fact. */
 const NOW = new Date('2026-10-04T10:00:00Z')
 
 /** A Wednesday in ۱۴۰۵, as the day every booking below is on. */
-const DAY = '1405-01-04' as const
+const DAY = asLocalDate('1405-01-04')
 
 /** The weekday of that day, which the shift and the hours are seeded for. */
 const DAY_WEEKDAY = 3
 
 /** The slot a booking is made against, inside the seeded ۰۹ تا ۱۴ range. */
-const SLOT = '10:00' as const
+const SLOT = asLocalTime('10:00')
 
 const TENANT_ID: TenantId = asTenantId('tenant-a')
 const OTHER_TENANT_ID: TenantId = asTenantId('tenant-b')
@@ -212,7 +217,10 @@ function context(
 }
 
 /** The arguments every booking below shares, with the slot a case varies. */
-function bookArgs(patch: { readonly localTime?: string; readonly doctorId?: UserId } = {}) {
+function bookArgs(patch: {
+  readonly localTime?: LocalTime
+  readonly doctorId?: UserId
+} = {}) {
   return {
     tx: unscoped as never,
     ctx: context(TENANT_ID, Role.Manager),
@@ -275,7 +283,7 @@ describe('bookAppointment', () => {
   })
 
   it('refuses a slot outside the doctor working hours', async () => {
-    await expect(bookAppointment(bookArgs({ localTime: '15:00' }))).rejects.toMatchObject({
+    await expect(bookAppointment(bookArgs({ localTime: asLocalTime('15:00') }))).rejects.toMatchObject({
       messageKey: 'appointment.closed',
     })
   })
@@ -284,7 +292,7 @@ describe('bookAppointment', () => {
     // A Friday (weekday ۵) the shift is not seeded for, so the day is not bookable and
     // the sentence names the day rather than the time.
     await expect(
-      bookAppointment({ ...bookArgs(), localDate: '1405-01-06' }),
+      bookAppointment({ ...bookArgs(), localDate: asLocalDate('1405-01-06') }),
     ).rejects.toMatchObject({ messageKey: 'appointment.closed' })
   })
 
@@ -313,16 +321,16 @@ describe('bookAppointment', () => {
       clinicId: CLINIC_ID,
       doctorId: DOCTOR_ID,
       localDate: DAY,
-      localTime: '11:00',
+      localTime: asLocalTime('11:00'),
       durationMinutes: 60,
     })
 
-    await expect(bookAppointment(bookArgs({ localTime: '11:30' }))).rejects.toMatchObject({
+    await expect(bookAppointment(bookArgs({ localTime: asLocalTime('11:30') }))).rejects.toMatchObject({
       messageKey: 'appointment.slotTaken',
     })
 
     // The block holds ۱۱:۰۰ تا ۱۲:۰۰ and the ۱۲:۰۰ slot is the desk's to offer.
-    const created = await bookAppointment(bookArgs({ localTime: '12:00' }))
+    const created = await bookAppointment(bookArgs({ localTime: asLocalTime('12:00') }))
     expect(created.localTime).toBe('12:00')
   })
 
@@ -393,7 +401,7 @@ describe('blockHours', () => {
       clinicId: CLINIC_ID,
       doctorId: DOCTOR_ID,
       localDate: DAY,
-      localTime: '13:00',
+      localTime: asLocalTime('13:00'),
       durationMinutes: 60,
       reason: 'جلسه تیم',
     })
@@ -415,7 +423,7 @@ describe('blockHours', () => {
       clinicId: CLINIC_ID,
       doctorId: DOCTOR_ID,
       localDate: DAY,
-      localTime: '13:00',
+      localTime: asLocalTime('13:00'),
       durationMinutes: 30,
     })
     await expect(
@@ -425,14 +433,14 @@ describe('blockHours', () => {
         clinicId: CLINIC_ID,
         doctorId: DOCTOR_ID,
         localDate: DAY,
-        localTime: '13:00',
+        localTime: asLocalTime('13:00'),
         durationMinutes: 30,
       }),
     ).resolves.toBeTruthy()
   })
 
   it('refuses a block that covers a booking the clinic already has', async () => {
-    await bookAppointment(bookArgs({ localTime: '09:30' }))
+    await bookAppointment(bookArgs({ localTime: asLocalTime('09:30') }))
 
     await expect(
       blockHours({
@@ -441,14 +449,14 @@ describe('blockHours', () => {
         clinicId: CLINIC_ID,
         doctorId: DOCTOR_ID,
         localDate: DAY,
-        localTime: '09:00',
+        localTime: asLocalTime('09:00'),
         durationMinutes: 60,
       }),
     ).rejects.toMatchObject({ messageKey: 'appointment.blockOverlapsBooking' })
   })
 
   it('allows a block beside a booking, because the two do not overlap', async () => {
-    await bookAppointment(bookArgs({ localTime: '09:00' }))
+    await bookAppointment(bookArgs({ localTime: asLocalTime('09:00') }))
 
     await expect(
       blockHours({
@@ -457,7 +465,7 @@ describe('blockHours', () => {
         clinicId: CLINIC_ID,
         doctorId: DOCTOR_ID,
         localDate: DAY,
-        localTime: '09:30',
+        localTime: asLocalTime('09:30'),
         durationMinutes: 30,
       }),
     ).resolves.toBeTruthy()
@@ -473,7 +481,7 @@ describe('rescheduleAppointment', () => {
       ctx: context(TENANT_ID, Role.Manager),
       appointmentId: first.id,
       newLocalDate: DAY,
-      newLocalTime: '12:00',
+      newLocalTime: asLocalTime('12:00'),
     })
 
     expect(moved.localTime).toBe('12:00')
@@ -492,7 +500,7 @@ describe('rescheduleAppointment', () => {
       clinicId: CLINIC_ID,
       doctorId: DOCTOR_ID,
       localDate: DAY,
-      localTime: '13:00',
+      localTime: asLocalTime('13:00'),
       durationMinutes: 30,
     })
 
@@ -502,7 +510,7 @@ describe('rescheduleAppointment', () => {
         ctx: context(TENANT_ID, Role.Manager),
         appointmentId: blocked.id,
         newLocalDate: DAY,
-        newLocalTime: '12:30',
+        newLocalTime: asLocalTime('12:30'),
       }),
     ).rejects.toMatchObject({ messageKey: 'appointment.illegalTransition' })
   })
@@ -567,7 +575,7 @@ describe('the manual transitions', () => {
       noShowReason: 'آمد اما نشد',
     })
 
-    const second = await bookAppointment(bookArgs({ localTime: '12:00' }))
+    const second = await bookAppointment(bookArgs({ localTime: asLocalTime('12:00') }))
     await unscoped.appointment.update({
       where: { id: second.id },
       data: { status: AppointmentStatus.AwaitingArrival },

@@ -20,6 +20,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { AppointmentStatus } from '@/core/constants'
 import { CustomerLifecycle } from '@/core/constants'
+import {
+  asLocalDate,
+  asLocalTime,
+  toUtcInstant,
+  type LocalDate,
+  type LocalTime,
+} from '@/core/localization'
 import { asClinicId, asTenantId, asUserId, type TenantId } from '@/core/types'
 import type { PrismaClient } from '@/generated/prisma/client'
 
@@ -39,17 +46,26 @@ import {
 /**
  * The instant the sweep reads, chosen so the day has arrived and the morning's slots
  * are past the two-hour threshold.
+ *
+ * The instant has to land on {@link TODAY} as the library converts it, not merely be
+ * labelled as it is below — the sweep derives "today" from the clock and compares it
+ * against the stored Jalali day, so a constant that converts to any other day makes
+ * every "later day" fixture compare as an earlier one. `1405-01-04` is
+ * `2026-03-24` (`jalali.ts`'s conversion, not an assumption about it).
  */
-const NOW = new Date('2026-10-04T14:00:00Z')
+const NOW = new Date('2026-03-24T14:00:00Z')
 
 /** The tenant's offset — Iran Standard Time, UTC+3:30 (`07-localization.md`). */
 const UTC_OFFSET = 210
 
 /** The Jalali day of `NOW` under that offset, which is the day the sweep promotes. */
-const TODAY = '1405-01-04' as const
+const TODAY = asLocalDate('1405-01-04')
 
 /** A future day, which the promotion must not reach. */
-const FUTURE_DAY = '1405-01-10' as const
+const FUTURE_DAY = asLocalDate('1405-01-10')
+
+/** The slot the fixtures sit on, in the morning so `NOW` is past it. */
+const SLOT_TIME = asLocalTime('10:00')
 
 const TENANT_ID: TenantId = asTenantId('tenant-a')
 const OTHER_TENANT_ID: TenantId = asTenantId('tenant-b')
@@ -142,10 +158,12 @@ beforeEach(async () => {
 async function booking(patch: {
   readonly id: string
   readonly status?: string
-  readonly localDate?: string
-  readonly localTime?: string
+  readonly localDate?: LocalDate
+  readonly localTime?: LocalTime
   readonly tenantId?: TenantId
 }): Promise<string> {
+  const localDate = patch.localDate ?? TODAY
+  const localTime = patch.localTime ?? SLOT_TIME
   await unscoped.appointment.create({
     data: {
       id: patch.id,
@@ -154,9 +172,9 @@ async function booking(patch: {
       customerId: CUSTOMER_ID,
       serviceId: SERVICE_ID,
       doctorId: DOCTOR_ID,
-      scheduledAt: new Date('2026-10-04T10:00:00Z'),
-      localDate: patch.localDate ?? TODAY,
-      localTime: patch.localTime ?? '10:00',
+      scheduledAt: toUtcInstant(localDate, localTime, UTC_OFFSET),
+      localDate,
+      localTime,
       durationMinutes: 30,
       status: patch.status ?? AppointmentStatus.Booked,
       isSlotBlock: false,
@@ -165,7 +183,7 @@ async function booking(patch: {
     },
   })
   return patch.id
-})
+}
 
 describe('promoteToAwaitingArrival', () => {
   it('promotes a booking whose day has arrived', async () => {
@@ -203,7 +221,7 @@ describe('promoteToAwaitingArrival', () => {
         doctorId: DOCTOR_ID,
         scheduledAt: new Date('2026-10-04T10:00:00Z'),
         localDate: TODAY,
-        localTime: '10:00',
+        localTime: asLocalTime('10:00'),
         durationMinutes: 60,
         status: AppointmentStatus.Booked,
         isSlotBlock: true,
@@ -233,8 +251,8 @@ describe('promoteToAwaitingArrival', () => {
 
 describe('flagUnrecordedResults', () => {
   it('flags a booking two hours past its slot with no result', async () => {
-    // `NOW` is ۱۴:۰۰ UTC and the slot is ۱۰:۰۰ UTC, so the slot is four hours past —
-    // past the two-hour threshold.
+    // `NOW` is ۱۴:۰۰ UTC; the slot is ۱۰:۰۰ local, which is ۰۶:۳۰ UTC at +۳:۳۰, so
+    // the slot is seven and a half hours past — past the two-hour threshold.
     const id = await booking({ id: 'overdue', status: AppointmentStatus.AwaitingArrival })
 
     const flagged = await flagUnrecordedResults(unscoped as never, TENANT_ID, NOW, UTC_OFFSET)
@@ -259,7 +277,7 @@ describe('flagUnrecordedResults', () => {
     const id = await booking({
       id: 'later-slot',
       status: AppointmentStatus.AwaitingArrival,
-      localTime: '16:00',
+      localTime: asLocalTime('16:00'),
     })
 
     const flagged = await flagUnrecordedResults(unscoped as never, TENANT_ID, NOW, UTC_OFFSET)
@@ -323,7 +341,7 @@ describe('runLifecycleSweep', () => {
     const id = await booking({
       id: 'both-passes',
       status: AppointmentStatus.Booked,
-      localTime: '09:00',
+      localTime: asLocalTime('09:00'),
     })
 
     const outcome = await runLifecycleSweep({
@@ -353,7 +371,7 @@ describe('runLifecycleSweep', () => {
 })
 
 describe('the alarm surfaces only in the reception cartable', () => {
-  it('holds the flagged row and the day\'s expectation and arrivals', async () => {
+  it("holds the flagged row and the day's expectation and arrivals", async () => {
     const flagged = await booking({
       id: 'overdue',
       status: AppointmentStatus.ResultNotRecorded,
@@ -361,12 +379,12 @@ describe('the alarm surfaces only in the reception cartable', () => {
     const expected = await booking({
       id: 'expected',
       status: AppointmentStatus.AwaitingArrival,
-      localTime: '16:00',
+      localTime: asLocalTime('16:00'),
     })
     const arrived = await booking({
       id: 'arrived',
       status: AppointmentStatus.Arrived,
-      localTime: '16:30',
+      localTime: asLocalTime('16:30'),
     })
 
     const rows = await unrecordedCartable({ tx: unscoped as never, tenantId: TENANT_ID })
@@ -374,7 +392,7 @@ describe('the alarm surfaces only in the reception cartable', () => {
     expect(rows.map((row) => row.id).sort()).toEqual([arrived, expected, flagged].sort())
   })
 
-  it('does not hold a booking, a block, or another tenant\'s row', async () => {
+  it("does not hold a booking, a block, or another tenant's row", async () => {
     await booking({ id: 'plain-booking', status: AppointmentStatus.Booked })
     await unscoped.appointment.create({
       data: {
@@ -384,7 +402,7 @@ describe('the alarm surfaces only in the reception cartable', () => {
         doctorId: DOCTOR_ID,
         scheduledAt: new Date('2026-10-04T10:00:00Z'),
         localDate: TODAY,
-        localTime: '13:00',
+        localTime: asLocalTime('13:00'),
         durationMinutes: 60,
         status: AppointmentStatus.Booked,
         isSlotBlock: true,

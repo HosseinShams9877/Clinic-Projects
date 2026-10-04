@@ -58,7 +58,7 @@ import {
   type LocalTime,
 } from '@/core/localization'
 
-import { assertTransition, isSweepTransition } from './status'
+import { isSweepTransition } from './status'
 
 /** Two hours, in minutes — the specification's own threshold. */
 const RESULT_OVERDUE_MINUTES = 120

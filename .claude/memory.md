@@ -12,6 +12,49 @@
 
 ---
 
+## ۱۴۰۵/۰۷/۱۲ — Phase 2 closed; the WIP commit's defects and where they were not
+
+**The fact.** `npm run build` (11 routes) and `npm run verify` (44 files, 1098
+tests) both exit 0. Phase 2 is closed in `docs/roadmap/progress.md` and
+`reports/phase-02-report.md`.
+
+**The WIP commit's own message was wrong about its own bug.** It said the syntax
+error was in `booking.test.ts`. It was in `lifecycle.test.ts` — a stray `)` at line
+168 that a bracket-balance pass found in one run. `booking.test.ts` had no syntax
+error; it had 42 type errors from plain strings passed where the branded `LocalDate`
+and `LocalTime` are expected. **When a commit tells you where the bug is, verify it
+with the tool before believing it.** `npx tsc --noEmit` reported the file and line
+correctly on the first run.
+
+**A test's clock constant must be checked against the calendar, not labelled.**
+`lifecycle.test.ts` set `NOW = new Date('2026-10-04T14:00:00Z')` with a comment
+asserting it was `1405-01-04`. The library converts `2026-10-04` to `1405-07-12` —
+six months past the fixtures. The sweep derives "today" from the clock and compares
+it against the stored Jalali day, so every fixture the suite called *later* compared
+as *earlier*, and three tests failed. The correct instant for `1405-01-04` is
+`2026-03-24`. **A comment naming a calendar day is not a fact; the conversion is.**
+The test now states the instant must land on the constant as the library converts it.
+
+**Two brand helpers, two homes.** `asLocalDate` and `asLocalTime` are exported from
+`@/core/localization`, not `@/core/types`. The types live in `types`; the validating
+constructors live in the calendar module, because `asLocalDate` has to consult the
+ Jalali calendar to reject a day that does not exist.
+
+**The three scheduling pages were already written and complete.** The phase's work
+was the three defects, four unused imports, and the reports — not the UI. Nothing
+was stubbed and nothing needed building. Survey what exists before estimating.
+
+**Tests deleted to get the gate green: none.** Every failure was a defect in the
+test or the fixture, fixed at the cause.
+
+**What still has not run**, unchanged from Phase 1 and still not a code gap:
+Playwright's Chromium cannot be downloaded here, so the e2e and axe pass over the
+three scheduling pages are unexecuted; and the cross-tenant suite needs a live
+PostgreSQL. `check:rls` covers the policies statically and fails closed. Run both
+on a machine that can, before Phase 11.
+
+---
+
 ## ۱۴۰۵/۰۷/۱۲ — Phase 1 closed; build and verify green
 
 **The fact.** `npm run build` (9 routes) and `npm run verify` (40 files, 1073

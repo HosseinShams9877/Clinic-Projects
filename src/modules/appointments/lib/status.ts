@@ -57,7 +57,7 @@
 import { AppointmentStatus, type AppointmentStatus as Status } from '@/core/constants'
 import { DomainError } from '@/core/types'
 
-import { MESSAGES, type AppointmentsMessageKey } from '../catalog'
+import { type AppointmentsMessageKey } from '../catalog'
 
 /**
  * Every transition the lifecycle permits.
