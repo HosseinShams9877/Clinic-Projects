@@ -131,6 +131,12 @@ model TenantSettings {
   sendWindowEnd          String?
   dailyMessageCap        Int?
 
+  // The booking mode `06-constants.md` §4.4 defines — which of the three ways the
+  // clinic offers its time a customer booking goes through. NULL is the default,
+  // and the default is FIXED_SLOT: a clinic that has never opened settings offers
+  // real slots, which is the mode the day grid is built for.
+  bookingMode String?
+
   // Documented values, so these two do carry a default.
   //   §6 of `02-architecture.md`: "no duplicate message within 90 days".
   //   ADR-0009 and `07-localization.md`: Iran Standard Time, a fixed UTC+3:30.

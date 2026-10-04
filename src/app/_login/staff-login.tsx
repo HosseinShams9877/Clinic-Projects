@@ -49,8 +49,6 @@ import { FIELD_INVALID, FIELD_REQUIRED, STAFF_LOGIN_PAGE } from '@/app/catalog'
 
 import { staffLoginAction } from '@/app/login/actions'
 
-import styles from './Login.module.css'
-
 export interface StaffLoginFormProps {
   /** `auth`'s login labels and placeholders, handed down by the page. */
   readonly labels: LoginLabels
@@ -82,10 +80,16 @@ export function StaffLoginForm({ labels, placeholders }: StaffLoginFormProps) {
   )
 
   return (
-    <Form form={form} onValid={onSubmit} className={styles.card}>
-      <h2 className={styles.cardTitle}>{labels.staffTitle}</h2>
-      <p className={styles.lead}>{STAFF_LOGIN_PAGE.lead}</p>
-      <div className={styles.fields}>
+    <Form
+      form={form}
+      onValid={onSubmit}
+      className="flex min-w-0 flex-[1_1_360px] flex-col gap-5 rounded-lg border border-line bg-surface p-7 shadow-2"
+    >
+      <h2 className="flex items-center gap-3 text-xl font-bold tracking-[var(--ls-heading)] text-ink">
+        {labels.staffTitle}
+      </h2>
+      <p className="text-md text-ink-2">{STAFF_LOGIN_PAGE.lead}</p>
+      <div className="flex flex-col gap-4">
         <Field label={labels.mobile} required error={form.formState.errors.mobile?.message}>
           <TextInput
             {...form.register('mobile')}
@@ -104,7 +108,7 @@ export function StaffLoginForm({ labels, placeholders }: StaffLoginFormProps) {
         </Field>
         <FormError error={form.formState.errors.root?.server?.message} />
       </div>
-      <div className={styles.actions}>
+      <div className="flex flex-col gap-3">
         <SubmitButton loading={form.formState.isSubmitting} leadingIcon="shield" block>
           {labels.submit}
         </SubmitButton>

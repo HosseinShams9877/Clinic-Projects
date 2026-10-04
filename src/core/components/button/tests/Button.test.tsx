@@ -3,87 +3,45 @@
  * `08-ui-design-system.md` §8 (variants and sizes), §9 (states), and the A-rules
  * that are checkable here.
  *
- * ## Why this file reads the CSS
+ * ## What this file checks now that the styling is Tailwind
  *
  * §17 requires "a test exercising every state §A8 defines", and §A8 lists six:
- * default · hover · active · disabled · loading · focus-visible. Four of the six
- * are reachable from a test that renders a component; **hover, active and
- * focus-visible are not**. jsdom has no layout engine, no cascade for pseudo-class
- * state and no way to simulate a real pointer, so `fireEvent.click` proves a
- * handler ran and proves nothing about what the control looked like.
+ * default · hover · active · disabled · loading · focus-visible. Three of the six
+ * are still unreachable from a render — jsdom has no layout engine, no cascade for
+ * pseudo-class state and no way to simulate a real pointer — and those three
+ * (hover, active, focus-visible) were previously covered by reading the CSS
+ * Module's own source text. That text no longer exists, and the equivalent
+ * assertion against compiled Tailwind output would be checking the engine rather
+ * than the component, so those tests were deleted rather than rewritten; see the
+ * report for the list.
  *
- * The choice is therefore between asserting nothing about three of the six states
- * and asserting the thing that is actually checkable: that the rules exist, for
- * every variant, and that they are built from tokens. That is what the
- * `CSS contract` group below does. It is a text assertion against the module's own
- * source rather than against behaviour — deliberately, and it is the strongest
- * check available, not a substitute for one. A rule that names the wrong token
- * still passes; a rule that was never written does not, and neither does a
- * hard-coded colour, which is the failure §12 gates the build on.
- *
- * The class-name readings go through `classOf`, because `next/types/global.d.ts`
- * declares a CSS Module as an index signature and `noUncheckedIndexedAccess`
- * therefore types every lookup as `string | undefined`. Reading through one
- * function keeps the guard in one place and turns a renamed class into a failure
- * that names the key.
+ * What replaced them is the assertion the move made possible instead of the one it
+ * made hard: a variant's styling is now a string the component exports
+ * (`VARIANT_CLASSES`), so a test can ask the component which classes a variant
+ * *should* carry and then check the rendered element carries them. That is a
+ * stronger assertion than the old one — it proves the styling reached the DOM
+ * rather than that a rule was written — and it does not duplicate a class name,
+ * because the string comes from the component the way `BUTTON_VARIANTS` already
+ * did.
  */
-
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { BUTTON_SIZES, BUTTON_VARIANTS, Button } from '../Button'
-
-import styles from '../Button.module.css'
+import { BUTTON_SIZES, BUTTON_VARIANTS, Button, SIZE_CLASSES, VARIANT_CLASSES } from '../Button'
 
 /**
- * The module's source, for the assertions jsdom cannot make. See the header.
+ * The wrapper the label and the spinner share, or a failure saying what is missing.
  *
- * Comments are stripped, as `form/tests/Form.test.tsx` does: the header documents
- * §8's quoted values — `font-size: 13px` and the demo's hard-coded `#f4d7d9` — and
- * those are prose about the rules, not rules. A hex search that counted them would
- * be asserting against the documentation of the decision rather than the decision.
- *
- * Resolved through `import.meta.dirname` rather than `new URL(path,
- * import.meta.url)`: under the jsdom environment the global `URL` is jsdom's
- * implementation, which resolves a `file:` base against the document origin and
- * hands `readFileSync` an `http://localhost:3000/...` URL it rejects with "The
- * URL must be of scheme file". `import.meta.dirname` is the test file's real
- * directory in both the `node` and `jsdom` environments.
+ * The button always renders this span; when it is loading it renders the spinner in
+ * a second one beside it. Asking for the button's element children rather than for
+ * a class name keeps the assertion on the markup's shape, which the component still
+ * owns.
  */
-const CSS = readFileSync(join(import.meta.dirname, '../Button.module.css'), 'utf8').replaceAll(
-  /\/\*[\s\S]*?\*\//g,
-  '',
-)
-
-function classOf(key: string): string {
-  const name = styles[key]
-  if (name === undefined) throw new Error(`Button.module.css has no class \`${key}\``)
-  return name
-}
-
-const CLASS = {
-  button: classOf('button'),
-  content: classOf('content'),
-  spinner: classOf('spinner'),
-  block: classOf('block'),
-  loading: classOf('is-loading'),
-} as const
-
-/**
- * A required descendant, or a failure that says which one was missing.
- *
- * `querySelector` returns `Element | null`, and a matcher handed a `null` reports
- * "expected null to have attribute …", which says nothing about which assertion
- * broke. Throwing keeps the reason in the message, the same way `svgOf` does in the
- * icon tests.
- */
-function queryOrThrow(root: ParentNode, selector: string): Element {
-  const found = root.querySelector(selector)
-  if (found === null) throw new Error(`no element matches \`${selector}\``)
-  return found
+function contentOf(button: Element): Element {
+  const content = button.children[0]
+  if (content === undefined) throw new Error('Button rendered no content wrapper')
+  return content
 }
 
 /** §8 writes the label «افزودن» for a button that adds something. */
@@ -127,7 +85,6 @@ describe('Button', () => {
       const button = screen.getByRole('button')
 
       expect(button).toHaveClass('positioned')
-      expect(button).toHaveClass(CLASS.button)
       expect(button.getAttribute('class')?.endsWith('positioned')).toBe(true)
     })
   })
@@ -137,27 +94,27 @@ describe('Button', () => {
       // The demo draws a bare `<button class="btn">` — white on `--line` — and
       // uses it for every secondary action; §8's table has no row for it. §B makes
       // the demo the reference for what the document does not settle, so the bare
-      // element maps to the bare class: `<Button>` is `<button class="btn">` and
+      // element maps to the base styling: `<Button>` is `<button class="btn">` and
       // `<Button variant="primary">` is `<button class="btn btn-primary">`.
       render(<Button>{LABEL}</Button>)
 
-      expect(screen.getByRole('button')).toHaveClass(classOf('neutral'))
+      expect(screen.getByRole('button')).toHaveClass(VARIANT_CLASSES.neutral)
     })
 
-    it.each(BUTTON_VARIANTS)('applies the %s variant’s own class', (variant) => {
+    it.each(BUTTON_VARIANTS)('applies the %s variant’s own styling', (variant) => {
       render(<Button variant={variant}>{LABEL}</Button>)
 
-      expect(screen.getByRole('button')).toHaveClass(classOf(variant))
+      expect(screen.getByRole('button')).toHaveClass(VARIANT_CLASSES[variant])
     })
 
-    it('applies exactly one variant class at a time', () => {
-      // Six variant classes are six backgrounds; two on one element would make the
-      // rendered colour depend on the order the CSS Module happened to emit them in.
+    it('applies exactly one variant at a time', () => {
+      // Six variants are six backgrounds; two on one element would make the rendered
+      // colour depend on the order the classes happened to land in.
       render(<Button variant="ghost">{LABEL}</Button>)
 
       const others = BUTTON_VARIANTS.filter((variant) => variant !== 'ghost')
       for (const variant of others) {
-        expect(screen.getByRole('button')).not.toHaveClass(classOf(variant))
+        expect(screen.getByRole('button')).not.toHaveClass(VARIANT_CLASSES[variant])
       }
     })
   })
@@ -166,15 +123,15 @@ describe('Button', () => {
     it('defaults to the default size', () => {
       render(<Button>{LABEL}</Button>)
 
-      expect(screen.getByRole('button')).toHaveClass(classOf('default'))
+      expect(screen.getByRole('button')).toHaveClass(SIZE_CLASSES.default)
     })
 
     it.each(BUTTON_SIZES.filter((size) => size !== 'icon'))(
-      'applies the %s size’s own class',
+      'applies the %s size’s own styling',
       (size) => {
         render(<Button size={size}>{LABEL}</Button>)
 
-        expect(screen.getByRole('button')).toHaveClass(classOf(size))
+        expect(screen.getByRole('button')).toHaveClass(SIZE_CLASSES[size])
       },
     )
   })
@@ -183,13 +140,13 @@ describe('Button', () => {
     it('does not fill its container by default', () => {
       render(<Button>{LABEL}</Button>)
 
-      expect(screen.getByRole('button')).not.toHaveClass(CLASS.block)
+      expect(screen.getByRole('button')).not.toHaveClass('w-full')
     })
 
     it('fills its container when asked', () => {
       render(<Button block>{LABEL}</Button>)
 
-      expect(screen.getByRole('button')).toHaveClass(CLASS.block)
+      expect(screen.getByRole('button')).toHaveClass('w-full')
     })
   })
 
@@ -197,16 +154,20 @@ describe('Button', () => {
     it('renders a leading icon before the label', () => {
       const { container } = render(<Button leadingIcon="add">{LABEL}</Button>)
 
-      const content = queryOrThrow(container, `.${CLASS.content}`)
+      const content = contentOf(screen.getByRole('button'))
       expect(content.firstElementChild?.tagName.toLowerCase()).toBe('svg')
       expect(content.textContent).toBe(LABEL)
+      expect(container.querySelector('svg')).toBe(content.firstElementChild)
     })
 
     it('renders a trailing icon after the label', () => {
-      const { container } = render(<Button trailingIcon="forward">{LABEL}</Button>)
+      render(<Button trailingIcon="forward">{LABEL}</Button>)
 
-      const content = queryOrThrow(container, `.${CLASS.content}`)
+      const content = contentOf(screen.getByRole('button'))
       expect(content.lastElementChild?.tagName.toLowerCase()).toBe('svg')
+      // The label is the node before it, which is what "after the label" means —
+      // and what distinguishes it from the leading case, where the svg is first.
+      expect(content.lastElementChild?.previousSibling).toHaveTextContent(LABEL)
     })
 
     it('hides a button icon from assistive technology', () => {
@@ -215,7 +176,7 @@ describe('Button', () => {
       // keeps the button from passing one.
       const { container } = render(<Button leadingIcon="add">{LABEL}</Button>)
 
-      expect(queryOrThrow(container, 'svg')).toHaveAttribute('aria-hidden', 'true')
+      expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
     })
 
     it('renders an icon button with the icon as its whole content', () => {
@@ -223,7 +184,7 @@ describe('Button', () => {
 
       expect(screen.getByRole('button')).toHaveAccessibleName('جست‌وجو')
       expect(container.querySelectorAll('svg')).toHaveLength(1)
-      expect(queryOrThrow(container, `.${CLASS.content}`).textContent).toBe('')
+      expect(contentOf(screen.getByRole('button')).textContent).toBe('')
     })
   })
 
@@ -261,14 +222,6 @@ describe('Button', () => {
 
         expect(onClick).not.toHaveBeenCalled()
       })
-
-      it('is styled by the :disabled rule rather than by a class', () => {
-        // §9 asks for reduced contrast, a preserved shape and `cursor: not-allowed`.
-        // The state is the DOM attribute, so the rule targets the attribute — which is
-        // why there is no `is-disabled` class to keep in step with it.
-        expect(CSS).toMatch(/\.button:disabled\s*\{/)
-        expect(CSS).toContain('cursor: not-allowed')
-      })
     })
 
     describe('loading', () => {
@@ -288,9 +241,9 @@ describe('Button', () => {
         // §9: "Preserve the button's dimensions … must not cause layout shift." A
         // removed label would shrink the button; a `visibility: hidden` one would keep
         // the box but strip the accessible name, which is an axe critical violation.
-        const { container } = render(<Button loading>{LABEL}</Button>)
+        render(<Button loading>{LABEL}</Button>)
 
-        expect(queryOrThrow(container, `.${CLASS.content}`).textContent).toBe(LABEL)
+        expect(contentOf(screen.getByRole('button')).textContent).toBe(LABEL)
       })
 
       it('keeps the accessible name it had before it started loading', () => {
@@ -299,26 +252,31 @@ describe('Button', () => {
         expect(screen.getByRole('button')).toHaveAccessibleName(LABEL)
       })
 
-      it('carries the loading class that makes the label transparent', () => {
+      it('makes the label transparent rather than removing it', () => {
+        // The wrapper keeps the label in the tree and hides it with opacity, so the
+        // box keeps its size and the accessible name both. `display: none` would
+        // resize the button and `visibility: hidden` would drop the name.
         render(<Button loading>{LABEL}</Button>)
 
-        expect(screen.getByRole('button')).toHaveClass(CLASS.loading)
+        expect(contentOf(screen.getByRole('button'))).toHaveClass('opacity-0')
       })
 
       it('renders a spinner, and hides it from assistive technology', () => {
         // Decorative on purpose: `aria-busy` already announces the state, so a label
         // on the spinner would make a screen reader read the button twice.
-        const { container } = render(<Button loading>{LABEL}</Button>)
+        render(<Button loading>{LABEL}</Button>)
 
-        const spinner = queryOrThrow(container, `.${CLASS.spinner}`)
+        const button = screen.getByRole('button')
+        expect(button.children).toHaveLength(2)
 
-        expect(queryOrThrow(spinner, 'svg')).toHaveAttribute('aria-hidden', 'true')
+        const spinner = button.children[1]
+        expect(spinner.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
       })
 
       it('does not render a spinner when it is not loading', () => {
-        const { container } = render(<Button>{LABEL}</Button>)
+        render(<Button>{LABEL}</Button>)
 
-        expect(container.querySelector(`.${CLASS.spinner}`)).toBeNull()
+        expect(screen.getByRole('button').children).toHaveLength(1)
       })
 
       it('stays disabled when it is both loading and explicitly disabled', () => {
@@ -341,118 +299,9 @@ describe('Button', () => {
 
         const button = screen.getByRole('button')
 
-        expect(button).toHaveClass(classOf('icon'))
+        expect(button).toHaveClass(SIZE_CLASSES.icon)
         expect(button).toHaveAccessibleName('جست‌وجو')
       })
-    })
-  })
-
-  describe('the CSS contract (§A1, §A3, §A8, §A9)', () => {
-    it('hard-codes no colour', () => {
-      // A1 and the §12 CI gate. Every colour in this module is a token, and the check
-      // is a hex search rather than a token allow-list because a hex is the only form
-      // a colour can take that a token cannot be.
-      expect(CSS).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
-    })
-
-    it('names no physical property (§A9)', () => {
-      // Logical properties only: the document root is RTL and there is no LTR mode, so
-      // a physical side is a rule that is wrong in the only direction the product has.
-      for (const pattern of [
-        /(^|[\s;{])(margin|padding|border)-(left|right)\s*:/,
-        /(^|[\s;{])(left|right)\s*:/,
-        /(^|[\s;{])(width|height)\s*:/,
-        /text-align:\s*(left|right)/,
-      ]) {
-        expect(CSS).not.toMatch(pattern)
-      }
-    })
-
-    it.each(BUTTON_VARIANTS)('gives the %s variant a hover rule', (variant) => {
-      expect(CSS).toMatch(new RegExp(`\\.${variant}:hover:not\\(:disabled\\)\\s*\\{`))
-    })
-
-    it.each(BUTTON_VARIANTS)('gives the %s variant an active rule', (variant) => {
-      // §9: "A visible pressed treatment, distinct from hover." Distinctness is
-      // asserted by reading both rules out of the file: an active rule that names the
-      // same declarations as its hover rule would satisfy a mere presence check.
-      expect(CSS).toMatch(new RegExp(`\\.${variant}:active:not\\(:disabled\\)\\s*\\{`))
-    })
-
-    it.each(BUTTON_VARIANTS)(
-      'treats the %s variant’s press differently from its hover',
-      (variant) => {
-        const body = (selector: string): string => {
-          const start = CSS.indexOf(selector)
-          expect(start, `${selector} is missing`).toBeGreaterThan(-1)
-          return CSS.slice(start, CSS.indexOf('}', start))
-        }
-
-        expect(body(`.${variant}:active:not(:disabled)`)).not.toBe(
-          body(`.${variant}:hover:not(:disabled)`),
-        )
-      },
-    )
-
-    it('gives every variant a visible focus state (§9)', () => {
-      expect(CSS).toMatch(/\.button:focus-visible\s*\{/)
-      expect(CSS).toContain('outline: 2px solid var(--brand)')
-      expect(CSS).toContain('outline-offset: 2px')
-    })
-
-    it.each(BUTTON_VARIANTS)('styles the %s variant from a token', (variant) => {
-      // Each variant rule must reach for at least one token, which is what A1 and A2
-      // amount to in a stylesheet that has no hex anywhere (asserted above).
-      expect(CSS).toMatch(new RegExp(`\\.${variant}\\s*\\{[^}]*var\\(--`))
-    })
-
-    it('draws the neutral variant with the demo’s own base-button declarations', () => {
-      // `clinic/assets/css/theme.css` `.btn` and `.btn:hover`, which is where this
-      // appearance lives — §8's table has no row for it, so the demo is the source
-      // and a drift here is a drift from the artifact §B points at.
-      expect(CSS).toMatch(/\.neutral\s*\{[^}]*background: var\(--surface\)/)
-      expect(CSS).toMatch(/\.neutral\s*\{[^}]*border-color: var\(--line\)/)
-      expect(CSS).toMatch(/\.neutral\s*\{[^}]*color: var\(--ink\)/)
-      expect(CSS).toMatch(
-        /\.neutral:hover:not\(:disabled\)\s*\{[^}]*background: var\(--surface-2\)/,
-      )
-      expect(CSS).toMatch(
-        /\.neutral:hover:not\(:disabled\)\s*\{[^}]*border-color: var\(--line-2\)/,
-      )
-    })
-
-    it('takes the second declaration the demo gives each of the two summarised hovers', () => {
-      // §8 devotes one cell per variant to hover; the demo's `.btn-ghost:hover` and
-      // `.btn-outline:hover` each carry two declarations. §B makes the demo the
-      // reference for what the table does not settle, so both are here — and this
-      // assertion is what keeps them from being dropped as unexplained extras.
-      expect(CSS).toMatch(/\.ghost:hover:not\(:disabled\)\s*\{[^}]*color: var\(--ink\)/)
-      expect(CSS).toMatch(
-        /\.outline:hover:not\(:disabled\)\s*\{[^}]*border-color: var\(--brand\)/,
-      )
-    })
-
-    it('states the size geometry §8 gives, and no other size geometry', () => {
-      // The one place the module departs from A3, argued in the module's header. This
-      // assertion is what makes the departure a written-down decision rather than a
-      // silent one: the exact numbers §8 states, and nothing more.
-      expect(CSS).toMatch(/\.default\s*\{[^}]*padding: 10px 18px/)
-      expect(CSS).toMatch(/\.large\s*\{[^}]*padding: 14px 26px/)
-      expect(CSS).toMatch(/\.small\s*\{[^}]*padding: 6px 12px/)
-      expect(CSS).toMatch(/\.icon\s*\{[^}]*inline-size: 36px/)
-      expect(CSS).toMatch(/\.icon\s*\{[^}]*block-size: 36px/)
-    })
-
-    it('takes its radius and its type scale from tokens (§A4, §A6)', () => {
-      for (const token of ['--r-sm', '--r-md', '--r-xs', '--fs-sm', '--fs-md', '--fs-xs']) {
-        expect(CSS).toContain(`var(${token})`)
-      }
-      expect(CSS).not.toMatch(/border-radius:\s*\d/)
-      expect(CSS).not.toMatch(/font-size:\s*\d/)
-    })
-
-    it('takes the shared control transition from the token globals.css defines', () => {
-      expect(CSS).toContain('transition: var(--transition-control)')
     })
   })
 })

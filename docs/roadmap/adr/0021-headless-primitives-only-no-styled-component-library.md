@@ -4,6 +4,20 @@
 
 **Status:** Accepted · Phase 0 addendum
 
+> **Surrounding-practice update — the styling mechanism.** This ADR forbids styled
+> *component libraries*. It does not forbid a utility engine, and the styling
+> mechanism it describes in passing has since been reversed: **CSS Modules are out
+> and Tailwind v4 is the styling system** (`01-tech-stack.md` §1 records the
+> decision). The reversal does not touch this ADR's decision — Tailwind lays no
+> claim to a component's appearance, spacing or typography and ships no theme that
+> could override a token; the `@theme` block in `src/app/globals.css` reads the
+> `:root` token block, so `bg-brand` resolves to `--brand` and the default palette is
+> cleared to `initial`. "Styled by a CSS Module that consumes only tokens" below
+> therefore reads "styled with Tailwind utilities that consume only tokens". The
+> `shadcn/ui` row of the rejected-alternatives table is unaffected and stands: shadcn
+> is a themed *component set* built on Tailwind, and it is the theme and the
+> component code that are rejected, not the engine it happens to use.
+
 **Context.** The design system (`08-ui-design-system.md`) defines every component
 and every one of its states — colours, radii, shadows, spacing, type scale, button
 states, the badge system, the icon language. It was supplied and preserved exactly,
@@ -23,10 +37,10 @@ component framework's theme is allowed to override the design system tokens.**
 
 Concretely (`01-tech-stack.md` §8, `05-conventions.md` §17):
 
-- Every headless primitive is wrapped in `src/core/components/**`, styled by a CSS
-  Module that consumes only tokens, and exported as the product's own component.
-  **Nothing in `src/modules/**` or `src/app/**` imports `@radix-ui/*` or `cmdk`
-  directly.**
+- Every headless primitive is wrapped in `src/core/components/**`, styled with
+  Tailwind utilities that consume only tokens, and exported as the product's own
+  component. **Nothing in `src/modules/**` or `src/app/**` imports `@radix-ui/*` or
+  `cmdk` directly.**
 - **Only the primitives actually needed are installed** — not the full set, not a
   bundle. Each package is the single primitive it provides.
 - Lucide's default `stroke-width` is 2; the design system requires **1.7**

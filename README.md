@@ -79,7 +79,7 @@ separate, narrowly-scoped identity that can only ever see their own data.
 | ORM | **Prisma** |
 | Isolation | Application-layer tenant filtering **plus** PostgreSQL row-level security |
 | Validation | **Zod**, at every trust boundary |
-| Styling | **CSS Modules** with a global CSS-variable token block |
+| Styling | **Tailwind v4**, reading the global CSS-variable token block through `@theme` |
 | Font | **Vazirmatn**, self-hosted — no CDN, works offline |
 | Tests | **Vitest** (unit, integration) and **Playwright** (e2e, accessibility) |
 | Worker | A separate **Node.js process** — not a separate codebase |

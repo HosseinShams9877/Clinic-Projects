@@ -26,6 +26,15 @@
  * that resolved one earlier would be a page that picked a tenant before it knew who
  * was logging in. The customer half resolves the host's tenant in its own action,
  * because a customer's tenant *is* the host's (`09-security.md` §7).
+ *
+ * ## The classes
+ *
+ * `08-ui-design-system.md` has no `login.html` section, so the page composes the
+ * same tokens the entry page does: the same centred column, the same card surface,
+ * the same heading scale. The one difference is the card's contents, which are a
+ * form and not a link, so the two cards here align their tops with `items-stretch`
+ * and let each be as tall as its own fields need. The `[&>*]` pair is the boundary
+ * the two forms own their own geometry inside.
  */
 
 import type { Metadata } from 'next'
@@ -41,17 +50,17 @@ import { STAFF_LOGIN_PAGE } from '@/app/catalog'
 import { CustomerLoginForm } from '@/app/_login/customer-login'
 import { StaffLoginForm } from '@/app/_login/staff-login'
 
-import styles from './page.module.css'
-
 export const metadata: Metadata = { title: STAFF_LOGIN_PAGE.title }
 
 export default function StaffLoginPage() {
   return (
-    <main className={styles.page}>
-      <div className={styles.inner}>
-        <h1 className={styles.title}>{STAFF_LOGIN_PAGE.title}</h1>
-        <p className={styles.lead}>{STAFF_LOGIN_PAGE.lead}</p>
-        <div className={styles.cards}>
+    <main className="min-h-dvh flex flex-col items-center justify-center p-8 px-[var(--content-pad)] panel:p-7 panel:px-[var(--content-pad-sm)]">
+      <div className="flex w-full max-w-[880px] flex-col items-center gap-6">
+        <h1 className="text-center text-3xl font-extrabold tracking-[var(--ls-heading)] text-ink">
+          {STAFF_LOGIN_PAGE.title}
+        </h1>
+        <p className="text-center text-lg text-ink-2">{STAFF_LOGIN_PAGE.lead}</p>
+        <div className="flex w-full flex-wrap items-stretch justify-center gap-6 [&>*]:min-w-0 [&>*]:flex-[1_1_340px]">
           <StaffLoginForm labels={LOGIN_LABELS} placeholders={LOGIN_PLACEHOLDERS} />
           <CustomerLoginForm
             nowEpochMs={realClock().getTime()}

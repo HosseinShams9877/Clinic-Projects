@@ -24,14 +24,23 @@ const nextConfig = {
     // properties of null (reading 'useContext')` — inside the framework's own
     // page wrapper, in code the application does not supply. This reproduces with
     // an empty root layout and a zero-dependency `global-error.tsx`, so it is a
-    // Turbopack bug and not this project's; `next build --debug-prerender`, which
-    // disables this flag, renders the page fine, which is the isolation.
+    // Turbopack bug and not this project's.
     //
-    // The cost is bundle size: the client and server chunks ship unminified. Every
-    // route in this product is dynamic (`ƒ`, server-rendered on demand), so the
-    // client bundles are the pages' own JS and the size is paid on first load.
-    // Track this and turn minification back on when the framework fixes the
-    // prerender — see `reports/phase-01-report.md`.
+    // `npm run build` therefore runs `next build --debug-prerender`, which
+    // prerenders in development mode — the one configuration in which the page
+    // renders, and this project's Phase 1 isolation step. `turbopackMinify: false`
+    // alone no longer clears it. The two flags below are the ones that flag turns
+    // on or off, kept here so that the knobs the build actually has are in the
+    // config and not only in `package.json`'s script.
+    //
+    // The cost is bundle size and prerender speed: the chunks ship unminified and
+    // the prerender runs in development. Every route in this product is dynamic
+    // (`ƒ`, server-rendered on demand) and `_global-error` is a boundary that
+    // renders on demand, so the client bundles are the pages' own JS and the size
+    // is paid on first load. Track this and turn minification back on when the
+    // framework fixes the prerender — see `reports/phase-01-report.md` §3.1.
+    allowDevelopmentBuild: true,
+    prerenderEarlyExit: false,
     turbopackMinify: false,
   },
 

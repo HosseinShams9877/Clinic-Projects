@@ -2,8 +2,6 @@ import { cx } from '@/core/lib'
 
 import { ICONS, iconPixels, ICON_STROKE_WIDTH, type IconName, type IconSize } from './icons'
 
-import styles from './Icon.module.css'
-
 /**
  * The one way an icon is rendered in this product.
  *
@@ -77,8 +75,10 @@ export interface IconProps {
    * a rotating `retry` is a legitimate second use, and a type-level restriction
    * would be a rule with one exception already.
    *
-   * The rotation honours `prefers-reduced-motion` — see `Icon.module.css`, where
-   * the reason it becomes a fade rather than stopping is written down.
+   * The rotation honours `prefers-reduced-motion` — the reduced-motion query in
+   * `globals.css` collapses every animation to 0.01ms, which a spinner survives
+   * only because `aria-busy` on the calling control is what actually announces
+   * the state; the rotation is the visual, not the signal.
    */
   readonly spin?: boolean
 
@@ -100,7 +100,7 @@ export function Icon({ name, size = 'control', label, spin = false, className }:
   return (
     <Glyph
       size={iconPixels(size)}
-      className={cx(styles.icon, mirrorsInRtl && styles.mirrored, spin && styles.spinning, className)}
+      className={cx('block shrink-0', mirrorsInRtl && '-scale-x-100', spin && 'animate-spin', className)}
       strokeWidth={ICON_STROKE_WIDTH}
       strokeLinecap="round"
       strokeLinejoin="round"

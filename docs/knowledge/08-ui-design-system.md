@@ -861,13 +861,24 @@ and make it visually consistent with this system.
 ## B. What Phase 1 does with this
 
 Phase 1 implements these as:
-- `src/app/globals.css` — the §46 token block, verbatim.
-- `src/core/components/**` — one CSS Module per component, consuming only tokens.
+- `src/app/globals.css` — the §46 token block, verbatim, in `:root`, and the single
+  source of truth for styling.
+- `src/core/components/**` — components styled with Tailwind utilities, consuming
+  only tokens. The engine reads the `:root` block through `@theme`, so a utility
+  resolves to a §46 value and to nothing else.
 - Vazirmatn loaded through `next/font/local`, self-hosted, no CDN
   (`07-localization.md` §2).
 - A visual regression baseline captured from the demo, so any drift between the
   implementation and this document fails a test rather than being noticed by a
   customer.
+
+> **The mechanism changed; the system did not.** Phase 1 wrote one CSS Module per
+> component. That has been reversed in favour of Tailwind v4 — `01-tech-stack.md`
+> §1 records the decision, and §48.5 records the one rule of this document that the
+> reversal touched. The tokens, the values, the visual language and the demo as the
+> reference artifact are all unchanged: this document still governs every pixel, and
+> a utility that would introduce a colour, radius, spacing or shadow the token block
+> does not define is wrong — the token is added to the block instead.
 
 The source demo files under `clinic/` remain in the repository as the reference
 artifact for any visual question this document does not settle.
@@ -921,29 +932,44 @@ floor permits. Closes when §9 or §8 states the pressed values.
 ### 48.4 The keyboard focus ring is added to §13's focus treatment — excepts §13
 
 §13 fixes focus as border `#D9A7A7`, `box-shadow: 0 0 0 3px #FBF1EE` and "no
-default browser outline". `Form.module.css` honours all three and adds a fourth on
-`:focus-visible`, `outline: 2px solid var(--brand)` at a `2px` offset. §13's
-`outline: none` on `:focus` cancels the product's *own* ring along with the
-browser's — a class plus a pseudo-class outranks `globals.css`'s bare one — and
-§13's ring cannot stand in for it: `--brand-50` on `--surface` is about 1.1:1, under
-SC 1.4.11's 3:1 for a non-text boundary, on the control a keyboard user is about to
-type into; the brand outline is 3.98:1. An addition, not a contradiction — "no
-default browser outline" is the UA's ring, and the brand ring is the product's, which
-§9 states as *the* focus treatment. Closes when §13 names a focus treatment that
-already clears 3:1, at which point the added rule deletes itself.
+default browser outline". The control class string (`src/core/components/form/control-classes.ts`)
+honours all three and adds a fourth on `:focus-visible`, `outline: 2px solid var(--brand)`
+at a `2px` offset. §13's `outline: none` on `:focus` cancels the product's *own* ring
+along with the browser's, and §13's ring cannot stand in for it: `--brand-50` on
+`--surface` is about 1.1:1, under SC 1.4.11's 3:1 for a non-text boundary, on the
+control a keyboard user is about to type into; the brand outline is 3.98:1. An
+addition, not a contradiction — "no default browser outline" is the UA's ring, and
+the brand ring is the product's, which §9 states as *the* focus treatment. Closes
+when §13 names a focus treatment that already clears 3:1, at which point the added
+rule deletes itself.
 
-### 48.5 One CSS Module per component *family* — excepts §B
+### 48.5 Styling is Tailwind, not CSS Modules — excepts §B, and closes the family question
 
-`src/core/components/form/` is six components — `Form`, `Field`, `FormError`,
-`SubmitButton`, `TextInput`, `TextArea` — and one module. §B's "one CSS Module per
-component" is ambiguous on a family, and the wider reading takes the rule's own
-reason as the tiebreaker: §13 gives the family one table, and `01-tech-stack.md` §8.5
-defines one shared shell so that "field layout, the Persian label, the error slot,
-and RTL are defined once, and a module's form composes it rather than restating it".
-Splitting it would put the control geometry in a module per control, which is the
-duplication §8.5 exists to prevent; §B's example, `button/Button.module.css`, is a
-one-component directory and cannot distinguish the readings. Closes when §B says
-"per component family".
+§B was written when the styling mechanism was one CSS Module per component. That
+mechanism is gone: `src/` holds no `*.module.css`, and components are styled with
+Tailwind utilities that read the §46 token block through `@theme` in
+`src/app/globals.css`. `01-tech-stack.md` §1 records the decision and the reason.
+
+The rule this entry was originally about — whether "one per component" means one per
+*component* or one per *family* — is settled by the reversal rather than by a ruling
+on the ambiguity, and settled the way the wider reading argued for: the form family
+shares one class string, exported from `src/core/components/form/control-classes.ts`,
+so §13's control geometry is stated once and `TextInput` and `TextArea` cannot drift
+apart. §8.5's shell composes it rather than restating it, which is the same
+reasoning, and the demo's `button/Button.module.css` — a one-component directory —
+could never have distinguished the two readings anyway. **Closed.**
+
+Two things the reversal does *not* close, because they are properties of the design
+system and not of the mechanism:
+
+- A utility that introduces a colour, radius, spacing, shadow or font weight the
+  token block does not define is still a finding; the token is added to the block.
+- The compiled stylesheet resolves utilities by their order in the generated CSS, not
+  by the order of the `class` attribute. Two utilities on one element that each set
+  the same property are decided by that order, so a component's class strings are
+  written with each variant and each state naming every property it owns — the base
+  string states none — and a call site's `className` is appended last. See
+  `src/core/components/button/Button.tsx`'s header for the concrete case.
 
 ### 48.6 The 22–30px branding icon size is not in `ICON_SIZES` — excepts §42
 

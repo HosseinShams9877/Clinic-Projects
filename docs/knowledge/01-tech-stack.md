@@ -15,7 +15,7 @@
 | Database (development) | **SQLite** |
 | Database (production / on-premise) | **PostgreSQL** |
 | UI | **React Server Components + Client Components**, CSS variables from the design system |
-| Styling | CSS Modules + the token block in `docs/knowledge/08-ui-design-system.md` |
+| Styling | **Tailwind v4** — a utility engine reading the token block in `docs/knowledge/08-ui-design-system.md` through `@theme`; see the note below |
 | Client data fetching | **TanStack Query (React Query) v5** — see §8.1 |
 | Icons | **Lucide (`lucide-react`)** — outline only, stroke overridden to 1.7 — see §8.2 |
 | Headless UI primitives | **Radix UI** — behaviour and accessibility only — see §8.3 |
@@ -31,6 +31,21 @@
 
 **Decision: Option B — Next.js full-stack — is adopted, with exactly one
 exception: a separate background worker process.**
+
+> **Styling — the reversal.** The styling row was originally **CSS Modules** over
+> the CSS-variable token block. That is superseded: **Tailwind v4 is the styling
+> system from here on, and CSS Modules are out.** The `:root` token block in
+> `src/app/globals.css` remains the single source of truth — Tailwind reads it
+> through `@theme`, so `bg-brand` resolves to `--brand` and not to a palette
+> Tailwind ships; the default palette is cleared to `initial` namespace by
+> namespace, so a utility the token block does not define is unaddressable rather
+> than silently blue. Where a rule needs a value the token block does not state,
+> the token is added to the block — never written as a literal in a component. See
+> `docs/roadmap/adr/0021-headless-primitives-only-no-styled-component-library.md`'s
+> surrounding-practice note and
+> `docs/knowledge/08-ui-design-system.md` §48.5 for what changed and what did not:
+> the tokens, the visual language and the per-component-family ownership are all
+> unchanged; only the mechanism moved.
 
 ---
 
@@ -314,9 +329,9 @@ focus restoration, escape handling, collision-aware positioning, typeahead,
 `aria-*` wiring, and keyboard navigation.
 
 **No styling comes from Radix.** Every Radix primitive is unstyled by design;
-each is wrapped in `src/core/components/**`, given a CSS Module that consumes
-only design-system tokens, and exported as the product's own component. Nothing
-in `src/modules/**` or `src/app/**` imports `@radix-ui/*` directly.
+each is wrapped in `src/core/components/**`, styled with Tailwind utilities that
+consume only design-system tokens, and exported as the product's own component.
+Nothing in `src/modules/**` or `src/app/**` imports `@radix-ui/*` directly.
 
 **Only the primitives actually needed are installed** — not the full set, and not
 a package that bundles one. Each installed package is the single primitive it
@@ -422,7 +437,7 @@ itself is a finding against it. Two further constraints:
 | shadcn/ui | Its default theme would override the design system tokens. Adapting it costs more than building the component. ADR-0021. |
 | Material UI, Chakra, Ant Design | Heavy, opinionated, and the wrong visual language for a Persian clinic product. ADR-0021. |
 | Any icon font | Blocking request, no tree-shaking, no per-icon stroke control. §8.2. |
-| A CSS-in-JS runtime | CSS Modules and CSS variables already express the design system; a runtime adds cost and a hydration surface. |
+| A CSS-in-JS runtime | Tailwind's utilities and CSS variables already express the design system; a runtime adds cost and a hydration surface. |
 | `moment` / `jalali-moment` | Deprecated, large, mutable, and locale data loaded at runtime. Superseded by §8.6. |
 | A state-management library (Redux, Zustand) | There is no global client state to manage. Server data belongs in React Query; everything else is local to a component. |
 

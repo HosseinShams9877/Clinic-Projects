@@ -153,10 +153,17 @@ const LUCIDE_IS_BEHIND_THE_WRAPPER = {
 }
 
 /**
- * The stack is CSS Modules over a CSS-variable token block
+ * The stack is Tailwind v4 over a CSS-variable token block
  * (`01-tech-stack.md` §1, `05-conventions.md` §9, `08-ui-design-system.md` §B), and
  * every component is built from the design system — "**No component library
  * theme**" is one of Phase 1's rules.
+ *
+ * Tailwind is the styling system: the engine reads the `:root` token block in
+ * `src/app/globals.css` through `@theme`, so a utility resolves to a project token
+ * and the default palette is cleared to `initial`. It is *not* a component library
+ * — it lays no claim to spacing, typography or component structure, which is what
+ * the bans below are about — so it is not in the list. See ADR-0021's surrounding
+ * practice for the reversal.
  *
  * The list is here so that re-introducing one is a lint error with a citation
  * rather than a `package.json` entry nobody notices. Adding one requires an ADR,
@@ -174,14 +181,13 @@ const NO_COMPONENT_LIBRARY = {
     'styled-components',
     '@emotion/*',
     '@stitches/*',
-    'tailwindcss',
     'bootstrap',
     'react-bootstrap',
     'shadcn-ui',
     'class-variance-authority',
   ],
   message:
-    'The stack is CSS Modules over the CSS-variable token block in `src/app/globals.css`; every component is built from the design system. Adding a component library or Tailwind requires an ADR. (docs/knowledge/01-tech-stack.md §1, docs/knowledge/08-ui-design-system.md preamble)',
+    'The stack is Tailwind over the CSS-variable token block in `src/app/globals.css`; every component is built from the design system. Adding a component library requires an ADR. (docs/knowledge/01-tech-stack.md §1, docs/knowledge/08-ui-design-system.md preamble)',
 }
 
 /**
@@ -504,6 +510,21 @@ const CONFIG_OBJECTS = [
     name: 'clinic/boundaries/clock',
     files: ['src/core/lib/clock.ts'],
     rules: { 'no-restricted-syntax': 'off' },
+  },
+
+  {
+    /**
+     * The two config files at the root.
+     *
+     * `import/no-anonymous-default-export` fires on both: `postcss.config.mjs`
+     * exports its object inline because that is what the PostCSS runner expects of
+     * an ESM config, and this file exports the array it built above. A config file
+     * is not shipped code, and re-writing either to satisfy a stylistic rule would
+     * make it harder to read for no benefit.
+     */
+    name: 'clinic/config-files',
+    files: ['postcss.config.mjs', 'eslint.config.mjs'],
+    rules: { 'import/no-anonymous-default-export': 'off' },
   },
 ]
 

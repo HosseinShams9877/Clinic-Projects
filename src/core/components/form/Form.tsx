@@ -10,8 +10,6 @@ import {
 
 import { cx } from '@/core/lib'
 
-import styles from './Form.module.css'
-
 /**
  * The form element, and the one place RHF's context is provided.
  *
@@ -42,6 +40,13 @@ import styles from './Form.module.css'
  * able to pass a handler that does not call `preventDefault`, and the page would
  * navigate. `SubmitHandler<TFieldValues>` is typed against the form's own values,
  * so a module that renames a field gets a compile error at its handler.
+ *
+ * ## The one class
+ *
+ * The demo spaces fields with `.grid`'s `var(--s-4)`; its `.col`, at `--s-3`, is
+ * the tighter gap it uses between *groups* inside a card body. A form is a
+ * sequence of fields, so it takes the field gap — which, with `--spacing` at
+ * `--s-1`, is what `gap-4` resolves to.
  */
 export interface FormProps<TFieldValues extends FieldValues> {
   /** The result of `useForm`, which the module owns — it holds the schema. */
@@ -71,7 +76,7 @@ export function Form<TFieldValues extends FieldValues>({
     <form
       noValidate
       onSubmit={form.handleSubmit((values) => onValid(values))}
-      className={cx(styles.form, className)}
+      className={cx('flex flex-col gap-4', className)}
     >
       {/* The shell wraps its children in RHF's provider as well as its own, so a
           module can reach `useWatch`, `useFieldArray` or `useController` inside a

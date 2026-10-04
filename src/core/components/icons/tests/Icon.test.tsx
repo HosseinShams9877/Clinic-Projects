@@ -20,11 +20,14 @@
  * always supplies one of the two accessibility states and Lucide never supplies
  * one — the outcome is ours, and that is what makes it assertable.
  *
- * The class-name assertions compare against `styles.<key>` imported from the same
- * CSS Module the component imports, never against a literal. Under Vitest's
- * `stable` strategy an unprocessed CSS Module resolves each key to a deterministic
- * generated name, so the comparison holds whether or not CSS is processed — and it
- * keeps the test from being a second place the class name is written down.
+ * ## The mirroring and spin classes
+ *
+ * Those two are the one place the move to Tailwind changed what a test reads. The
+ * wrapper used to own `.mirrored` and `.spinning` in `Icon.module.css`; it now
+ * writes `-scale-x-100` and `animate-spin`, which are the engine's own names for
+ * the same two declarations. The assertions below use those names directly — there
+ * is no component-owned indirection left to read through, and pretending otherwise
+ * by introducing a constant would just be a second place the name is written.
  */
 
 import { render } from '@testing-library/react'
@@ -33,33 +36,8 @@ import { describe, expect, it } from 'vitest'
 import { Icon } from '../Icon'
 import { ICONS, iconPixels, ICON_SIZES, ICON_STROKE_WIDTH, type IconName, type IconSize } from '../icons'
 
-import styles from '../Icon.module.css'
-
 /** Every registered concept, so a new entry is covered the moment it is added. */
 const ICON_NAMES = Object.keys(ICONS) as IconName[]
-
-/**
- * A class name from `Icon.module.css`, or a failure that names the key.
- *
- * `next/types/global.d.ts` declares a CSS Module as `{ readonly [key: string]:
- * string }` — an index signature — so `noUncheckedIndexedAccess` types every
- * lookup as `string | undefined`. That is not a nuisance to work around: it is the
- * accurate type, because the declaration cannot know which classes exist, and a
- * misspelled or renamed class is therefore not a compile error. Reading through one
- * function puts the guard in a single place and turns that mistake into a failure
- * naming the key, instead of a matcher comparing against `undefined`.
- */
-function classOf(key: 'icon' | 'mirrored' | 'spinning'): string {
-  const name = styles[key]
-  if (name === undefined) throw new Error(`Icon.module.css has no class \`${key}\``)
-  return name
-}
-
-const CLASS = {
-  icon: classOf('icon'),
-  mirrored: classOf('mirrored'),
-  spinning: classOf('spinning'),
-} as const
 
 /** A Persian label, so the test proves the wrapper passes one through untouched. */
 const LABEL = 'نوبت'
@@ -181,14 +159,14 @@ describe('Icon', () => {
     it.each(['back', 'forward', 'chevronStart', 'chevronEnd'] satisfies IconName[])(
       'mirrors %s, which points in the reading direction',
       (name) => {
-        expect(svgOf(render(<Icon name={name} />).container)).toHaveClass(CLASS.mirrored)
+        expect(svgOf(render(<Icon name={name} />).container)).toHaveClass('-scale-x-100')
       },
     )
 
     it.each(['clock', 'phone', 'appointment', 'view'] satisfies IconName[])(
       'never mirrors %s, which encodes a real-world object',
       (name) => {
-        expect(svgOf(render(<Icon name={name} />).container)).not.toHaveClass(CLASS.mirrored)
+        expect(svgOf(render(<Icon name={name} />).container)).not.toHaveClass('-scale-x-100')
       },
     )
 
@@ -196,7 +174,7 @@ describe('Icon', () => {
       // The case that proves the flag is data rather than a family check: §42
       // names chevrons as direction icons, and flipping one that opens downward
       // would point it upward.
-      expect(svgOf(render(<Icon name="chevronDown" />).container)).not.toHaveClass(CLASS.mirrored)
+      expect(svgOf(render(<Icon name="chevronDown" />).container)).not.toHaveClass('-scale-x-100')
     })
 
     it('mirrors exactly the four concepts that point in the reading direction', () => {
@@ -208,21 +186,11 @@ describe('Icon', () => {
 
   describe('the §9 loading state', () => {
     it('does not rotate unless asked', () => {
-      expect(svgOf(render(<Icon name="spinner" />).container)).not.toHaveClass(CLASS.spinning)
+      expect(svgOf(render(<Icon name="spinner" />).container)).not.toHaveClass('animate-spin')
     })
 
     it('rotates when asked', () => {
-      expect(svgOf(render(<Icon name="spinner" spin />).container)).toHaveClass(CLASS.spinning)
-    })
-
-    it('keeps the base class while rotating', () => {
-      // The reason `Icon.module.css` mirrors with the individual `scale` property
-      // instead of `transform`: a `rotate()` keyframe and `transform: scaleX(-1)`
-      // on one element overwrite each other, and whichever lost would vanish.
-      const svg = svgOf(render(<Icon name="retry" spin />).container)
-
-      expect(svg).toHaveClass(CLASS.icon)
-      expect(svg).toHaveClass(CLASS.spinning)
+      expect(svgOf(render(<Icon name="spinner" spin />).container)).toHaveClass('animate-spin')
     })
   })
 
@@ -231,7 +199,6 @@ describe('Icon', () => {
       const svg = svgOf(render(<Icon name="search" className="positioned" />).container)
 
       expect(svg).toHaveClass('positioned')
-      expect(svg).toHaveClass(CLASS.icon)
       expect(svg.getAttribute('class')?.endsWith('positioned')).toBe(true)
     })
   })

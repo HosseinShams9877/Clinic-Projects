@@ -75,8 +75,6 @@ import {
 
 import { requestOtpAction, verifyOtpAction } from '@/app/account/login/actions'
 
-import styles from './Login.module.css'
-
 /**
  * The challenge step 2 holds.
  *
@@ -163,10 +161,16 @@ export function CustomerLoginForm({ nowEpochMs, codeLength, labels, placeholders
 
   if (challenge === null) {
     return (
-      <Form form={requestForm} onValid={onRequest} className={styles.card}>
-        <h2 className={styles.cardTitle}>{labels.customerTitle}</h2>
-        <p className={styles.lead}>{CUSTOMER_LOGIN_PAGE.lead}</p>
-        <div className={styles.fields}>
+      <Form
+        form={requestForm}
+        onValid={onRequest}
+        className="flex min-w-0 flex-[1_1_360px] flex-col gap-5 rounded-lg border border-line bg-surface p-7 shadow-2"
+      >
+        <h2 className="flex items-center gap-3 text-xl font-bold tracking-[var(--ls-heading)] text-ink">
+          {labels.customerTitle}
+        </h2>
+        <p className="text-md text-ink-2">{CUSTOMER_LOGIN_PAGE.lead}</p>
+        <div className="flex flex-col gap-4">
           <Field
             label={labels.mobile}
             required
@@ -181,7 +185,7 @@ export function CustomerLoginForm({ nowEpochMs, codeLength, labels, placeholders
           </Field>
           <FormError error={requestForm.formState.errors.root?.server?.message} />
         </div>
-        <div className={styles.actions}>
+        <div className="flex flex-col gap-3">
           <SubmitButton loading={requestForm.formState.isSubmitting} leadingIcon="phone" block>
             {labels.requestCode}
           </SubmitButton>
@@ -191,10 +195,18 @@ export function CustomerLoginForm({ nowEpochMs, codeLength, labels, placeholders
   }
 
   return (
-    <Form form={verifyForm} onValid={onVerify} className={styles.card}>
-      <h2 className={styles.cardTitle}>{labels.customerTitle}</h2>
-      <p className={styles.codeSentTo}>{renderMessage(CODE_SENT_TO, { mobile: formatPhone(challenge.mobile) })}</p>
-      <div className={styles.fields}>
+    <Form
+      form={verifyForm}
+      onValid={onVerify}
+      className="flex min-w-0 flex-[1_1_360px] flex-col gap-5 rounded-lg border border-line bg-surface p-7 shadow-2"
+    >
+      <h2 className="flex items-center gap-3 text-xl font-bold tracking-[var(--ls-heading)] text-ink">
+        {labels.customerTitle}
+      </h2>
+      <p className="rounded-md bg-brand-50 p-3 px-4 text-md text-ink-2">
+        {renderMessage(CODE_SENT_TO, { mobile: formatPhone(challenge.mobile) })}
+      </p>
+      <div className="flex flex-col gap-4">
         <Field label={labels.code} required error={verifyForm.formState.errors.code?.message}>
           <TextInput
             {...verifyForm.register('code')}
@@ -206,7 +218,7 @@ export function CustomerLoginForm({ nowEpochMs, codeLength, labels, placeholders
         <FormError error={verifyForm.formState.errors.root?.server?.message} />
       </div>
       <CodeCountdown challenge={challenge} nowEpochMs={nowEpochMs} />
-      <div className={styles.actions}>
+      <div className="flex flex-col gap-3">
         <SubmitButton loading={verifyForm.formState.isSubmitting} block>
           {labels.submit}
         </SubmitButton>
@@ -276,16 +288,16 @@ function CodeCountdown({ challenge, nowEpochMs }: CodeCountdownProps) {
 
   if (remainingMs <= 0) {
     return (
-      <p className={styles.countdownDone} role="status">
+      <p className="font-semibold text-warn" role="status">
         {CODE_COUNTDOWN_DONE}
       </p>
     )
   }
 
   return (
-    <p className={styles.countdown}>
+    <p className="flex items-center gap-2 text-sm text-ink-2">
       <span>{CODE_COUNTDOWN_LABEL}</span>
-      <span className={styles.countdownDigits}>{formatCountdown(remainingMs)}</span>
+      <span className="font-semibold text-ink tabular-nums">{formatCountdown(remainingMs)}</span>
     </p>
   )
 }

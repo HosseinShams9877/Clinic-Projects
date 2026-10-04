@@ -5,10 +5,196 @@
  * `docs/knowledge/08-ui-design-system.md` §46, copied without modification.
  * It is the only place in this codebase where a literal colour, radius, shadow,
  * spacing step or font size is written. Every component consumes these
- * variables through a CSS Module and never restates a value.
+ * variables through a Tailwind theme mapping and never restates a value.
  *
  * Changing any value in this file requires an ADR
  * (`docs/knowledge/08-ui-design-system.md`, preamble).
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+@import 'tailwindcss';
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * The Tailwind theme, built entirely from the token block.
+ *
+ * `@theme` is Tailwind v4's CSS configuration. There is no `tailwind.config.js`
+ * anywhere in this repository, and adding one would give the theme a second
+ * place to live; this block and the `:root` block below are one contract, and
+ * this block references it by variable so a token changed in `:root` is a token
+ * changed in Tailwind. Nothing here introduces a colour, a radius, a shadow, a
+ * spacing step or a font size of its own — if a utility you reach for is not in
+ * the tables below, the token does not exist and the design system does not have
+ * it (`08-ui-design-system.md` §48 is the register of permanent exceptions).
+ *
+ * ## Why the default theme is cleared first
+ *
+ * Tailwind ships a full default palette and a default scale of every kind, and
+ * `05-conventions.md` §9 and `08-ui-design-system.md` §45 both forbid the
+ * default palette being used as a visual choice. A forbidden colour that is
+ * still addressable is a forbidden colour that is one autocomplete away, so the
+ * namespaces Tailwind pre-populates are reset to `initial` before the project's
+ * own values are declared. After this block `bg-red-500` does not exist, because
+ * the product has no such colour.
+ *
+ * `initial` is the Tailwind v4 spelling of "remove every value in this
+ * namespace" — the engine treats the namespace as empty rather than as a list
+ * with a hole in it, which is what makes a removed scale unaddressable instead
+ * of merely unstyled.
+ *
+ * ## Namespaces not mapped, and why
+ *
+ * `--breakpoint-*` is deliberately untouched. The design system has exactly one
+ * breakpoint (`--breakpoint-panel`, §43) and every responsive rule in this
+ * product is written against it; importing Tailwind's five default breakpoints
+ * would import four the design system does not have. The one breakpoint is
+ * declared in the second `@theme` block below, where the surrounding comment
+ * explains why a media query has to write the literal and cannot read the token.
+ *
+ * `--font-*` is not mapped either. The family is injected by `next/font/local`
+ * in `layout.tsx` as a variable the browser resolves, and the body rule below
+ * already applies it to everything; a `font-vazirmatn` utility would be a second
+ * route to the same family with nothing to resolve against it.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* Clear every default Tailwind scale. Order matters only in that each
+     namespace has to be empty before it is refilled below. */
+  --color-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --text-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --blur-*: initial;
+  --perspective-*: initial;
+  --container-*: initial;
+  --text-*: initial;
+  --font-weight-*: initial;
+  --tracking-*: initial;
+  --leading-*: initial;
+  --breakpoint-*: initial;
+  --animate-*: initial;
+  --ease-*: initial;
+
+  /* ── Spacing, as a multiplier ───────────────────────────────────────────── */
+
+  /* Tailwind v4 derives `p-1`, `p-2` … from one base multiplied by the number —
+     `p-4` is `calc(var(--spacing) * 4)`. The §46 scale is 4 · 8 · 12 · 16 · 20 ·
+     24 · 32 · 40 · 56 · 72, and every one of those is a multiple of 4, so
+     `--s-1` as the base lands the whole utility scale on the design system's
+     steps: `p-4` is 16px, `p-9` is 36px (not on the scale, and not used), and
+     `gap-6` is exactly `--s-6`. A base that was not a divisor of the whole scale
+     would put the utilities in the gaps between tokens, which is how a design
+     system drifts. */
+  --spacing: var(--s-1);
+
+  /* ── Colour, from the §46 block ─────────────────────────────────────────── */
+
+  --color-brand: var(--brand);
+  --color-brand-btn: var(--brand-btn);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-300: var(--brand-300);
+  --color-brand-100: var(--brand-100);
+  --color-brand-50: var(--brand-50);
+
+  --color-bg: var(--bg);
+  --color-bg-alt: var(--bg-alt);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-sidebar-dark: var(--sidebar-dark);
+  --color-sidebar-dark-2: var(--sidebar-dark-2);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-inverse: var(--ink-inverse);
+
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+
+  --color-dark-danger: var(--dark-danger);
+  --color-dark-danger-bg: var(--dark-danger-bg);
+
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+
+  --color-neutral-bg: var(--neutral-bg);
+
+  /* ── Radius, from the §46 block ─────────────────────────────────────────── */
+
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-pill: var(--r-pill);
+
+  /* ── Shadow, from the §46 block ─────────────────────────────────────────── */
+
+  --shadow-1: var(--sh-1);
+  --shadow-2: var(--sh-2);
+  --shadow-3: var(--sh-3);
+  --shadow-brand: var(--sh-brand);
+
+  /* ── Font size, from the §46 block ──────────────────────────────────────── */
+
+  --text-xs: var(--fs-xs);
+  --text-sm: var(--fs-sm);
+  --text-md: var(--fs-md);
+  --text-lg: var(--fs-lg);
+  --text-xl: var(--fs-xl);
+  --text-2xl: var(--fs-2xl);
+  --text-3xl: var(--fs-3xl);
+  --text-4xl: var(--fs-4xl);
+
+  /* ── Font weight, from the block below ──────────────────────────────────── */
+
+  /* §46 does not carry weights; the four the product uses are declared in `:root`
+     and named by Tailwind's own weight scale, so `font-bold` is 700 and
+     `font-extrabold` is 800 — and `font-thin` through `font-light` and
+     `font-medium` do not exist, because the product has no such weight. */
+  --font-weight-normal: var(--fw-normal);
+  --font-weight-semibold: var(--fw-semibold);
+  --font-weight-bold: var(--fw-bold);
+  --font-weight-extrabold: var(--fw-extrabold);
+
+  /* ── The one breakpoint (§43) ───────────────────────────────────────────── */
+
+  /* The literal, not a `var()`. Two reasons that are the same reason: a `@media`
+     feature resolves before custom properties exist, so the value cannot be
+     indirected even inside a theme block; and Tailwind reads this declaration to
+     build its `panel:` responsive variant, which it does while compiling the
+     theme, when no `:root` variable has a value yet. The token in `:root` below
+     is the declaration JS and anything else reads; this is the one that makes the
+     utility variant exist. Both say `1000px` and both must, because a single
+     source of truth is not served by making the variant silently not exist. */
+  --breakpoint-panel: 1000px;
+
+  /* ── Transitions ────────────────────────────────────────────────────────── */
+
+  /* The one control transition, as a theme value so `transition-*` utilities can
+     name it without a component restating the curve. */
+  --transition-control: 0.18s ease;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Tokens for values the design system documents outside the §46 block.
+ *
+ * These are not new values — every one is quoted from the section named in the
+ * comment, which the §46 block does not enumerate. Nothing here overrides a
+ * §46 token, and no component may name one of these instead of its §46
+ * equivalent.
  * ─────────────────────────────────────────────────────────────────────────── */
 
 :root {
@@ -108,6 +294,18 @@
   /* §3 — base body metrics. */
   --lh-base: 1.75;
   --ls-heading: -0.2px;
+
+  /* Font weights. §46 does not enumerate them, but §3 fixes the body at 400, the
+     headings at 700, and §8 and §13 both ask for 600 on a button and a label; the
+     two pages that open the product use 800 for their display title. They are
+     declared here for the same reason every other value above is: so that
+     `font-semibold` resolves to a number the design system wrote down rather than
+     to Tailwind's own 600, and a weight the product does not use is not
+     addressable. */
+  --fw-normal: 400;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-extrabold: 800;
 
   /* §7 — layout constants the block omits. */
   --public-header-h: 76px;

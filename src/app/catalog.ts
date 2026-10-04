@@ -277,3 +277,159 @@ export const GLOBAL_ERROR_PAGE = {
   lead: 'مشکلی پیش آمد. دوباره تلاش کنید.',
   retry: 'تلاش دوباره',
 } as const satisfies Record<string, string>
+
+/* ── Phase 2's appointments surfaces ─────────────────────────────────────────
+ *
+ * The three pages `02-architecture.md` §9 names for the `appointments` module —
+ * `reception/appointments.html`, `admin/appointments.html` and the doctor's
+ * «برنامه من». Their copy is here and not in the module's catalog for the same
+ * reason the panel names are: the module owns the sentences its functions *raise*
+ * (`appointment.slotTaken` and its five neighbours), while a page's own titles,
+ * button labels and empty states are composition the app tier does from those.
+ * A page title in the module catalog would be a page the module knows about, and
+ * §6 puts pages in `src/app/`.
+ *
+ * The sentences the module raises are not repeated here. They reach a page through
+ * `MESSAGES` and the message renderer, which is also the only place a number is
+ * substituted into Persian.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The three surfaces' shared chrome: the tabs a receptionist switches between and
+ * the labels a day grid's cells carry.
+ *
+ * The tab keys are the module's own vocabulary — the day, the week and the
+ * cartable — because a receptionist's three views of one day are three names the
+ * product already has for them, and a fourth set of labels would be a fourth set
+ * the translation has to keep up.
+ */
+export const APPOINTMENTS_PAGE = {
+  reception: {
+    title: 'نوبت‌های امروز',
+    /** The line under the title, naming what the grid's columns are. */
+    lead: 'ستون هر پزشک و ساعت نوبت‌های او. برای ثبت نوبت جدید، «نوبت جدید» را باز کنید.',
+  },
+  admin: {
+    title: 'نمایش نوبت‌ها',
+    /** The oversight page is read-only, and the sentence says so. */
+    lead: 'این صفحه فقط مشاهده است. ثبت و تغییر نوبت در پنل پذیرش انجام می‌شود.',
+    /** The filters' own headings. */
+    filters: { doctor: 'پزشک', status: 'وضعیت', date: 'تاریخ' },
+  },
+  doctor: {
+    title: 'برنامه من',
+    lead: 'برنامه روز خود. ثبت سریع نوبت برای ساعت خالی خودتان.',
+  },
+  /** The tab bar's three views, keyed as the search param is. */
+  tabs: { day: 'روز', week: 'هفته', cartable: 'کارتابل نتیجه ثبت نشده' },
+  /** The day grid's empty states. */
+  empty: {
+    /** A doctor's column with no appointment on the shown day. */
+    column: 'نوبتی برای این روز ثبت نشده است.',
+    /** A whole day with no row at all. */
+    day: 'هیچ نوبتی در این روز نیست.',
+    /** The cartable when nothing is outstanding. */
+    cartable: 'هیچ نتیجه ثبت‌نشده‌ای وجود ندارد.',
+  },
+  /** The grid's controls. */
+  controls: {
+    newAppointment: 'نوبت جدید',
+    blockHours: 'بستن یک ساعت',
+    arrived: 'حاضر شد',
+    noShow: 'عدم حضور',
+    cancel: 'لغو نوبت',
+    reschedule: 'جابه‌جایی نوبت',
+    result: 'ثبت نتیجه',
+    today: 'برای امروز',
+    previousDay: 'روز قبل',
+    nextDay: 'روز بعد',
+  },
+  /** The column header of the grid's time axis. */
+  timeColumn: 'ساعت',
+  /** The weekday headers' label when a day has no doctor working it. */
+  noDoctors: 'پزشکی در این روز کاری ندارد',
+} as const satisfies Record<string, unknown>
+
+/**
+ * The three-step booking popup — `10-testing-strategy.md` line 308 names the steps:
+ * service → day and time → name and mobile → deposit.
+ *
+ * The desk's popup is the same three steps in the reception's vocabulary, opened
+ * from a slot the grid already knows: the service the visit is for, the day and
+ * time the grid offered, and the person the visit is for. The public site's own
+ * popup (`booking.html`) is Phase 8; the shell it renders in is this phase's, and
+ * the two share an engine and differ in who is typing.
+ *
+ * Each step's own labels, its placeholders and the sentence it raises when a field
+ * is not filled are below, because a step's copy is the step's and no other
+ * surface's.
+ */
+export const BOOKING_POPUP = {
+  /** The three steps, in order, as the progress indicator names them. */
+  steps: { service: 'خدمت', time: 'روز و ساعت', customer: 'مشتری' },
+  titles: {
+    service: 'چه خدمتی؟',
+    time: 'چه روز و ساعتی؟',
+    customer: 'برای چه کسی؟',
+  },
+  /** The summary the third step shows before the row is written. */
+  summary: {
+    service: 'خدمت',
+    doctor: 'پزشک',
+    time: 'زمان',
+    price: 'مبلغ',
+    deposit: 'بیعانه',
+  },
+  fields: {
+    service: 'خدمت',
+    doctor: 'پزشک',
+    localDate: 'تاریخ',
+    localTime: 'ساعت',
+    customerId: 'مشتری',
+    customerSearch: 'جستجوی مشتری با شماره موبایل یا نام',
+    firstName: 'نام',
+    lastName: 'نام خانوادگی',
+    mobile: 'شماره موبایل',
+    durationMinutes: 'مدت زمان (دقیقه)',
+    priceAtBooking: 'مبلغ (تومان)',
+    depositAmount: 'بیعانه (تومان)',
+    blockReason: 'دلیل بستن ساعت',
+    cancelReason: 'دلیل لغو',
+  },
+  hints: {
+    /** The mobile hint, naming the format the normalizer expects. */
+    mobile: 'با صفر شروع شود، بدون فاصله و خط تیره.',
+    /** The price hint, naming the unit the field is in. */
+    price: 'مبلغ به تومان وارد می‌شود.',
+    deposit: 'بیعانه‌ای که هنگام رزرو دریافت می‌شود؛ صفر یعنی بدون بیعانه.',
+    blockReason: 'اختیاری — مثلاً «جلسه تیم» یا «تعطیلی موقت».',
+  },
+  /** The new-customer branch, when the search names nobody. */
+  newCustomer: {
+    label: 'مشتری جدید',
+    lead: 'این شماره در سیستم نیست. نام و نام خانوادگی را وارد کنید تا مشتری ساخته شود.',
+  },
+  actions: {
+    back: 'بازگشت',
+    next: 'مرحله بعد',
+    confirm: 'ثبت نوبت',
+    close: 'بستن',
+  },
+  /** The one sentence the popup shows when a step is missing a choice. */
+  chooseService: 'ابتدا یک خدمت انتخاب کنید.',
+  chooseTime: 'ابتدا روز و ساعت را انتخاب کنید.',
+  chooseCustomer: 'ابتدا شماره موبایل مشتری را وارد کنید.',
+  /** The page's own sentence when the tenant has no service to book against. */
+  noServices: 'هیچ خدمتی برای ثبت نوبت تعریف نشده است.',
+  /** The duration line under the time field, naming the service's own length. */
+  duration: 'مدت زمان این خدمت',
+} as const satisfies Record<string, unknown>
+
+/**
+ * The slot block popup's own copy — «بستن یک ساعت» is a booking the desk makes
+ * against the calendar itself, and its sentence names the hour it closes.
+ */
+export const BLOCK_HOURS_POPUP = {
+  title: 'بستن یک ساعت',
+  lead: 'ساعت انتخاب شده برای پزشک بسته می‌شود و دیگر قابل رزرو نیست.',
+} as const satisfies Record<string, unknown>

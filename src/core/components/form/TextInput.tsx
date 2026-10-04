@@ -5,8 +5,7 @@ import type { ComponentProps } from 'react'
 import { cx } from '@/core/lib'
 
 import { useControlWiring } from './field-context'
-
-import styles from './Form.module.css'
+import { CONTROL_CLASSES } from './control-classes'
 
 /**
  * A single-line text input, styled to §13 and wired to its `Field`.
@@ -14,8 +13,8 @@ import styles from './Form.module.css'
  * `08-ui-design-system.md` §13: "Input / select / textarea | width 100%,
  * `padding: 11px 16px`, white bg, border `#E3D5D0`, radius 10px, font 13px", with
  * placeholder `#817169` and a focus treatment of border `#D9A7A7` plus
- * `box-shadow: 0 0 0 3px #FBF1EE`. All of it is in `Form.module.css`; none of it is
- * a prop here, which is the point — a module cannot restyle a control into
+ * `box-shadow: 0 0 0 3px #FBF1EE`. All of it is in `control-classes.ts`; none of
+ * it is a prop here, which is the point — a module cannot restyle a control into
  * something that is no longer the design system.
  *
  * ## The four attributes a caller does not write
@@ -51,7 +50,7 @@ export function TextInput({ className, ...inputProps }: TextInputProps) {
     <input
       {...inputProps}
       {...wiring}
-      className={cx(styles.control, className)}
+      className={cx(CONTROL_CLASSES, className)}
     />
   )
 }

@@ -174,6 +174,66 @@ export async function recoverStaleClaims(args: RecoverArgs): Promise<number> {
 }
 
 /**
+ * Puts a job on the queue — the write half of the bargain `02-architecture.md` §12
+ * names, and the only way a `JobQueue` row comes to exist.
+ *
+ * Phase 1 shipped the consumer and no producer, which is the honest order: a queue
+ * that enqueues a job whose handler is not written is a queue with a row nothing
+ * can run. Phase 2's `appointments` module is the first producer, for the lifecycle
+ * sweep that has to keep ticking whether or not a person opened a page.
+ *
+ * ## Why the enqueue is inside the caller's transaction
+ *
+ * The function takes the transaction the caller already opened, for the same reason
+ * every other write here does: `JobQueue` is a tenant-scoped model, and there is no
+ * enqueue without a scope. It also makes the enqueue atomic with the work that asked
+ * for it — a booking that enqueues a confirmation enqueues it with the booking, and
+ * a rollback takes both.
+ *
+ * ## Why a recurring job re-enqueues itself
+ *
+ * A recurring job is not a row the worker rewrites in place: `Done` is terminal, and
+ * a row that went back to `pending` would be a row the lease rules have to treat as
+ * claimed-then-not. So a handler that wants to run again enqueues its own successor
+ * before it returns, and the two rows never overlap — the next tick is `runAt` in
+ * the future, so the same sweep does not claim it twice. The alternative, a cron-like
+ * scheduler that rewrites rows, is a second source of truth for "when is this job
+ * due", and the queue already holds the first.
+ *
+ * ## Why `runAt` is required and defaults to nothing
+ *
+ * A job that names no due time is due now, which is the common case and is what an
+ * absent argument means. The parameter exists because a recurring job's successor is
+ * due *later*, and a caller that could not say so would enqueue a job that fires on
+ * the tick after the one that created it.
+ */
+export async function enqueueJob(args: {
+  readonly tx: TransactionClient
+  readonly tenantId: string
+  readonly kind: string
+  /** Opaque to the queue; the handler owns its own payload schema. */
+  readonly payload?: string
+  /**
+   * When the job becomes due, from the clock the caller already holds
+   * (`05-conventions.md` §8 bans the wall clock in `src/`). Required: a job that
+   * names no due time is a job that is due at the epoch, which reads as "due now"
+   * by accident rather than by decision.
+   */
+  readonly runAt: Date
+}): Promise<string> {
+  const created = await args.tx.jobQueue.create({
+    data: {
+      tenantId: args.tenantId,
+      kind: args.kind,
+      payload: args.payload ?? null,
+      status: JobStatus.Pending,
+      runAt: args.runAt,
+    },
+  })
+  return created.id
+}
+
+/**
  * Records a job that completed. Called inside the handler's own transaction, so
  * the work and its outcome commit together — a job that finishes but cannot record
  * the fact is not a job that finished, and the lease is what re-runs it.

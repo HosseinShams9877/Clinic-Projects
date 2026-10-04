@@ -64,6 +64,12 @@ unevenly.
 
 ### 3.1 `experimental.turbopackMinify: false` (Next 16.3.8 / Turbopack)
 
+> **Update after Phase 1 closed.** The workaround stopped clearing the failure, and
+> the build script moved to `next build --debug-prerender`; `next.config.mjs` now
+> carries `allowDevelopmentBuild` and `prerenderEarlyExit` alongside the flag. See
+> the Phase 2 report. The isolation below still stands and is why the replacement
+> was the next thing reached for.
+
 Next force-prerenders `/_global-error` at build time, and under the production
 React build that prerender dies with `TypeError: Cannot read properties of null
 (reading 'useContext')` — inside the framework's own page wrapper, in code the

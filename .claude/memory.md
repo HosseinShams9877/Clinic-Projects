@@ -132,7 +132,11 @@ nothing is pushed. Local identity is `Hossein Shams <dev@localhost>`.
   and `Form.module.css` both quote §8/§13's literal values in their headers to
   explain which token each became — including the demo's hard-coded `#f4d7d9` and
   a `font-size: 13px`. A hex check over the raw file fails on its own
-  documentation.
+  documentation. *(Superseded by the Tailwind reversal: the modules and the tests
+  that read them are gone. The successor technique asserts against the class
+  strings the component exports — `VARIANT_CLASSES`, `SIZE_CLASSES`,
+  `CONTROL_CLASSES` — which proves the styling reached the DOM rather than that a
+  rule was written in a file. See the Tailwind entry lower down.)*
 - **React Query's `setQueryData` writes a new reference on restore**, so a
   rollback assertion needs `toEqual`, not `toBe`.
 
@@ -141,7 +145,9 @@ nothing is pushed. Local identity is `Hossein Shams <dev@localhost>`.
 `Button.module.css`'s scoped name and a literal `'primary'` can never match — it
 is looked up through the module now; and `catalog.test.ts`'s hand-written key
 list was missing `error.malformedPermissionOverrides` (the union has 7 entries,
-the list had 6).
+the list had 6). *(The first of these is also superseded by the Tailwind reversal:
+there is no scoped name, and the test now reads `VARIANT_CLASSES.primary` from the
+component. The second stands.)*
 
 **What is still open.** Nothing. All eight items below were built in the session
 that followed — the SQLite migration list, `getTenantContext()` and the Prisma

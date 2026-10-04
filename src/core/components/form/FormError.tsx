@@ -3,8 +3,6 @@
 import { Icon } from '@/core/components/icons'
 import { cx } from '@/core/lib'
 
-import styles from './Form.module.css'
-
 /**
  * The form-level error slot.
  *
@@ -34,7 +32,9 @@ import styles from './Form.module.css'
  * genuinely needs one.
  *
  * `color: var(--danger)` is a status colour used for a status, which is what §A13
- * requires of it.
+ * requires of it. `gap-2` is the demo's own gap for an icon beside small text, and
+ * `--fs-sm` is one step larger than a field error, because this is the only thing
+ * on the screen saying nothing was saved.
  */
 export interface FormErrorProps {
   /**
@@ -51,7 +51,7 @@ export function FormError({ error, className }: FormErrorProps) {
   if (error === undefined) return null
 
   return (
-    <p className={cx(styles.formError, className)} role="alert">
+    <p className={cx('flex items-center gap-2 text-sm text-danger', className)} role="alert">
       {/* Decorative: the sentence beside it already says what happened, so
           announcing the icon as well would read the message twice. */}
       <Icon name="alert" size="control" />

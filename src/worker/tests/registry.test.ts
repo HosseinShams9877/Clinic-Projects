@@ -57,8 +57,11 @@ describe('build', () => {
 })
 
 describe('JOB_REGISTRY', () => {
-  it('is empty in Phase 1, because the six jobs of §12 arrive with the modules that own them', () => {
-    expect(JOB_REGISTRY.kinds).toEqual([])
-    expect(Object.keys(JOB_REGISTRY.handlers)).toEqual([])
+  it('holds one handler per module that has shipped its job, keyed by the kind the module owns', () => {
+    // Phase 1 asserted the empty registry, because none of §12's six modules
+    // existed. Phase 2 ships the first one: `appointments`'s lifecycle sweep. The
+    // five after it land the same way — a kind per module, from the module's barrel.
+    expect(JOB_REGISTRY.kinds).toEqual(['appointment.lifecycle'])
+    expect(typeof JOB_REGISTRY.handlers['appointment.lifecycle']?.run).toBe('function')
   })
 })

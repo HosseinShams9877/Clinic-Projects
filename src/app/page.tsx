@@ -29,6 +29,15 @@
  * The public site itself: `index.html` is `public-site`'s, and the eight pages §9
  * gives it are Phase 3. This is the one surface of the eight that Phase 1 needs,
  * because it is the one the two logins lead back to.
+ *
+ * ## The classes
+ *
+ * `08-ui-design-system.md` has no `panels.html` section, so the page composes the
+ * same tokens the login pages do: a centred column, a §12-style card, the §3
+ * heading scale. The one breakpoint is `panel` (§43), and its narrow-side padding
+ * is `--content-pad-sm` — a token the scale does not reach (16px is on it, but the
+ * token is what the §7 constant is *for*), so it is an arbitrary value while
+ * everything else on the page names a theme utility.
  */
 
 import type { Metadata } from 'next'
@@ -44,8 +53,6 @@ import { LOGIN_LABELS } from '@/modules/auth'
 import { PANELS_PAGE } from '@/app/catalog'
 import { panelPath, ROLE_PANEL } from '@/app/_shell/navigation'
 import { sessionToken } from '@/app/_shell/session'
-
-import styles from './page.module.css'
 
 export const metadata: Metadata = { title: PANELS_PAGE.title }
 
@@ -83,11 +90,13 @@ async function redirectToPanelIfExists(): Promise<void> {
 /** The two doors, side by side on a wide screen and stacked on a narrow one. */
 function PanelsEntry() {
   return (
-    <main className={styles.page}>
-      <div className={styles.inner}>
-        <h1 className={styles.title}>{PANELS_PAGE.title}</h1>
-        <p className={styles.lead}>{PANELS_PAGE.lead}</p>
-        <div className={styles.cards}>
+    <main className="min-h-dvh flex flex-col items-center justify-center p-8 px-[var(--content-pad)] panel:p-7 panel:px-[var(--content-pad-sm)]">
+      <div className="flex w-full max-w-[880px] flex-col items-center gap-6">
+        <h1 className="text-3xl font-extrabold tracking-[var(--ls-heading)] text-ink">
+          {PANELS_PAGE.title}
+        </h1>
+        <p className="text-center text-lg text-ink-2">{PANELS_PAGE.lead}</p>
+        <div className="flex w-full flex-wrap justify-center gap-6">
           <Card
             href="/login"
             icon="staff"
@@ -113,16 +122,28 @@ interface CardProps {
   readonly description: string
 }
 
-/** One door. The heading is the link, so a card's whole name is its own destination. */
+/**
+ * One door. The heading is the link, so a card's whole name is its own destination.
+ *
+ * The whole card is one `<Link>`, so the hover is the card's and not a button inside
+ * it — which is also why the transition names `box-shadow` and `border-color`
+ * rather than reading `--transition-control`: a card is not a control, and §9's
+ * transition is the one §9's states get.
+ */
 function Card({ href, icon, title, description }: CardProps) {
   return (
-    <Link href={href} className={styles.card}>
-      <span className={styles.cardIcon}>
+    <Link
+      href={href}
+      className="relative flex min-w-0 flex-[1_1_340px] flex-col gap-3 rounded-lg border border-line bg-surface p-7 shadow-2 no-underline transition-[box-shadow,var(--transition-control),border-color] hover:border-line-2 hover:shadow-3"
+    >
+      <span className="grid size-11 shrink-0 place-items-center rounded-md bg-brand-50 text-brand">
         <Icon name={icon} size="action" />
       </span>
-      <h2 className={styles.cardTitle}>{title}</h2>
-      <p className={styles.cardText}>{description}</p>
-      <span className={styles.cardGo}>
+      <h2 className="text-xl font-bold tracking-[var(--ls-heading)] text-ink">{title}</h2>
+      <p className="text-md text-ink-2">{description}</p>
+      {/* The "go" chevron, which reads as the card's destination and points the
+          reading way — `chevronEnd` mirrors in RTL, so it points left here. */}
+      <span className="flex items-center text-brand">
         <Icon name="chevronEnd" size="compact" />
       </span>
     </Link>

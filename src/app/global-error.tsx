@@ -22,6 +22,16 @@
  * An error boundary is a React boundary, and React boundaries are client components
  * — the framework requires it and forbids `metadata` here, which is why the title
  * below is a `<title>` element and not an export.
+ * ## Why the styles are inline
+ *
+ * `global-error` replaces the root layout, which is where `globals.css` is imported
+ * — so the page imports the token block itself (`./globals.css`) and then uses the
+ * same theme utilities every other page does. The card is the §12 surface on the
+ * centred column the login pages use, because this is still the product's voice on
+ * its worst day, and the retry button is the one element in the product drawn
+ * outside `Button`: this page has no access to anything but the token block, and
+ * hand-writing its four properties here is shorter than the dependency it would
+ * take to share them across a boundary the framework replaces the layout for.
  */
 
 'use client'
@@ -29,20 +39,25 @@
 import { GLOBAL_ERROR_PAGE } from '@/app/catalog'
 
 import './globals.css'
-import styles from './global-error.module.css'
 
 export default function GlobalError({ retry }: { error: Error & { digest?: string }; retry: () => void }) {
   return (
     <html lang="fa" dir="rtl">
       <body>
-        <main className={styles.page}>
-          <div className={styles.card}>
-            <span className={styles.mark}>
+        <main className="flex min-h-dvh items-center justify-center bg-surface-2 p-8 px-[var(--content-pad)]">
+          <div className="flex w-full max-w-[420px] flex-col items-center gap-4 rounded-lg border border-line bg-surface p-8 shadow-2">
+            <span className="grid size-11 place-items-center rounded-md bg-danger-bg text-danger">
               <span aria-hidden="true">⚠</span>
             </span>
-            <h1 className={styles.title}>{GLOBAL_ERROR_PAGE.title}</h1>
-            <p className={styles.lead}>{GLOBAL_ERROR_PAGE.lead}</p>
-            <button type="button" onClick={retry} className={styles.retry}>
+            <h1 className="text-2xl font-extrabold tracking-[var(--ls-heading)] text-ink">
+              {GLOBAL_ERROR_PAGE.title}
+            </h1>
+            <p className="text-center text-md text-ink-2">{GLOBAL_ERROR_PAGE.lead}</p>
+            <button
+              type="button"
+              onClick={retry}
+              className="cursor-pointer rounded-md border-none bg-brand p-[10px_18px] text-md font-semibold text-surface [transition:background_var(--transition-control)] hover:bg-brand-700"
+            >
               {GLOBAL_ERROR_PAGE.retry}
             </button>
           </div>

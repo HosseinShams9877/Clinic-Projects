@@ -8,8 +8,6 @@ import { cx } from '@/core/lib'
 
 import { FieldContext } from './field-context'
 
-import styles from './Form.module.css'
-
 /**
  * One field of a form: the label, the control, and the two message slots.
  *
@@ -65,6 +63,14 @@ import styles from './Form.module.css'
  * anyone has touched it**, so any `:invalid` styling would paint the whole form red
  * on first paint and the form would look broken before it was used. The schema is
  * the authority on what is required; this carries the announcement.
+ *
+ * ## The classes
+ *
+ * §13: "Label | 13px, weight 600, `#6E5F5B`" — `--fs-sm`, 600, `--ink-2`. The demo
+ * agrees exactly with all three, and the field's `7px` gap is its own literal
+ * because 7 is not a step of the `--s-*` scale; see `control-classes.ts` for the
+ * reading. The hint is `--fs-xs` on `--ink-3`, the demo's own `.hint`, because §13
+ * has no hint row.
  */
 export interface FieldProps {
   /**
@@ -118,11 +124,11 @@ export function Field({
   if (error !== undefined) describedBy.push(errorId)
 
   return (
-    <div className={cx(styles.field, className)}>
-      <label className={styles.label} htmlFor={controlId}>
+    <div className={cx('flex flex-col gap-[7px]', className)}>
+      <label className="text-sm font-semibold text-ink-2" htmlFor={controlId}>
         {label}
         {required ? (
-          <span className={styles.required} aria-hidden="true">
+          <span className="text-danger" aria-hidden="true">
             {'*'}
           </span>
         ) : null}
@@ -140,13 +146,13 @@ export function Field({
       </FieldContext.Provider>
 
       {hint === undefined ? null : (
-        <p className={styles.hint} id={hintId}>
+        <p className="text-xs text-ink-3" id={hintId}>
           {hint}
         </p>
       )}
 
       {error === undefined ? null : (
-        <p className={styles.error} id={errorId} role="alert">
+        <p className="flex items-center gap-1 text-xs text-danger" id={errorId} role="alert">
           {/* Decorative: the sentence beside it already says what is wrong, so
               announcing the icon too would read the field's failure twice. */}
           <Icon name="error" size="compact" />

@@ -2,21 +2,21 @@
  * The job registry — `JobQueue.kind` → the handler that runs it.
  *
  * `02-architecture.md` §12 names six jobs, and every one of them belongs to a
- * module that does not exist yet: `audience-groups`, `cycles`, `notifications` +
- * `messages`, `campaigns`, `appointments`, `debts`. Phase 1 ships the worker
- * before any of them, so the registry is **empty** — and the empty table is the
- * honest artefact of that order, exactly as `src/modules/registry/registry.ts`
- * builds `build({})` for the same reason and says so in its own header.
+ * module: `audience-groups`, `cycles`, `notifications` + `messages`, `campaigns`,
+ * `appointments`, `debts`. Phase 1 shipped the worker before any of them, and the
+ * empty table was the honest artefact of that order, exactly as
+ * `src/modules/registry/registry.ts` still builds `build({})` for the same reason
+ * and says so in its own header.
  *
- * The alternative would be to register a job whose module is not written, which is
- * a placeholder by another name; the standing rule is that neither exists. The
- * worker is complete without a single handler because the mechanism it exists to
- * prove — claim, scope, retry, lease — is independent of what a job does, and the
- * six handlers drop into the call below when their phases land. The `unknown kind`
- * path in `runner.ts` is what a release that ships before its enqueuing module
- * sees, and it is tested against a fixture registry for the same reason the module
- * registry's mechanism is: a code path that no shipped entry exercises is a code
- * path that no shipped entry proves.
+ * Registering a job whose module is not written would be a placeholder by another
+ * name, and the standing rule is that neither exists. The worker is complete
+ * without a single handler because the mechanism it exists to prove — claim, scope,
+ * retry, lease — is independent of what a job does, and the remaining five handlers
+ * drop into the call below when their phases land. The `unknown kind` path in
+ * `runner.ts` is what a release that ships before its enqueuing module sees, and it
+ * is tested against a fixture registry for the same reason the module registry's
+ * mechanism is: a code path that no shipped entry exercises is a code path that no
+ * shipped entry proves.
  *
  * ## Why the registry is built by hand and not discovered
  *
@@ -48,6 +48,7 @@
  */
 
 import type { TransactionClient } from '@/core/db/scope'
+import { APPOINTMENT_LIFECYCLE_JOB_KIND, lifecycleJobHandler } from '@/modules/appointments'
 
 import type { ClaimedJob } from './queue'
 
@@ -125,7 +126,13 @@ export function build(entries: UnbuiltJobRegistry): JobRegistry {
  * registry would be a registry that could be built twice — which is a registry
  * that could disagree with itself about what it ships.
  *
- * **This is empty, and that is correct for Phase 1.** `02-architecture.md` §12's
- * six jobs each arrive with the module that owns them.
+ * Phase 1 shipped this empty, and that was correct: none of §12's six modules
+ * existed, and a handler registered for a module that is not written is a
+ * placeholder by another name. Phase 2 lands the first one — `appointments`'
+ * lifecycle sweep — and the five after it arrive with their own modules the same
+ * way: a handler is imported from the module's barrel, because the module is the
+ * only place the job's own vocabulary is offered from.
  */
-export const JOB_REGISTRY: JobRegistry = build({})
+export const JOB_REGISTRY: JobRegistry = build({
+  [APPOINTMENT_LIFECYCLE_JOB_KIND]: lifecycleJobHandler,
+})

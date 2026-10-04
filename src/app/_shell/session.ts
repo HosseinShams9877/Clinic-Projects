@@ -47,6 +47,7 @@ import { redirect } from 'next/navigation'
 
 import { getEnv } from '@/core/config/env'
 import { getTenantContext, getTenantContextForCustomer, unscopedPrisma } from '@/core/db'
+import { TenantResolutionError } from '@/core/db/context'
 import { realClock } from '@/core/lib/clock'
 import {
   asClinicId,
@@ -104,15 +105,9 @@ export async function sessionToken(): Promise<string | null> {
  * person's next useful step is the same one.
  */
 export async function requireStaffPanel(panel: Panel): Promise<PanelSession> {
-  const token = await sessionToken()
-  if (token === null) redirect('/login')
-
-  const resolved = await getTenantContext({
-    client: unscopedPrisma(),
-    token,
-    now: realClock(),
-    multiTenant: getMultiTenant(),
-  }).catch((error: unknown) => {
+  try {
+    return await resolveStaffPanel(panel)
+  } catch (error) {
     // Every reason the resolution can fail is a reason the request has no usable
     // staff session, and the staff login is where one is acquired. `redirect()` is
     // how the boundary answers, so the failure is caught here rather than let to
@@ -120,11 +115,44 @@ export async function requireStaffPanel(panel: Panel): Promise<PanelSession> {
     // not an error page.
     if (error instanceof Error) redirect('/login')
     throw error
+  }
+}
+
+/**
+ * The same resolution, raising instead of redirecting.
+ *
+ * A Server Action answers a person, not a page: its contract is a result the caller
+ * renders, and a `redirect()` from inside one is a navigation the caller did not ask
+ * for and cannot turn into a sentence. Actions call this and map the failure to
+ * their own answer; shells call `requireStaffPanel` and let it navigate.
+ *
+ * Everything the resolution checks is the same, because the two readers are the two
+ * halves of one boundary: the shell renders for a person the resolution accepted,
+ * and the action acts for that same person.
+ *
+ * @throws `TenantResolutionError` — the session is not usable for this panel.
+ */
+export async function resolveStaffPanel(panel: Panel): Promise<PanelSession> {
+  const token = await sessionToken()
+  if (token === null) {
+    throw new TenantResolutionError('The request carries no session cookie.', 'session-not-found')
+  }
+
+  const resolved = await getTenantContext({
+    client: unscopedPrisma(),
+    token,
+    now: realClock(),
+    multiTenant: getMultiTenant(),
   })
 
   if (ROLE_PANEL[resolved.role] !== panel) {
-    // Signed in, and for a different door. The person has a panel; this is not it.
-    redirect(panelPath(ROLE_PANEL[resolved.role]))
+    // Signed in, and for a different door. The action is not the shell, so it says
+    // so rather than sending the person somewhere — the caller renders the sentence,
+    // and the panel the person does hold is the one their own topbar links to.
+    throw new TenantResolutionError(
+      `The membership's role opens the ${ROLE_PANEL[resolved.role]} panel, not ${panel}.`,
+      'no-membership',
+    )
   }
 
   return Object.freeze({

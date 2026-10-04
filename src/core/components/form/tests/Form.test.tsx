@@ -18,20 +18,19 @@
  * shell hand-made props would not be exercising the composition the shell exists
  * for.
  *
- * ## Why the CSS contract group reads the stylesheet
+ * ## What this file no longer checks
  *
- * For the reason `Button.test.tsx` gives in full: jsdom has no layout engine and no
- * cascade for pseudo-class state, so `:focus`, `:focus-visible`, `::placeholder`
- * and `:disabled` cannot be reached by rendering. Those assertions are text
- * assertions against the module's own source.
- *
- * The source is read with its comments stripped, because the file's header quotes
- * §13's colours in order to explain which token each became — and a hex check that
- * fails on its own documentation teaches nothing.
+ * The CSS-contract group that read `Form.module.css` is gone with the file. Its
+ * subject was the stylesheet's own text — token spellings, the `11px` and `96px`
+ * literals §13 states, the focus treatment — and the equivalent reading of compiled
+ * Tailwind output would be testing the engine rather than the shell. Two things
+ * survived the move and are asserted differently: the §13 styling is now an exported
+ * string (`CONTROL_CLASSES`), so the test asks the component what a control should
+ * carry instead of grepping a file; and the required marker is found by the fact
+ * that it is the hidden span inside the label rather than by a class name. See the
+ * report for the full list of what was deleted.
  */
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type { ReactNode } from 'react'
 
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -40,68 +39,29 @@ import { useForm, useFormContext } from 'react-hook-form'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
+import { VARIANT_CLASSES } from '../../button/Button'
 import { Field, Form, FormError, SubmitButton, TextArea, TextInput } from '../index'
-
-import styles from '../Form.module.css'
-import buttonStyles from '../../button/Button.module.css'
-
-/**
- * The module's rules with its comments removed. See the file header.
- *
- * Resolved through `import.meta.dirname` rather than `new URL(path,
- * import.meta.url)`: under the jsdom environment the global `URL` is jsdom's
- * implementation, which resolves a `file:` base against the document origin and
- * hands `readFileSync` an `http://localhost:3000/...` URL it rejects. See
- * `button/tests/Button.test.tsx` for the full note.
- */
-const CSS = readFileSync(join(import.meta.dirname, '../Form.module.css'), 'utf8').replaceAll(
-  /\/\*[\s\S]*?\*\//g,
-  '',
-)
-
-function classOf(key: string): string {
-  const name = styles[key]
-  if (name === undefined) throw new Error(`Form.module.css has no class \`${key}\``)
-  return name
-}
-
-/**
- * `SubmitButton` renders a `Button`, so the class on the rendered element is
- * `Button.module.css`'s scoped name — not the literal `primary`, which no CSS
- * Module in this tree produces. Looked up through the module for the same reason
- * `classOf` looks the shell's own classes up: `next/types/global.d.ts` types a
- * lookup as `string | undefined`, and a renamed class should fail by naming itself.
- */
-function buttonClassOf(key: string): string {
-  const name = buttonStyles[key]
-  if (name === undefined) throw new Error(`Button.module.css has no class \`${key}\``)
-  return name
-}
-
-const CLASS = {
-  form: classOf('form'),
-  field: classOf('field'),
-  label: classOf('label'),
-  required: classOf('required'),
-  control: classOf('control'),
-  textarea: classOf('textarea'),
-  hint: classOf('hint'),
-  error: classOf('error'),
-  formError: classOf('formError'),
-} as const
-
-/** The first descendant matching a selector, or a failure that names it. */
-function queryOrThrow(root: ParentNode, selector: string): Element {
-  const found = root.querySelector(selector)
-  if (found === null) throw new Error(`no element matches \`${selector}\``)
-  return found
-}
+import { CONTROL_CLASSES, TEXTAREA_CLASSES } from '../control-classes'
 
 /** The rendered `<form>`, found without depending on an implicit ARIA role. */
 function formElement(container: HTMLElement): HTMLFormElement {
-  const form = queryOrThrow(container, 'form')
+  const form = container.querySelector('form')
+  if (form === null) throw new Error('the shell rendered no form element')
   if (!(form instanceof HTMLFormElement)) throw new Error('the form is not a form element')
   return form
+}
+
+/**
+ * The required marker, or a failure saying where it should have been.
+ *
+ * It is the one child of the label that is hidden from assistive technology, which
+ * is how the shell marks it and therefore how this test finds it — the class it
+ * happens to carry is not the contract, the `aria-hidden` and the `*` are.
+ */
+function markerIn(container: HTMLElement): Element {
+  const marker = container.querySelector('label span[aria-hidden="true"]')
+  if (marker === null) throw new Error('no required marker inside the label')
+  return marker
 }
 
 /**
@@ -209,7 +169,7 @@ describe('Form', () => {
   it('renders a real form element', () => {
     const { container } = render(<Harness onValid={vi.fn()} />)
 
-    expect(formElement(container)).toHaveClass(CLASS.form)
+    expect(formElement(container)).toBeInstanceOf(HTMLFormElement)
   })
 
   it('turns off the browser’s own validation', () => {
@@ -286,7 +246,7 @@ describe('Field', () => {
     // aloud as "star" would be noise on top of it.
     const { container } = render(<Harness onValid={vi.fn()} />)
 
-    const marker = queryOrThrow(container, `.${CLASS.required}`)
+    const marker = markerIn(container)
 
     expect(marker).toHaveTextContent('*')
     expect(marker).toHaveAttribute('aria-hidden', 'true')
@@ -295,7 +255,7 @@ describe('Field', () => {
   it('marks only the field that is required', () => {
     const { container } = render(<Harness onValid={vi.fn()} />)
 
-    expect(container.querySelectorAll(`.${CLASS.required}`)).toHaveLength(1)
+    expect(container.querySelectorAll('label span[aria-hidden="true"]')).toHaveLength(1)
     expect(screen.getByLabelText(/یادداشت/)).not.toHaveAttribute('aria-required')
   })
 
@@ -318,7 +278,7 @@ describe('Field', () => {
     // moves everything below it.
     const { container } = render(<Harness onValid={vi.fn()} />)
 
-    expect(container.querySelector(`.${CLASS.error}`)).toBeNull()
+    expect(container.querySelector('[role="alert"]')).toBeNull()
   })
 
   it('renders the error as an alert and describes the control with it', async () => {
@@ -369,11 +329,16 @@ describe('TextInput and TextArea', () => {
     const { container } = render(<Harness onValid={vi.fn()} />)
 
     const textarea = screen.getByLabelText(/یادداشت/)
+    const input = screen.getByLabelText(/شماره موبایل/)
 
-    expect(screen.getByLabelText(/شماره موبایل/)).toHaveClass(CLASS.control)
-    expect(textarea).toHaveClass(CLASS.control)
-    expect(textarea).toHaveClass(CLASS.textarea)
-    expect(container.querySelectorAll(`.${CLASS.control}`)).toHaveLength(2)
+    // `CONTROL_CLASSES` is the §13 contract the shell exports, so asking it which
+    // classes a control carries and checking the rendered element has them is the
+    // assertion the move to Tailwind made possible: it proves the styling reached
+    // the DOM rather than that a rule was written somewhere.
+    expect(input).toHaveClass(CONTROL_CLASSES)
+    expect(textarea).toHaveClass(CONTROL_CLASSES)
+    expect(textarea).toHaveClass(TEXTAREA_CLASSES)
+    expect(container.querySelectorAll('input, textarea')).toHaveLength(2)
   })
 
   it('forwards the props its caller passes', () => {
@@ -426,7 +391,7 @@ describe('SubmitButton', () => {
   it('is the primary action of the form', () => {
     render(<Harness onValid={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: SAVE })).toHaveClass(buttonClassOf('primary'))
+    expect(screen.getByRole('button', { name: SAVE })).toHaveClass(VARIANT_CLASSES.primary)
   })
 
   it('carries the loading state through to the button', () => {
@@ -496,85 +461,5 @@ describe('FormError', () => {
     fireEvent.click(screen.getByRole('button', { name: 'trigger' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('اتصال قطع شد')
-  })
-})
-
-describe('the CSS contract (§A1, §A9, §13)', () => {
-  it('hard-codes no colour', () => {
-    expect(CSS).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
-  })
-
-  it('names no physical property (§A9)', () => {
-    for (const pattern of [
-      /(^|[\s;{])(margin|padding|border)-(left|right)\s*:/,
-      /(^|[\s;{])(left|right)\s*:/,
-      /(^|[\s;{])(width|height)\s*:/,
-      /text-align:\s*(left|right)/,
-    ]) {
-      expect(CSS).not.toMatch(pattern)
-    }
-  })
-
-  it('states §13’s control geometry and nothing else', () => {
-    // The off-scale numbers §13 states, asserted so that the departure from A3 is
-    // a written-down decision rather than a silent one. The 16px is `--s-4`, which
-    // is on the scale, and is the demo's own spelling of it.
-    expect(CSS).toMatch(/\.control\s*\{[^}]*padding: 11px var\(--s-4\)/)
-    expect(CSS).toMatch(/\.control\s*\{[^}]*inline-size: 100%/)
-    expect(CSS).toMatch(/\.control\s*\{[^}]*border: 1px solid var\(--line-2\)/)
-    expect(CSS).toMatch(/\.field\s*\{[^}]*gap: 7px/)
-    expect(CSS).toMatch(/\.textarea\s*\{[^}]*min-height: 96px/)
-    expect(CSS).toMatch(/\.textarea\s*\{[^}]*line-height: 1\.8/)
-  })
-
-  it('takes §13’s colours, radius and type scale from tokens', () => {
-    expect(CSS).toMatch(/\.control\s*\{[^}]*background: var\(--surface\)/)
-    expect(CSS).toMatch(/\.control\s*\{[^}]*border-radius: var\(--r-sm\)/)
-    expect(CSS).toMatch(/\.control\s*\{[^}]*font-size: var\(--fs-sm\)/)
-    expect(CSS).toMatch(/\.control::placeholder\s*\{[^}]*color: var\(--ink-3\)/)
-    expect(CSS).toMatch(/\.label\s*\{[^}]*color: var\(--ink-2\)/)
-    expect(CSS).toMatch(/\.required\s*\{[^}]*color: var\(--danger\)/)
-    expect(CSS).toMatch(/\.hint\s*\{[^}]*color: var\(--ink-3\)/)
-  })
-
-  it('states §13’s focus treatment', () => {
-    expect(CSS).toMatch(/\.control:focus\s*\{[^}]*outline: none/)
-    expect(CSS).toMatch(/\.control:focus\s*\{[^}]*border-color: var\(--brand-300\)/)
-    expect(CSS).toMatch(/\.control:focus\s*\{[^}]*box-shadow: 0 0 0 3px var\(--brand-50\)/)
-  })
-
-  it('restores the product’s own focus ring for keyboard users', () => {
-    // §13's `outline: none` cancels `globals.css`'s `:focus-visible` rule, because
-    // a class with a pseudo-class outranks a bare pseudo-class. Its ring cannot
-    // stand in: `--brand-50` on `--surface` is about 1.1:1, so a keyboard user
-    // tabbing through a form would have no indicator meeting WCAG 2.1 SC 1.4.11's
-    // 3:1 — on the control they are about to type into. The brand outline is
-    // 3.98:1 on white. See the module's header.
-    expect(CSS).toMatch(/\.control:focus-visible\s*\{[^}]*outline: 2px solid var\(--brand\)/)
-    expect(CSS).toMatch(/\.control:focus-visible\s*\{[^}]*outline-offset: 2px/)
-  })
-
-  it('marks an invalid control with the status colour, and not with colour alone', () => {
-    // §A13 reserves `--danger` for a status, and this is one. The message below the
-    // control is the primary signal, so nothing here depends on a colour being seen.
-    expect(CSS).toMatch(/\.control\[aria-invalid='true'\]\s*\{[^}]*border-color: var\(--danger\)/)
-    expect(CSS).toMatch(/\.error\s*\{[^}]*color: var\(--danger\)/)
-  })
-
-  it('recesses a disabled control and says why it cannot be used', () => {
-    expect(CSS).toMatch(/\.control:disabled\s*\{[^}]*background: var\(--surface-sunken\)/)
-    expect(CSS).toMatch(/\.control:disabled\s*\{[^}]*cursor: not-allowed/)
-  })
-
-  it('takes the control transition from the token globals.css defines', () => {
-    expect(CSS).toContain('transition: var(--transition-control)')
-  })
-
-  it('uses the spacing scale for every gap §13 does not fix', () => {
-    // A3. The only literals in this file are the ones §13 states — `7px`, `11px`,
-    // `96px` and the 3px ring — which `Button.module.css` argues at length.
-    expect(CSS).toMatch(/\.form\s*\{[^}]*gap: var\(--s-4\)/)
-    expect(CSS).toMatch(/\.error\s*\{[^}]*gap: var\(--s-1\)/)
-    expect(CSS).toMatch(/\.formError\s*\{[^}]*gap: var\(--s-2\)/)
   })
 })

@@ -5,8 +5,7 @@ import type { ComponentProps } from 'react'
 import { cx } from '@/core/lib'
 
 import { useControlWiring } from './field-context'
-
-import styles from './Form.module.css'
+import { CONTROL_CLASSES, TEXTAREA_CLASSES } from './control-classes'
 
 /**
  * A multi-line text input, styled to §13 and wired to its `Field`.
@@ -32,7 +31,7 @@ export function TextArea({ className, ...textAreaProps }: TextAreaProps) {
     <textarea
       {...textAreaProps}
       {...wiring}
-      className={cx(styles.control, styles.textarea, className)}
+      className={cx(CONTROL_CLASSES, TEXTAREA_CLASSES, className)}
     />
   )
 }

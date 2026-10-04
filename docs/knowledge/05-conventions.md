@@ -178,17 +178,27 @@ Two areas where a small mistake is expensive and invisible.
 
 ## 9. Styling
 
-- **CSS Modules** per component, plus the global token block.
+- **Tailwind v4 is the styling system.** No `*.module.css` exists under `src/`; a
+  component is styled with utility classes, and the engine reads the global token
+  block in `src/app/globals.css` through `@theme` — see `01-tech-stack.md` §1's
+  reversal note for what changed and what did not.
 - **Every colour, radius, shadow and spacing value comes from a token**
-  (`08-ui-design-system.md`). A hard-coded hex is a finding.
-- **No Tailwind default palette.** The brand is a custom dusty-rose; a
-  `bg-rose-500` is a finding.
-- **Logical properties only** — `margin-inline-start`, not `margin-left`;
-  `padding-block`, not `padding-top`/`bottom`. RTL is a hard constraint.
+  (`08-ui-design-system.md`). A hard-coded hex is a finding, and so is an arbitrary
+  value a token already states: `p-4` rather than `p-[16px]`, because `--spacing`
+  is `--s-1` and `p-4` *is* 16px.
+- **No palette but the token block's.** The default Tailwind palette is cleared to
+  `initial` namespace by namespace in `@theme`, so `bg-red-500` does not resolve at
+  all — and were it re-enabled, `bg-rose-500` would still be a finding, because the
+  brand is a custom dusty-rose.
+- **Logical properties only** — `ms-`/`me-` and `ps-`/`pe-` for inline margins and
+  padding, `inset-inline-start` in an arbitrary property, never `ml-`/`pl-` or
+  `left:`/`right:`. RTL is a hard constraint, and the physical utility is a Latin
+  assumption baked into a class name.
 - No inline `style` except for a genuinely dynamic value (a computed position, a
-  progress width). A static inline style is a finding.
-- Component state lives in class names (`is-loading`, `is-disabled`), not in
-  ad-hoc attributes.
+  progress width). A static inline style is a finding — the utility for it exists.
+- Component state is expressed through the component's own props (`loading`,
+  `disabled`), which select the utilities; not through ad-hoc attributes or
+  hand-added class names at the call site.
 
 ---
 
