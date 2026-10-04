@@ -1,6 +1,6 @@
 import { cx } from '@/core/lib'
 
-import { ICONS, ICON_SIZES, ICON_STROKE_WIDTH, type IconName, type IconSize } from './icons'
+import { ICONS, iconPixels, ICON_STROKE_WIDTH, type IconName, type IconSize } from './icons'
 
 import styles from './Icon.module.css'
 
@@ -93,13 +93,13 @@ export interface IconProps {
  * system's sizes, mirrored if the concept is a direction icon, and either
  * announced or hidden depending on whether it was given a label.
  */
-export function Icon({ name, size = ICON_SIZES.control, label, spin = false, className }: IconProps) {
+export function Icon({ name, size = 'control', label, spin = false, className }: IconProps) {
   const { glyph: Glyph, mirrorsInRtl } = ICONS[name]
   const decorative = label === undefined
 
   return (
     <Glyph
-      size={size}
+      size={iconPixels(size)}
       className={cx(styles.icon, mirrorsInRtl && styles.mirrored, spin && styles.spinning, className)}
       strokeWidth={ICON_STROKE_WIDTH}
       strokeLinecap="round"

@@ -145,6 +145,19 @@ CREATE POLICY tenant_isolation ON "sessions"
   USING      ("tenantId" = current_setting('app.tenant_id', true)::text)
   WITH CHECK ("tenantId" = current_setting('app.tenant_id', true)::text);
 
+-- One-time-code challenges are written by the login that is about to establish a
+-- session, so they are the same shape as "sessions": the challenge's tenant is the
+-- one the login resolved, and the row is what the login's rate limit counts. A
+-- challenge is never read outside its own login, and the mobile it was texted to is
+-- the only thing the response discloses (09-security.md §10).
+ALTER TABLE "otp_challenges" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "otp_challenges" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON "otp_challenges";
+CREATE POLICY tenant_isolation ON "otp_challenges"
+  USING      ("tenantId" = current_setting('app.tenant_id', true)::text)
+  WITH CHECK ("tenantId" = current_setting('app.tenant_id', true)::text);
+
 ALTER TABLE "audit_logs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "audit_logs" FORCE ROW LEVEL SECURITY;
 

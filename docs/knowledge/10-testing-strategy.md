@@ -592,9 +592,11 @@ Alongside it:
   rendered for tenant B **does not** return A's rows before its own query
   resolves. This is the client-side mirror of the cross-tenant suite in §6.2 — the
   database cannot catch this leak because no query is made.
-- **A test that no key contains a name, a mobile number, or a customer id**
-  (`05-conventions.md` §16.2 rule 5). Keys are observable in devtools and in error
-  reports.
+- **A test that no key contains a name, a mobile number, or any other personal
+  data** (`05-conventions.md` §16.2 rule 5). Keys are observable in devtools and
+  in error reports. A surrogate customer id is permitted — §16.3's payment row
+  invalidates a per-customer key — and the test asserts against personal data,
+  not against ids.
 
 ### 16.4 Optimistic updates: success **and** rollback
 

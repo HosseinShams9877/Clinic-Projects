@@ -1,6 +1,6 @@
 'use client'
 
-import { Icon, ICON_SIZES } from '@/core/components/icons'
+import { Icon } from '@/core/components/icons'
 import { cx } from '@/core/lib'
 
 import styles from './Form.module.css'
@@ -54,7 +54,7 @@ export function FormError({ error, className }: FormErrorProps) {
     <p className={cx(styles.formError, className)} role="alert">
       {/* Decorative: the sentence beside it already says what happened, so
           announcing the icon as well would read the message twice. */}
-      <Icon name="alert" size={ICON_SIZES.control} />
+      <Icon name="alert" size="control" />
       {error}
     </p>
   )

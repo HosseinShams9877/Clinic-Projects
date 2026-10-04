@@ -10,6 +10,12 @@
  * Anything that knows what a value *means* — a money conversion, a date, a
  * permission — belongs in the module that owns that meaning, or in
  * `src/core/localization` or `src/core/constants`. This folder is for mechanics.
+ *
+ * `clock` is the exception that proves the last paragraph is a rule and not a
+ * definition: a clock is not a value's *meaning*, but it is the one thing every
+ * time-dependent module has to reach for, and there is no module that owns "the
+ * time" — so it lives here beside the other mechanics (`05-conventions.md` §8).
  */
 
+export * from './clock'
 export * from './cx'

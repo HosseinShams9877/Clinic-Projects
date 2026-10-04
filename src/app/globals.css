@@ -113,7 +113,12 @@
   --public-header-h: 76px;
   --content-pad: 24px;          /* page content padding, desktop */
   --content-pad-sm: 16px;       /* ≤ 1000px (§43) */
-  --breakpoint-panel: 1000px;   /* §43 — the only breakpoint */
+  --breakpoint-panel: 1000px;   /* §43 — the only breakpoint. Read by JS and by
+                                   anything that needs the number as a value; a
+                                   `@media` feature cannot take a `var()` — CSS
+                                   resolves media features before custom properties
+                                   exist — so a media query writes `1000px` and this
+                                   token is the one place that number is declared. */
 
   /* §21 — the modal. */
   --modal-max-w: 560px;
@@ -201,10 +206,14 @@ button {
 
 /* §9 — focus is part of every component's contract. The global rule is a
    fallback for the elements no component styles; a component that draws its own
-   focus treatment does so with the same two properties. */
+   focus treatment does so with the same two properties. `border-radius` follows
+   the demo's own global rule (`clinic/assets/css/theme.css`), which §9 does not
+   name and §B therefore takes from the reference artifact: it rounds the ring on
+   the focusable elements that set no corner of their own. */
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
+  border-radius: var(--r-xs);
 }
 
 /* Both are design-system facts, not preferences: the interface is calm (§44),

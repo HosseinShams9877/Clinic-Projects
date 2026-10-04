@@ -20,6 +20,14 @@
  * a file inside it, and it may not import another module — `02-architecture.md` §10
  * rule 3.
  *
+ * ## The contract, and who reads it
+ *
+ * `RolesPermissionsModule` is exported here and defined in `./types` because
+ * `05-conventions.md` §15.5 puts an override's contract in the default module's
+ * `types/` and makes it a named, exported interface. It is exported through the barrel
+ * for the same reason every other public name is: the registry, which is another
+ * module, may not reach into this one's `types/` to name it.
+ *
  * ## What is deliberately not here
  *
  * `effectiveSet`, `SECRETARY_DEFAULT_COUNT` and `RECOVERY_PERMISSIONS` are private.
@@ -28,7 +36,7 @@
  * `tenantHasRecoveryManager` already state in a form a caller can use.
  */
 
-export type { MembershipSnapshot } from './types'
+export type { MembershipSnapshot, RolesPermissionsModule } from './types'
 
 export type { RolesPermissionsMessageKey } from './catalog'
 export { MESSAGES } from './catalog'

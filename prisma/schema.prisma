@@ -99,6 +99,7 @@ model Tenant {
   leaveRequests  LeaveRequest[]
   jobs           JobQueue[]
   auditLogs      AuditLog[]
+  otpChallenges  OtpChallenge[]
 
   @@map("tenants")
 }
@@ -246,17 +247,31 @@ model Membership {
   @@map("memberships")
 }
 
-// A staff session. `09-security.md`: the session lives in an HttpOnly cookie and
-// the server holds only a hash of the token, so a database disclosure does not
-// hand over a usable credential. Rotation on login revokes the previous row and
-// writes a new one; `rotatedAt` records the handover so a replayed old token is
-// visible rather than merely refused.
+// A session. `09-security.md` §10: the session lives in an httpOnly, `Secure`,
+// `SameSite=Lax` cookie and the server holds only a hash of the token, so a
+// database disclosure does not hand over a usable credential. Rotation on login
+// revokes the previous row and writes a new one; `rotatedAt` records the handover
+// so a replayed old token is visible rather than merely refused.
+//
+// Exactly one of `userId` and `customerId` is set (`09-security.md` §7): a staff
+// member's session resolves to a `User` and through it the membership that carries
+// the role; a customer's resolves to a `Customer`, and every query the customer
+// panel runs is scoped to that id **in addition to** the tenant. Neither column is
+// an input — §7: "A customer-supplied `customerId` would be an instant horizontal
+// privilege escalation across the entire patient database, so it does not exist as
+// an input anywhere." Both are nullable rather than one required-plus-one-excluded
+// because SQLite has no CHECK the schema can express across two columns in a way
+// the two engines agree on; the module layer writes exactly one and the resolution
+// reads exactly one.
 model Session {
   id       String @id @default(cuid())
-  userId   String
   tenantId String
-  user     User   @relation(fields: [userId], references: [id])
   tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  userId    String?
+  user      User?   @relation(fields: [userId], references: [id])
+  customerId String?
+  customer  Customer? @relation(fields: [customerId], references: [id])
 
   tokenHash String   @unique(map: "session_token_key")
   expiresAt DateTime
@@ -269,7 +284,50 @@ model Session {
   createdAt DateTime @default(now())
 
   @@index([userId, expiresAt], map: "session_user_expires_idx")
+  @@index([customerId, expiresAt], map: "session_customer_expires_idx")
   @@map("sessions")
+}
+
+// The customer one-time-code challenge (`09-security.md` §10).
+//
+// Only a **hash** of the code is stored, with an expiry and an attempt counter —
+// the three fields §10 names — so a database disclosure hands over neither a
+// credential nor a way to compute one. The code itself is texted to the mobile it
+// was issued for and exists nowhere else.
+//
+// `mobile` is denormalised here rather than joined through `Customer` because the
+// challenge has to exist **before** there is a customer to join to: §10 requires
+// the response to an unknown mobile to be indistinguishable from a known one, so
+// the row is written and the code is simply not sent. A lookup-first design would
+// have to choose between disclosing the absence (a leak) and skipping the write
+// (no row to rate-limit, so no rate limit).
+//
+// `attempts` is what makes guessing cost more than a retry. It is the counter
+// §10's "attempt counter" names, and the check freezes the challenge once it is
+// exhausted rather than deleting the row — a deleted row looks the same to the
+// rate limiter as a row that never existed.
+model OtpChallenge {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  customerId String?
+  customer  Customer? @relation(fields: [customerId], references: [id])
+
+  mobile     String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int     @default(0)
+  consumedAt DateTime?
+
+  ip        String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, mobile], map: "otp_tenant_mobile_idx")
+  @@index([mobile, createdAt(sort: Desc)], map: "otp_mobile_created_idx")
+  @@map("otp_challenges")
 }
 
 // On-premise licence (§6). Deliberately not tenant-scoped: a licence belongs to
@@ -410,6 +468,8 @@ model Customer {
   consentRecords ConsentRecord[]
   images         BeforeAfterImage[]
   messageSends   MessageSend[]
+  otpChallenges  OtpChallenge[]
+  sessions       Session[]
 
   @@unique([tenantId, mobile], map: "customer_mobile_key")
   @@index([tenantId, lastVisitAt], map: "customer_tenant_lastvisit_idx")

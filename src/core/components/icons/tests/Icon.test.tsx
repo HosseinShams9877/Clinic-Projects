@@ -31,7 +31,7 @@ import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { Icon } from '../Icon'
-import { ICONS, ICON_SIZES, ICON_STROKE_WIDTH, type IconName } from '../icons'
+import { ICONS, iconPixels, ICON_SIZES, ICON_STROKE_WIDTH, type IconName, type IconSize } from '../icons'
 
 import styles from '../Icon.module.css'
 
@@ -107,7 +107,7 @@ describe('Icon', () => {
     it('draws on the 24-unit Lucide grid and scales by width and height', () => {
       // The icon is scaled, not redrawn: a `viewBox` that changed with `size`
       // would mean the wrapper was doing arithmetic on the path data.
-      const svg = svgOf(render(<Icon name="appointment" size={ICON_SIZES.compact} />).container)
+      const svg = svgOf(render(<Icon name="appointment" size="compact" />).container)
 
       expect(svg).toHaveAttribute('viewBox', '0 0 24 24')
       expect(svg).toHaveAttribute('width', '14')
@@ -122,11 +122,14 @@ describe('Icon', () => {
       expect(ICON_SIZES.control).toBe(17)
     })
 
-    it.each(Object.entries(ICON_SIZES))('accepts the %s size', (_role, size) => {
+    it.each(Object.keys(ICON_SIZES) as IconSize[])('accepts the %s size', (size) => {
+      // A size is a *name* — `compact`, `nav` — and the pixel value is what the name
+      // stands for, looked up by the wrapper. Handing the name in and reading the
+      // pixel out is the whole contract, and it is what keeps a caller on the scale.
       const svg = svgOf(render(<Icon name="appointment" size={size} />).container)
 
-      expect(svg).toHaveAttribute('width', String(size))
-      expect(svg).toHaveAttribute('height', String(size))
+      expect(svg).toHaveAttribute('width', String(iconPixels(size)))
+      expect(svg).toHaveAttribute('height', String(iconPixels(size)))
     })
 
     it('keeps every size on the scale §42 defines', () => {

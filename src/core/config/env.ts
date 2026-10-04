@@ -73,6 +73,12 @@ const environmentSchema = z.object({
   // mechanism that keeps a job from being lost when a process dies mid-run.
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(250).default(15_000),
   WORKER_LEASE_SECONDS: z.coerce.number().int().min(30).default(300),
+
+  // `setup/deployment.md` §6: the worker's supervisor health-checks
+  // `GET /api/health/worker`. A port of its own keeps that endpoint off the web
+  // tier's, and the worker binds it to loopback only — the check is for the
+  // supervisor and the reverse proxy on the same machine, not for the internet.
+  WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65_535).default(3100),
 })
 
 export type NodeEnvironment = 'development' | 'test' | 'production'
@@ -82,6 +88,8 @@ export interface WorkerConfig {
   readonly pollIntervalMs: number
   /** How long a claimed job may run before it may be reclaimed. */
   readonly leaseSeconds: number
+  /** The loopback port the worker's health check is served on. */
+  readonly healthPort: number
 }
 
 export interface Env {
@@ -221,6 +229,7 @@ export function loadEnv(
     worker: Object.freeze({
       pollIntervalMs: values.WORKER_POLL_INTERVAL_MS,
       leaseSeconds: values.WORKER_LEASE_SECONDS,
+      healthPort: values.WORKER_HEALTH_PORT,
     }),
   })
 }

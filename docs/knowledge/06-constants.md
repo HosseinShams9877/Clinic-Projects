@@ -346,6 +346,67 @@ SMS         پیامک
 WHATSAPP    واتساپ
 ```
 
+### 4.13 Lead statuses (5)
+
+```
+NEW             تازه
+CONTACTED       تماس گرفته شد
+FOLLOWING_UP    پیگیری بعدی
+BOOKED          نوبت گرفت
+LOST            منصرف شد
+```
+
+The lead cartable's own lifecycle, quoted from the specification's §10: «تازه ·
+تماس گرفته شد · پیگیری بعدی · نوبت گرفت · منصرف شد». It is closed because the
+board's filter row *is* the set — an extra state is a state the filter cannot
+select.
+
+**The demo collapses it to four.** Its filter chips are جدید · در پیگیری ·
+تبدیل شده · از دست رفته, which merges «تماس گرفته شد» and «پیگیری بعدی» into
+one «در پیگیری» and renames the other two. The five-state version is the
+specification's, and it is the one the product implements, because the
+distinction the demo drops is the one the secretary works from: a lead that has
+been contacted and a lead due for a follow-up are two different rows in a day's
+work.
+
+### 4.14 Service categories (4)
+
+```
+SKIN        پوست
+LASER       لیزر
+INJECTABLE  تزریق
+HAIR        مو
+```
+
+The specification names four, as the public site's service filter: «دسته بندی
+(پوست، لیزر، تزریق، مو) … فیلتر بر اساس دسته». **The demo lists five** —
+تزریقات · لیزر · پوست · مو · مشاوره — adding مشاوره and pluralising تزریق to
+تزریقات, which is the same category under a chip label.
+
+The product takes the specification's four as the stored set. A fifth filter the
+specification does not name is a fifth column on a screen it already drew; if a
+clinic needs مشاوره, the set is extended here and nowhere else.
+
+### 4.15 The two sets the specification does not enumerate
+
+Two columns the data model carries are **not enumerated anywhere in the
+specification**, and no code references them yet. They are recorded here as
+explicitly *unsettled* rather than invented:
+
+- **`noShowReason`** (on `Appointment`). The specification gives one example —
+  «منشی ثبت کرد و تماس گرفت، مسافرت بود» — and one automatic message kind,
+  «پیگیری عدم حضور», but no closed list of reasons. Free text is the reading
+  the evidence supports, and a closed list would be invented. **Needed by Phase
+  2**; if the reports page turns out to need «گزارش ریزش، با دلیل» as a
+  breakdown, the list has to be settled first.
+- **`depositStatus`** (on `Appointment`). The specification describes a deposit
+  *requirement* (per-service, optional by clinic setting) and a *refund policy*
+  in settings — کامل · نیمی · بدون بازگشت — but never a status of a deposit on
+  an appointment. The three-member refund policy is a settings constant, not a
+  status. **Needed by Phase 3** (services) and Phase 5 (payments).
+
+Neither is blocking: neither column is read by any code in Phase 1.
+
 ---
 
 ## 5. Numeric and structural constants

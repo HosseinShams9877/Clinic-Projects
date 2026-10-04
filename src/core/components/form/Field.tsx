@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import { useId } from 'react'
 
-import { Icon, ICON_SIZES } from '@/core/components/icons'
+import { Icon } from '@/core/components/icons'
 import { cx } from '@/core/lib'
 
 import { FieldContext } from './field-context'
@@ -149,7 +149,7 @@ export function Field({
         <p className={styles.error} id={errorId} role="alert">
           {/* Decorative: the sentence beside it already says what is wrong, so
               announcing the icon too would read the field's failure twice. */}
-          <Icon name="error" size={ICON_SIZES.compact} />
+          <Icon name="error" size="compact" />
           {error}
         </p>
       )}

@@ -372,9 +372,10 @@ nightly reconciliation job recomputes both sums from the ledger and fails
 loudly on any drift. Storing the two *inputs* and computing the *derived value*
 keeps immutable rule 8 intact while keeping the group query off a full scan.
 
-> Flagged for human confirmation in `reports/phase-00-report.md` (OQ-3): this
-> is the one place where the performance design and the literal reading of
-> rule 8 are in tension.
+> Resolved in `docs/roadmap/adr/0014-recomputable-…md` (Phase 1, OQ-3): the
+> cache stays, because the rule it touches names the thing it protects — rule 8
+> forbids storing *the balance*, and these are its inputs. The reconciliation
+> that keeps it honest is a blocking test in Phase 5, not an operational habit.
 
 ### 4.4 Fixed financial rules
 

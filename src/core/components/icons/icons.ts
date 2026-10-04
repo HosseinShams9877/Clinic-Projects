@@ -148,7 +148,20 @@ export const ICON_SIZES = {
 } as const
 
 /** One of the named sizes above. A bare `13` does not type-check. */
-export type IconSize = (typeof ICON_SIZES)[keyof typeof ICON_SIZES]
+export type IconSize = keyof typeof ICON_SIZES
+
+/**
+ * The pixels a size name stands for, for the one place that needs the number: the
+ * Lucide glyph's own `size` prop, which takes pixels and not the role.
+ *
+ * `Icon` reads a name and hands this value down, so a caller writes `size="nav"` and
+ * never `19` — the name is the thing §42 states and the pixel is the thing it is
+ * stated *for*, and looking it up here is what keeps a caller from picking a value
+ * the scale does not hold.
+ */
+export function iconPixels(size: IconSize): (typeof ICON_SIZES)[IconSize] {
+  return ICON_SIZES[size]
+}
 
 /** A registered icon: the glyph to render, and whether RTL must flip it. */
 export interface IconDefinition {

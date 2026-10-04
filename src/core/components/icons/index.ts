@@ -13,6 +13,8 @@
  * against a second literal and so a CSS Module that needs the stroke width cannot
  * invent its own. `IconName` and `IconSize` are the two types a caller needs in a
  * signature — a nav configuration typed as `readonly { icon: IconName }[]`, say.
+ * `iconPixels` is the name-to-number lookup, exported for the tests that assert the
+ * scale and for a caller that needs the pixel value of a size it already named.
  *
  * The registry itself is **not** exported. A caller that could reach `ICONS.appointment.glyph`
  * could render it directly and skip the stroke assertion, which is precisely the
@@ -21,5 +23,5 @@
 
 export { Icon } from './Icon'
 export type { IconProps } from './Icon'
-export { ICON_SIZES, ICON_STROKE_WIDTH } from './icons'
+export { ICON_SIZES, iconPixels, ICON_STROKE_WIDTH } from './icons'
 export type { IconName, IconSize } from './icons'

@@ -20,7 +20,7 @@
  * | 2. `tenantId` comes from the resolved context | the parameter's type is `TenantId`, a brand only the server can mint |
  * | 3. Keys are hierarchical | every helper spreads its parent's key as its prefix |
  * | 4. Filters are part of the key, canonically | `canonicalFilters()` |
- * | 5. Keys carry identifiers, never labels | *not enforced here — see below* |
+ * | 5. No personal data in a key — surrogate identifiers only | the parameter types: every filter is a branded id, an enum member or a date |
  *
  * Rule 2 deserves the note. A branded `TenantId` is not proof of provenance; a
  * component could still be handed one. What the brand buys is that the *shape*
@@ -29,26 +29,23 @@
  * produces a `TenantId` is `getTenantContext()` on the server, which is why no
  * exported helper here accepts a plain `string`.
  *
- * ## Rule 5 is stated in the document and is not enforced by this file
+ * ## Rule 5, and why it does not constrain this file
+
+ * §16.2 rule 5 prohibits **personal data** in a key — a name, a mobile number,
+ * free text — because a key is observable in devtools and in error reports. It
+ * does not prohibit a surrogate identifier, and it cannot: §16.3's invalidation
+ * table names "**the customer's payment key**", and `payments` cannot be scoped to
+ * a customer by anything other than the customer's `cuid()`, which carries nothing
+ * about the person it identifies. The two sentences used to read as though they
+ * disagreed; `05-conventions.md` now states which of the two it meant, and this
+ * file implements the reading.
  *
- * §16.2 rule 5 reads: "**Keys never contain a customer id, a name, or a mobile
- * number.** A key is observable in devtools and in error reports. Identifiers
- * only."
- *
- * The same section's §16.3 invalidation table lists "**the customer's payment
- * key**" as a key that exists, and `payments` cannot be scoped to a customer by
- * anything other than the customer's id. The two sentences disagree, and this
- * file implements §16.3 — `payments.forCustomer()` takes a `CustomerId` — because
- * a key the table says must exist cannot be built any other way. A `string` is a
- * name and an id at runtime, so no runtime check can separate them either
+ * What remains a convention rather than a check is the shape of a filter value:
+ * an id, an enum member or a date. A *label* is never a filter. A `string` is a
+ * name and an id at runtime, so no runtime check can separate them
  * (`normalize.ts` can tell that a value *contains* Persian letters; it cannot
- * tell whether that makes it a label or a slug).
- *
- * The rule is recorded as an open question rather than resolved by guesswork.
- * Until it is settled, the convention this file follows is the narrow one: a
- * filter value is an id, an enum member or a date, and a *label* — a name, a
- * mobile number, a free-text search term — is never a filter. A surface that
- * needs to filter by a label filters server-side and keys by the resolved id.
+ * tell whether that makes it a label or a slug), and a surface that needs to
+ * filter by a label filters server-side and keys by the resolved id.
  *
  * ## What is deliberately not here
  *

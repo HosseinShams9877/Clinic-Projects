@@ -516,8 +516,12 @@ The rules:
 4. **Filters and pagination are part of the key, as a stable object.** An object
    literal built inline at every render changes identity and defeats the cache;
    the helper takes the filter object and serialises it deterministically.
-5. **Keys never contain a customer id, a name, or a mobile number.** A key is
-   observable in devtools and in error reports. Identifiers only.
+5. **Keys never contain a name, a mobile number, or any other personal data —
+   surrogate identifiers only.** A key is observable in devtools and in error
+   reports, and a `cuid()` carries nothing about the person it identifies. A
+   customer id is therefore permitted and is required by §16.3, whose payment row
+   invalidates "the customer's payment key"; a customer's *mobile number* in the
+   same position would be a leak.
 
 **Why tenant-scoping is not a formality.** Two tenants share one browser only in
 the operator's case, but a single tenant's user switching tenancy — a visiting

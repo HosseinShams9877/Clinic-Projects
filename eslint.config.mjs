@@ -483,6 +483,28 @@ const CONFIG_OBJECTS = [
       'no-restricted-syntax': ['error', ...LOCALIZATION_SELECTORS],
     },
   },
+
+  {
+    /**
+     * The one place the ambient clock may be read: `src/core/lib/clock.ts`.
+     *
+     * `NO_AMBIENT_CLOCK` bans `new Date()` and `Date.now()` everywhere under `src/`,
+     * which is what makes `05-conventions.md` §8 a rule rather than a review note —
+     * and an injected clock still has to read the wall clock somewhere. `realClock`
+     * is that boundary, so it is the one file the ban is lifted in. This object is
+     * last in `CONFIG_OBJECTS` for the same reason the i18n block is after
+     * `clinic/rules`: `no-restricted-syntax` is a single rule and the last config
+     * to set it wins, so the exemption has to come after both of the scopes that
+     * set it for this file.
+     *
+     * The exemption is a file, not a pattern, and it names the clock and nothing
+     * else: a directory-wide exemption would be a directory where §8 does not
+     * apply, and `realClock` is the only sanctioned read of the ambient time.
+     */
+    name: 'clinic/boundaries/clock',
+    files: ['src/core/lib/clock.ts'],
+    rules: { 'no-restricted-syntax': 'off' },
+  },
 ]
 
 /**

@@ -2,7 +2,7 @@
 
 > Part of the decision log. Index: [`roadmap/decisions.md`](../decisions.md).
 
-**Status:** Accepted, provisional · Phase 0
+**Status:** Accepted · Phase 0, resolved ۱۴۰۵/۰۷/۱۰ (Phase 1, OQ-3)
 
 **Context.** This is the one point in the design where immutable rule 8 and a
 performance requirement pull against each other, and it is raised as **OQ-3** in
@@ -25,15 +25,22 @@ and auditable. The balance is still computed, still never stored, and still
 reproducible from the payment and appointment records alone. If the cache is lost
 entirely, nothing is lost — it is recomputable in one query.
 
-**Why it is still provisional.** It is a compromise, and the specification did
-not explicitly authorise it. The honest framing: it is a cache, the balance is
-not stored, and the nightly reconciliation makes drift loud rather than silent.
-**This should be confirmed by the specification's author**, which is why it is
-OQ-3 and why this ADR is marked provisional rather than accepted outright.
+**Why it is no longer provisional.** The question was whether the specification
+authorised the compromise. Resolved in favour, on the grounds that the rule it
+touches names the thing it protects: rule 8 forbids storing **the balance**, a
+derived conclusion that can disagree with the ledger it came from. The two
+columns are sums of append-only, auditable ledger facts — not a conclusion — and
+the balance is still computed at read time and still reproducible from the
+ledger alone. The one way this design could still break rule 8 is drift, and
+drift is what the reconciliation is for, so the reconciliation is a hard
+requirement rather than an operational nicety: **Phase 5 ships a test that
+injects a mismatch and asserts the job fails loudly**. If that test does not
+exist, this ADR is not implemented.
 
-**If the answer is no.** The cache is removed, the audience group's predicate
-becomes a live aggregate, and the `بدهکاران` group is documented as the one slow
-group. Nothing else changes; no other decision depends on the cache.
+**If the answer had been no.** The cache would be removed, the audience group's
+predicate would become a live aggregate, and `بدهکاران` would be documented as
+the one slow group. Nothing else depends on the cache, which is what made the
+question safe to leave open.
 
 **Consequences accepted.**
 

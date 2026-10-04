@@ -328,10 +328,17 @@ export type ServiceCategory = (typeof ServiceCategory)[keyof typeof ServiceCateg
  * validated value and never re-parses.
  * ------------------------------------------------------------------------- */
 
-/** True when `value` is a member of a closed set, narrowing the type. */
+/**
+ * True when `value` is a member of a closed set, narrowing the type.
+ *
+ * The set may be spelled either way the constants declare one — an object enum like
+ * `CustomerLifecycle`, or a `readonly` array like `MODULES` — because both are the
+ * same closed set and a caller should not have to re-spell one to test membership.
+ */
 export function isMember<T extends string>(
-  set: Readonly<Record<string, T>>,
+  set: Readonly<Record<string, T>> | readonly T[],
   value: unknown,
 ): value is T {
-  return typeof value === 'string' && Object.values<string>(set).includes(value)
+  const members: readonly T[] = Array.isArray(set) ? set : (Object.values<string>(set) as T[])
+  return typeof value === 'string' && (members as readonly string[]).includes(value)
 }

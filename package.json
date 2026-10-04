@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "5.9.1",
+    "@node-rs/argon2": "^2.2.1",
     "@prisma/adapter-better-sqlite3": "7.10.0",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
@@ -51,6 +52,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-hook-form": "7.89.0",
+    "vazirmatn": "^33.0.3",
     "zod": "4.6.5"
   },
   "devDependencies": {

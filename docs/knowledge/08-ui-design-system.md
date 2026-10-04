@@ -874,7 +874,127 @@ artifact for any visual question this document does not settle.
 
 ---
 
-*Related: `07-localization.md` (font, RTL, digits, Jalali),
-`06-constants.md` §4.7 (the source-tag colours),
-`05-conventions.md` §9 and §14 (the styling rules and the forbidden list),
-`roadmap/decisions.md` (any change to a value here requires an ADR).*
+## 48. Recorded exceptions
+
+Every place the built components depart from the rules above, and why each is a
+decision rather than a defect. Each entry names the rule it excepts, what the code
+does instead, and what would close it; Appendix A.1 of `reports/phase-01-report.md`
+traces each one, and closing one means an ADR in `roadmap/decisions.md`.
+
+### 48.1 A sixth button variant, `neutral` — excepts §8
+
+§8's table names five variants and its "Base" line gives geometry only, with no
+colour. `BUTTON_VARIANTS` ships six; the sixth is the default — `neutral` is
+`--surface` on a `--line` border with `--ink` text, hovering `--surface-2` on
+`--line-2`. `theme.css` draws that appearance in `.btn` itself, so all five §8 rows
+are modifiers on it, and no §8 row reproduces the bare class, since Ghost and
+Outline are both transparent and neither carries `--ink` text. §B makes the demo the
+reference for what this document does not settle, and this is the question it
+settles: the bare element maps to the bare class, so `<Button>` is `<button
+class="btn">`. Closes when §8 gains a row for the base button, until which the table
+is the set §8 *enumerates*, not all ordinary buttons.
+
+### 48.2 Control geometry is quoted, not snapped — excepts rule A3
+
+A3 sends every spacing value to the `--s-*` scale; §8 and §13 state control
+geometry the scale cannot reach — `10px 18px`, `14px 26px`, `6px 12px`, the icon
+button's `36×36`, §13's `gap: 7px`, `padding: 11px 16px`, `min-height: 96px` and
+its ring's `3px`. None is a scale step, so A3 and §8/§13 cannot both hold. The
+components write §8's and §13's values as literals and take everything the scale
+*does* reach from a token — the control's horizontal `16px` is `--s-4`, the
+button's `gap: 8px` is `--s-2`. Snapping would resize every control away from the
+demo; the reading taken is that A3 governs the space *between* things and a
+control's own geometry belongs to the section that states it. Closes when §46 gains
+steps for the geometry, or when A3 is narrowed to layout spacing.
+
+### 48.3 The pressed state is derived — excepts §9
+
+§9 requires "a visible pressed treatment, distinct from hover" and states no value
+for it, and the preamble forbids inventing one. Each variant therefore takes the
+next step on the ramp it already uses — `--surface` → `--surface-2` →
+`--surface-sunken`, `--brand-50` → `--brand-100` — and contracts by `transform:
+scale(0.97)`. The transform is load-bearing: Soft, Ghost and Danger hover on
+backgrounds whose next darker step fails AA behind their text — `--brand-300`
+behind `--brand-700` is 3.6:1 — and a transform gives them a press the contrast
+floor permits. Closes when §9 or §8 states the pressed values.
+
+### 48.4 The keyboard focus ring is added to §13's focus treatment — excepts §13
+
+§13 fixes focus as border `#D9A7A7`, `box-shadow: 0 0 0 3px #FBF1EE` and "no
+default browser outline". `Form.module.css` honours all three and adds a fourth on
+`:focus-visible`, `outline: 2px solid var(--brand)` at a `2px` offset. §13's
+`outline: none` on `:focus` cancels the product's *own* ring along with the
+browser's — a class plus a pseudo-class outranks `globals.css`'s bare one — and
+§13's ring cannot stand in for it: `--brand-50` on `--surface` is about 1.1:1, under
+SC 1.4.11's 3:1 for a non-text boundary, on the control a keyboard user is about to
+type into; the brand outline is 3.98:1. An addition, not a contradiction — "no
+default browser outline" is the UA's ring, and the brand ring is the product's, which
+§9 states as *the* focus treatment. Closes when §13 names a focus treatment that
+already clears 3:1, at which point the added rule deletes itself.
+
+### 48.5 One CSS Module per component *family* — excepts §B
+
+`src/core/components/form/` is six components — `Form`, `Field`, `FormError`,
+`SubmitButton`, `TextInput`, `TextArea` — and one module. §B's "one CSS Module per
+component" is ambiguous on a family, and the wider reading takes the rule's own
+reason as the tiebreaker: §13 gives the family one table, and `01-tech-stack.md` §8.5
+defines one shared shell so that "field layout, the Persian label, the error slot,
+and RTL are defined once, and a module's form composes it rather than restating it".
+Splitting it would put the control geometry in a module per control, which is the
+duplication §8.5 exists to prevent; §B's example, `button/Button.module.css`, is a
+one-component directory and cannot distinguish the readings. Closes when §B says
+"per component family".
+
+### 48.6 The 22–30px branding icon size is not in `ICON_SIZES` — excepts §42
+
+§42's table has six size rows and `ICON_SIZES` ships five — `compact` 14, `card`
+16, `control` 17, `nav` 19 and `action` 20 — with the 22–30px branding row absent.
+It is a *range* with no single value, and the preamble forbids approximating a
+dimension — choosing 26 would be inventing a value this document does not state, and
+§29's 30px logo is the one member stated exactly, which belongs to the surface that
+renders it. Closes when §42 states one value for the row; until then a surface
+needing one names it in its own module.
+
+### 48.7 `THEME_COLOR` is the one colour literal — excepts §45 and rule A1
+
+`src/app/theme.ts` exports `'#f7f2f0'` for `Viewport.themeColor`, the one colour
+literal outside the §46 block. It cannot be a `var()`: Next emits it into `<meta
+name="theme-color">`, which the browser reads before any stylesheet is applied to
+paint the mobile address bar, and a computed-style variable has no value there. The
+file states the constraint it cannot enforce, that the literal must equal `--bg` —
+drift shows on a phone, not on a desktop. This one does not close; it is the
+platform's limit, and `--bg` and `THEME_COLOR` stay one fact in two places, traced
+only by that comment.
+
+### 48.8 `globals.css` carries tokens beyond the §46 block — excepts §46 and §B
+
+§B's "the §46 token block, verbatim" is true of the first `:root` block, character
+for character; a second block follows it — the fallback stack and base metrics of §1
+and §3, the layout constants of §7, the modal values of §21, §43's breakpoint,
+`--transition-control`, and the `--z-*` order. Each is quoted from the section its
+comment names, since §46 does not enumerate them and the alternative is a literal
+per component; none overrides a §46 token.
+`--transition-control` is the one that replaced a demo value: the demo's controls
+use `.16s` — five times in `theme.css`, with `.15s` and `.2s` beside them — §13
+states no duration for a control, and §8 pins `.18s ease`. Promoting the button's
+`.18s` to the one control transition is how the system stays one system. Closes when
+§46 enumerates these values and the second block dissolves into the first.
+
+### 48.9 The demo's global paragraph margin is not adopted — excepts §B
+
+The demo's base layer carries `p { margin: 0 0 var(--s-3) }` and a `:focus-visible`
+rule whose third declaration is `border-radius: var(--r-xs)`. `globals.css` carries
+the second and not the first — `p { margin: 0 }`. §B points at the demo for a margin
+this document does not state, and its rule is a good one for prose — but
+`Field` renders its hint and error as `<p>` inside a flex column spaced by §13's
+`gap: 7px`, and a global 12px margin would make the field's spacing stop being the
+field's. The focus rule's `border-radius` *is* carried, because rounding the ring on
+focusable elements that set no corner of their own has to be global, and §9 does not
+name it. Closes when prose surfaces exist — the public site, empty-state copy — at
+which point a scoped prose style there is the margin's right home.
+
+---
+
+*Related: `07-localization.md` (font, RTL, digits, Jalali), `06-constants.md` §4.7
+(the source-tag colours), `05-conventions.md` §9 and §14 (the styling rules and the
+forbidden list), `roadmap/decisions.md` (any change to a value here requires an ADR).*
