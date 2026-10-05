@@ -12,6 +12,73 @@
 
 ---
 
+## ۱۴۰۵/۰۷/۱۳ — Phase 3 closed; the two `TenantContext` types, and a snapshot that isn't there
+
+**The fact.** `npm run build` (17 routes) and `npm run verify` (48 files, 1116 tests)
+both exit 0. Phase 3 is closed in `docs/roadmap/progress.md` and
+`reports/phase-03-report.md`.
+
+**The two `TenantContext` types will cost you once per test file.** `getTenantContext`
+answers `core/db/scope`'s context — `userId: string`, `clinicId: string | null` — and
+`can()` / every module function read `core/tenant`'s — branded `UserId`, `ClinicId`. A
+helper that returns the resolved context straight into a `can()` call does not compile.
+Re-brand the three ids with `asUserId` / `asTenantId` / `asClinicId` where the test
+crosses the boundary, so the conversion is visible at both ends instead of an `as any`
+that silences it. `ResolvedTenantContext` is exported from `@/core/db` and is *not* the
+one `can()` takes.
+
+**`Appointment` has no `serviceName`.** The schema snapshots `priceAtBooking`,
+`depositAmount` and `durationMinutes` and keeps `serviceId` as a live relation, so the
+*price* of a past booking is frozen and the *name* is not — renaming a service changes
+what its history displays. Two of the phase's tests were written against a name column
+that does not exist, and Prisma's error for it is `Unknown argument serviceName`, which
+reads like a typo rather than like a wrong assumption. **Read the model before asserting
+what a snapshot holds**, and note it for Phase 5, whose accounting surfaces will care.
+
+**`getTenantContext` takes the *unscoped* client.** `prisma()` is Layer-1 scoped and
+throws `TenantScopeError` outside a `runInTenantScope` — and the resolver runs *before*
+a scope exists, which is the reason `createUnscopedClient` is documented as one of the
+three exceptions. In a test, pass `database.unscoped`.
+
+**A module-scope array placed after the Sets it reads is a TDZ the unit tests will not
+find.** `admin/staff/page.tsx` built its 16-row matrix from `DOCTOR_DEFAULTS`, declared
+two statements later. Vitest passed; `next build` died with
+`ReferenceError: Cannot access 'DOCTOR_DEFAULTS' before initialization`. The unit suite
+imports modules in an order of its own. **`npm run build` is the gate that catches
+evaluation order, and it is a separate gate from `tsc`.**
+
+**The `Popover` wrapper the eslint config anticipated is now built.** `eslint.config.mjs`
+lists six `HEADLESS_WRAPPER_DIRECTORIES` — `combobox`, `dialog`, `dropdown-menu`,
+`popover`, `tabs`, `tooltip` — as the only files that may import Radix or cmdk. Only
+`combobox` existed before Phase 3; `popover/` is there now, owning the panel's token
+styling. **Four of the six are still unbuilt wrappers**, and a component that needs one
+of them has to build it rather than importing the primitive — the directory names in
+that config are the spec for which wrappers are coming.
+
+**A control's Persian labels live in `core/localization/catalog/controls.ts`.** A
+control owns no module and no surface, so the two catalog locations a component may use
+are both wrong for it, and the localization layer is the third. The rule is the same one
+`common.ts` cites for core-raised message keys.
+
+**The coverage floors are red and were left red.** Global 47.31% lines against the
+relaxed 60%. The phase's instruction was six test scenarios, no more, and "do not write
+tests to hit a number" — so the four largest holes are recorded in the report
+(`staff/lib/leave.ts` 3.57%, `customers/lib/profile.ts` 2.7%,
+`customers/lib/leads.ts` 35%, `services/lib/queries.ts` 40%) and **a later session
+decides which of them earn a suite.** `leave.ts` is the cheapest to cover well and the
+one the spec states as a state machine.
+
+**Tests deleted to get the gate green: none.** Every failure was a defect in the code,
+the schema assumption, or the fixture.
+
+**What still has not run**, unchanged since Phase 1 and still not a code gap:
+Playwright's Chromium cannot be downloaded here, so the e2e and axe pass over the seven
+new pages are unexecuted (DoD 9 is unchecked for the third phase running); and the
+cross-tenant suite needs a live PostgreSQL. `check:rls` covers the policies statically
+and fails closed. Run both on a machine that can, before Phase 11.
+
+---
+
 ## ۱۴۰۵/۰۷/۱۲ — Phase 2 closed; the WIP commit's defects and where they were not
 
 **The fact.** `npm run build` (11 routes) and `npm run verify` (44 files, 1098

@@ -305,6 +305,24 @@ export const MessageSendStatus = {
 } as const
 export type MessageSendStatus = (typeof MessageSendStatus)[keyof typeof MessageSendStatus]
 
+/** `03-data-model.md` §2.1 — `Customer.leadStatus`, the lead cartable's four states. */
+export const LeadStatus = {
+  New: 'NEW',
+  Following: 'FOLLOWING',
+  Converted: 'CONVERTED',
+  Lost: 'LOST',
+} as const
+export type LeadStatus = (typeof LeadStatus)[keyof typeof LeadStatus]
+
+/** `03-data-model.md` §6 — `LeaveRequest.status`, the approval path a leave takes. */
+export const LeaveRequestStatus = {
+  Pending: 'PENDING',
+  Approved: 'APPROVED',
+  Rejected: 'REJECTED',
+} as const
+export type LeaveRequestStatus =
+  (typeof LeaveRequestStatus)[keyof typeof LeaveRequestStatus]
+
 /** `03-data-model.md` §2.1 — `Customer.lifecycle`. */
 export const CustomerLifecycle = {
   Lead: 'LEAD',

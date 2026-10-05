@@ -28,6 +28,14 @@
  * is not enforced — the module's own signature requires the amounts, and the
  * *source* of the amounts is where the policy lives.
  *
+ * ## Why the service comes from `services` and not from the table
+ *
+ * The row is read through `loadBookableService`, which is the gate that makes a
+ * deactivation bite on the write path (Phase 3's DoD 4): an inactive service is
+ * refused with `service.notBookable` no matter what the posted form named. Reading
+ * the row directly would have been one line fewer and a rule the catalogue did not
+ * keep.
+ *
  * ## Why failures are sentences and never exceptions
  *
  * An action's contract is a result a component renders. A thrown error surfaces as
@@ -55,6 +63,7 @@ import {
   recordNoShow,
   recordResult,
 } from '@/modules/appointments'
+import { loadBookableService } from '@/modules/services'
 import type { Panel } from '@/app/_shell/navigation'
 import { resolveStaffPanel } from '@/app/_shell/session'
 
@@ -139,16 +148,13 @@ export async function createBookingAction(
   panel: Panel,
   input: BookingInput,
 ): Promise<ActionResult> {
-  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId }) => {
-    const service = await tx.service.findUniqueOrThrow({
-      where: { id: input.serviceId },
-      select: { price: true, depositAmount: true, durationMinutes: true },
-    })
+  const result = await inTenantScope(panel, async ({ tx, ctx }) => {
+    const service = await loadBookableService({ tx, ctx, serviceId: input.serviceId })
     const customerId =
       input.customerId ??
       (await resolveCustomerId({
         tx,
-        tenantId,
+        ctx,
         mobile: input.mobile,
         firstName: input.firstName,
         lastName: input.lastName,
@@ -183,16 +189,13 @@ export async function createBookingAction(
  * the module's own check on the settings the action never sees.
  */
 export async function quickBookAction(panel: Panel, input: BookingInput): Promise<ActionResult> {
-  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
-    const service = await tx.service.findUniqueOrThrow({
-      where: { id: input.serviceId },
-      select: { price: true, depositAmount: true, durationMinutes: true },
-    })
+  const result = await inTenantScope(panel, async ({ tx, ctx, userId }) => {
+    const service = await loadBookableService({ tx, ctx, serviceId: input.serviceId })
     const customerId =
       input.customerId ??
       (await resolveCustomerId({
         tx,
-        tenantId,
+        ctx,
         mobile: input.mobile,
         firstName: input.firstName,
         lastName: input.lastName,

@@ -62,7 +62,7 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
         doctorId: session.permissions.userId,
         localDate,
       }),
-      loadPopupOptions({ tx, tenantId: session.tenantId }),
+      loadPopupOptions({ tx, ctx: session.permissions }),
       readBookingSettings(tx, session.tenantId),
     ])
     return { rows, options, settings }

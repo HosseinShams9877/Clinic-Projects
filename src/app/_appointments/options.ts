@@ -1,12 +1,12 @@
 /**
  * The popup's options — the services and the customers its two selects offer.
  *
- * `02-architecture.md` §6 puts reads in the module that owns the table, and the two
- * tables here are owned by modules that have not landed: `services` is Phase 5 and
- * `customers` is Phase 3. The reads are therefore in the app tier, next to the popup
- * that consumes them, and the comment the seed writes about its own absences
- * (`prisma/seed.ts`) is the same contract this file holds: when the module arrives,
- * its barrel replaces this file and the popup's props do not change.
+ * `02-architecture.md` §6 puts reads in the module that owns the table. `services` has
+ * landed, so the service read is the module's own `bookableServices` and this file is
+ * the composition around it; `customers`'s own reads are scoped to a permission and a
+ * question this popup does not ask — the desk's hundred most recent, including the
+ * patients a doctor's own scope would exclude — so the customer read stays here next
+ * to the popup until the module has the read this surface actually wants.
  *
  * ## Why the reads are scoped and not filtered by hand
  *
@@ -15,15 +15,24 @@
  * customers, which is the property the RLS layer exists to keep and the property a
  * hand-written `where: { tenantId }` would only appear to keep.
  *
+ * ## Why the service read goes through the module (DoD 4)
+ *
+ * `bookableServices` is the read `loadBookableService` shares with the write path, so
+ * the list the popup offers and the gate the booking runs are one read. A service the
+ * clinic deactivated between the popup opening and the form submitting is refused by
+ * that gate, and the two cannot disagree because there is one function between them.
+ *
  * ## Why the list is bounded
  *
  * The popup's customer search is client-side over the list, and a tenant with
  * thousands of customers is a tenant whose list is not a select. The bound is a
  * hundred, which is a desk's own working set; the search beyond it is the
- * `customers` module's own query, and it arrives with the module.
+ * `customers` module's own query.
  */
 
+import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
+import { bookableServices } from '@/modules/services'
 
 import type { CustomerOption, ServiceOption } from './booking-dialog'
 
@@ -41,16 +50,12 @@ const POPUP_CUSTOMER_LIMIT = 100
  */
 export async function loadPopupOptions(args: {
   readonly tx: TransactionClient
-  readonly tenantId: string
+  readonly ctx: TenantContext
 }): Promise<{ readonly services: readonly ServiceOption[]; readonly customers: readonly CustomerOption[] }> {
   const [services, customers] = await Promise.all([
-    args.tx.service.findMany({
-      where: { tenantId: args.tenantId, isActive: true },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, durationMinutes: true, price: true },
-    }),
+    bookableServices({ tx: args.tx, ctx: args.ctx }),
     args.tx.customer.findMany({
-      where: { tenantId: args.tenantId, isActive: true },
+      where: { tenantId: args.ctx.tenantId, isActive: true },
       orderBy: { lastVisitAt: 'desc' },
       take: POPUP_CUSTOMER_LIMIT,
       select: { id: true, firstName: true, lastName: true, mobile: true, lastVisitAt: true },

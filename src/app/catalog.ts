@@ -433,3 +433,362 @@ export const BLOCK_HOURS_POPUP = {
   title: 'بستن یک ساعت',
   lead: 'ساعت انتخاب شده برای پزشک بسته می‌شود و دیگر قابل رزرو نیست.',
 } as const satisfies Record<string, unknown>
+
+/* ── Phase 3: the customers, services and staff surfaces ─────────────────────
+ *
+ * The seven pages `02-architecture.md` §9 names for this phase — the reception's
+ * customer file and lead cartable, the manager's customer file, the customer
+ * profile, the services catalogue, the staff page, and the doctor's own patients.
+ * Their copy is here for the same reason Phase 2's three appointments pages are:
+ * the module owns the sentences its functions *raise* (`customer.notFound` and its
+ * neighbours, through `MESSAGES`), while a page's own titles, column headers,
+ * button labels and empty states are composition the app tier does from those.
+ *
+ * The module catalogs are not repeated here. A key reaches a page through the
+ * failure-message lookup, which is the only path a key takes to a sentence.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The three customer lists — reception, admin and the doctor's own — which are one
+ * read through three permissions, and the copy that the three surfaces share.
+ *
+ * The three are the same rows and the same columns; the three leads differ, because
+ * the desk's names the search it offers, the manager's names the oversight and the
+ * doctor's names the scope. One object with a `panel` key would be one object whose
+ * three halves a reader has to keep apart.
+ */
+export const CUSTOMERS_PAGE = {
+  reception: {
+    title: 'مشتریان',
+    lead: 'پرونده مشتریان کلینیک. جستجو با نام یا شماره موبایل.',
+  },
+  admin: {
+    title: 'همه مشتریان',
+    lead: 'پرونده کامل مشتریان کلینیک، با تاریخچه نوبت‌ها و پرداخت‌ها.',
+  },
+  doctor: {
+    title: 'مراجعین من',
+    lead: 'پرونده مشتریانی که پزشک اول آن‌ها شما هستید.',
+  },
+  search: {
+    label: 'جستجو',
+    placeholder: 'نام یا شماره موبایل',
+    /** The screen-reader name of the button that clears the field. */
+    clear: 'پاک کردن جستجو',
+  },
+  columns: {
+    name: 'نام و نام خانوادگی',
+    mobile: 'شماره موبایل',
+    lifecycle: 'وضعیت پرونده',
+    leadStatus: 'وضعیت لید',
+    primaryDoctor: 'پزشک اول',
+    lastVisit: 'آخرین مراجعه',
+    sessions: 'جلسات انجام شده',
+    actions: 'عملیات',
+  },
+  actions: {
+    open: 'باز کردن پرونده',
+    book: 'ثبت نوبت',
+  },
+  empty: {
+    /** A search that named nobody. */
+    noResults: 'مشتری‌ای با این مشخصات پیدا نشد.',
+    /** A file with no customers in it at all. */
+    noCustomers: 'هنوز مشتری‌ای ثبت نشده است.',
+    /** A doctor with no patients of their own. */
+    noPatients: 'هنوز مراجعی برای شما ثبت نشده است.',
+  },
+} as const satisfies Record<string, unknown>
+
+/**
+ * The customer profile — `admin/customer/[id]`'s full record.
+ *
+ * The page's own copy is the section headings, the field labels and the empty
+ * states; the customer's facts are the row's, and the consent flags are the four the
+ * module writes.
+ */
+export const CUSTOMER_PROFILE_PAGE = {
+  /** `{name}` is filled by the message renderer, and the digits with it. */
+  title: 'پرونده {name}',
+  lead: 'مشخصات، تاریخچه نوبت‌ها و پرداخت‌ها، و تنظیمات ارسال.',
+  sections: {
+    details: 'مشخصات',
+    contact: 'راه‌های ارتباطی',
+    medical: 'پرونده پزشکی',
+    appointments: 'نوبت‌ها',
+    payments: 'پرداخت‌ها',
+    consent: 'تنظیمات ارسال',
+  },
+  fields: {
+    firstName: 'نام',
+    lastName: 'نام خانوادگی',
+    mobile: 'شماره موبایل',
+    birthDate: 'تاریخ تولد',
+    acquisitionSource: 'نحوه آشنایی',
+    residenceArea: 'محله سکونت',
+    primaryDoctor: 'پزشک اول',
+    primaryClinic: 'کلینیک اصلی',
+    firstVisit: 'اولین مراجعه',
+    lastVisit: 'آخرین مراجعه',
+    completedSessions: 'جلسات انجام شده',
+    chargedTotal: 'مجموع مبالغ',
+    paidTotal: 'مجموع پرداخت‌ها',
+    balance: 'مانده حساب',
+    medicalHistory: 'سوابق پزشکی',
+    sensitivities: 'حساسیت‌ها',
+    doctorNote: 'یادداشت پزشک',
+  },
+  consent: {
+    sms: 'پیامک',
+    whatsApp: 'واتساپ',
+    phone: 'تماس تلفنی',
+    beforeAfter: 'استفاده از عکس‌های قبل و بعد',
+    lead: 'کانال‌هایی که کلینیک می‌تواند با آن‌ها با شما تماس بگیرد.',
+    save: 'ذخیره تنظیمات ارسال',
+    saved: 'تنظیمات ارسال ذخیره شد.',
+  },
+  note: {
+    save: 'ذخیره یادداشت',
+    saved: 'یادداشت ذخیره شد.',
+    placeholder: 'یادداشت بالینی این مشتری را اینجا بنویسید.',
+  },
+  edit: {
+    title: 'ویرایش پرونده',
+    save: 'ذخیره تغییرات',
+    saved: 'تغییرات پرونده ذخیره شد.',
+    cancel: 'انصراف',
+  },
+  history: {
+    date: 'تاریخ',
+    time: 'ساعت',
+    service: 'خدمت',
+    doctor: 'پزشک',
+    status: 'وضعیت',
+    price: 'مبلغ',
+    amount: 'مبلغ',
+    method: 'روش پرداخت',
+    kind: 'نوع پرداخت',
+    paidAt: 'تاریخ پرداخت',
+  },
+  empty: {
+    appointments: 'این مشتری هنوز نوبتی نداشته است.',
+    payments: 'برای این مشتری پرداختی ثبت نشده است.',
+  },
+} as const satisfies Record<string, unknown>
+
+/**
+ * The lead cartable — its KPI row, its filter chips and its table.
+ *
+ * The four KPI labels are the cartable's own vocabulary and are the module's
+ * `LEAD_STATUS_LABELS` restated as a count, kept in step by review and not by a
+ * derived name — the four counts are not the four states, and a derivation would be
+ * a derivation that drops the count.
+ */
+export const LEADS_PAGE = {
+  title: 'کارتابل لید',
+  lead: 'افرادی که با کلینیک تماس گرفته‌اند و هنوز خدمتی دریافت نکرده‌اند.',
+  counts: {
+    new: 'بی‌پاسخ',
+    following: 'در حال پیگیری',
+    converted: 'تبدیل شده این ماه',
+    lost: 'از دست رفته',
+  },
+  chips: {
+    all: 'همه',
+    new: 'جدید',
+    following: 'در پیگیری',
+    converted: 'تبدیل شده',
+    lost: 'از دست رفته',
+  },
+  newLead: {
+    title: 'ثبت لید دستی',
+    lead: 'شماره و نام فردی که تماس گرفته یا مراجعه کرده است.',
+    firstName: 'نام',
+    lastName: 'نام خانوادگی',
+    mobile: 'شماره موبایل',
+    source: 'نحوه آشنایی',
+    /** The sentence the source select renders when a filter named nothing. */
+    sourceEmpty: 'هیچ منبعی با این نام پیدا نشد.',
+    note: 'یادداشت',
+    notePlaceholder: 'خلاصه تماس یا درخواست این فرد.',
+    save: 'ثبت لید',
+    saved: 'لید ثبت شد.',
+  },
+  columns: {
+    name: 'نام و نام خانوادگی',
+    mobile: 'شماره موبایل',
+    source: 'نحوه آشنایی',
+    status: 'وضعیت',
+    nextContact: 'تماس بعدی',
+    createdAt: 'تاریخ ثبت',
+    actions: 'عملیات',
+  },
+  actions: {
+    followUp: 'تماس',
+    followUpTitle: 'ثبت پیگیری',
+    nextContactAt: 'تاریخ تماس بعدی',
+    confirm: 'ثبت پیگیری',
+    book: 'نوبت',
+    lost: 'از دست رفته',
+    lostConfirm: 'این لید به عنوان از دست‌شده ثبت شود؟',
+    lostConfirmYes: 'بله، از دست رفته',
+    cancel: 'انصراف',
+  },
+  empty: 'هیچ لید بازی در کارتابل نیست.',
+} as const satisfies Record<string, unknown>
+
+/**
+ * The services catalogue, and the deactivation that replaces deletion.
+ *
+ * The page renders the catalogue's own columns and the state that replaces a remove,
+ * so its copy names the state and not a deletion: there is no delete button here and
+ * no sentence for one, which is DoD 3 held at the surface as well as the module.
+ */
+export const SERVICES_PAGE = {
+  title: 'خدمات',
+  lead: 'فهرست خدمات کلینیک. غیرفعال کردن یک خدمت آن را از نوبت‌دهی حذف می‌کند ولی تاریخچه نوبت‌ها دست‌نخورده می‌ماند.',
+  new: {
+    title: 'افزودن خدمت',
+    save: 'ثبت خدمت',
+    saved: 'خدمت ثبت شد.',
+    name: 'نام خدمت',
+    category: 'دسته‌بندی',
+    price: 'مبلغ (تومان)',
+    deposit: 'بیعانه (تومان)',
+    duration: 'مدت زمان (دقیقه)',
+    sessions: 'تعداد جلسات پیش‌فرض',
+    interval: 'فاصله بین جلسات (روز)',
+    showPrice: 'نمایش مبلغ در سایت',
+  },
+  edit: {
+    title: 'ویرایش خدمت',
+    save: 'ذخیره تغییرات',
+    saved: 'تغییرات خدمت ذخیره شد.',
+    cancel: 'انصراف',
+  },
+  doctors: {
+    title: 'پزشکان مجاز',
+    lead: 'پزشکانی که می‌توانند این خدمت را انجام دهند.',
+    save: 'ذخیره پزشکان',
+    saved: 'پزشکان مجاز ذخیره شدند.',
+    none: 'هیچ پزشکی در این کلینیک ثبت نشده است.',
+  },
+  columns: {
+    name: 'نام خدمت',
+    category: 'دسته‌بندی',
+    price: 'مبلغ',
+    duration: 'مدت زمان',
+    deposit: 'بیعانه',
+    doctors: 'پزشکان مجاز',
+    status: 'وضعیت',
+    actions: 'عملیات',
+  },
+  actions: {
+    activate: 'فعال کردن',
+    deactivate: 'غیرفعال کردن',
+    deactivateConfirm: 'این خدمت از نوبت‌دهی حذف شود؟ تاریخچه نوبت‌های قبلی دست‌نخورده می‌ماند.',
+    deactivateConfirmYes: 'بله، غیرفعال شود',
+    doctors: 'پزشکان',
+    edit: 'ویرایش',
+  },
+  empty: 'هنوز خدمتی ثبت نشده است.',
+  validation: {
+    money: 'مبلغ باید یک عدد صحیح به تومان باشد.',
+    count: 'مدت زمان و تعداد جلسات باید عدد صحیح باشند.',
+  },
+} as const satisfies Record<string, unknown>
+
+/**
+ * The staff page — its permission matrix and its leave table.
+ *
+ * The matrix's own column header and row labels come from `@/core/localization`'s
+ * `PERMISSION_LABELS` and `ROLE_LABELS`, because those are the closed sets and this
+ * page renders them; nothing here restates a permission's name. The page's own copy
+ * is the chrome around them.
+ */
+export const STAFF_PAGE = {
+  title: 'کارکنان',
+  lead: 'نقش و دسترسی‌های هر کاربر، و درخواست‌های مرخصی پزشکان.',
+  invite: {
+    title: 'دعوت کاربر',
+    lead: 'شماره موبایل، نام و نقش کاربر جدید را وارد کنید.',
+    firstName: 'نام',
+    lastName: 'نام خانوادگی',
+    mobile: 'شماره موبایل',
+    password: 'رمز عبور اولیه',
+    role: 'نقش',
+    save: 'دعوت کاربر',
+    saved: 'کاربر دعوت شد.',
+    cancel: 'انصراف',
+  },
+  matrix: {
+    title: 'ماتریس دسترسی‌ها',
+    lead: 'هر ستون یک نقش و هر ردیف یک دسترسی است. تغییرات بلافاصله اعمال می‌شوند.',
+    /** The manager column's badge, rendered in place of the checkboxes it does not have. */
+    managerLocked: 'همیشه',
+    hint: 'ستون مدیر قفل است و کسی نمی‌تواند دسترسی خودش را تغییر دهد.',
+    /** The modal's own note, which says the change is for this one person (`04-roles-permissions.md` §2.2). */
+    note: 'تغییرات فقط برای همین کاربر اعمال می‌شوند.',
+    /** The count's two halves, as the modal's header renders them: «۵ از ۱۶». */
+    countOf: 'از',
+    countTotal: 16,
+    save: 'ذخیره دسترسی‌ها',
+    saved: 'دسترسی‌ها ذخیره شدند.',
+  },
+  membership: {
+    active: 'فعال',
+    inactive: 'غیرفعال',
+    activate: 'فعال کردن',
+    deactivate: 'غیرفعال کردن',
+    applyRole: 'اعمال نقش جدید',
+    leaveTitle: 'درخواست‌های مرخصی',
+    leaveEmpty: 'هیچ درخواست مرخصی‌ای وجود ندارد.',
+    approve: 'تأیید',
+    reject: 'رد',
+    /** The leave table's own three headers, which the page's `columns` do not name. */
+    leaveFrom: 'از تاریخ',
+    leaveTo: 'تا تاریخ',
+    leaveStatus: 'وضعیت',
+    leaveApprover: 'تأییدکننده',
+  },
+  columns: {
+    name: 'نام و نام خانوادگی',
+    mobile: 'شماره موبایل',
+    role: 'نقش',
+    status: 'وضعیت',
+    permissions: 'دسترسی‌ها',
+    actions: 'عملیات',
+  },
+  empty: 'هنوز کاربری دعوت نشده است.',
+  audit: {
+    title: 'تاریخچه تغییرات دسترسی',
+    empty: 'هیچ تغییری ثبت نشده است.',
+    actor: 'انجام‌دهنده',
+    action: 'عملیات',
+    at: 'زمان',
+    detail: 'جزئیات',
+  },
+} as const satisfies Record<string, unknown>
+
+/**
+ * The two payment enumerations the customer profile renders, which no module owns yet.
+ *
+ * `payments` is a later phase, and the profile's payment history reads the columns the
+ * `customers` module's own query already joins; the labels for the two closed sets the
+ * rows hold are here because a page renders them and a label has to live somewhere.
+ * When `payments` lands, its own catalog takes the two records and this page imports
+ * them there — the same handover `_appointments/options.ts` documents for the
+ * services and customers reads Phase 2 held.
+ */
+export const PAYMENT_METHOD_LABELS: Readonly<Record<string, string>> = {
+  CASH: 'نقدی',
+  CARD: 'کارت',
+  ONLINE: 'آنلاین',
+}
+
+export const PAYMENT_KIND_LABELS: Readonly<Record<string, string>> = {
+  DEPOSIT: 'بیعانه',
+  PARTIAL: 'جزیی',
+  FINAL: 'تسویه',
+  REFUND: 'بازگشت',
+}

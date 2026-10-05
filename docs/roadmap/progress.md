@@ -17,7 +17,7 @@
 | 0 | Foundation and architecture | **Complete** | — | ۱۴۰۵/۰۷/۰۹ |
 | 1 | Platform foundation | **Complete** | ۱۴۰۵/۰۷/۰۹ | ۱۴۰۵/۰۷/۱۲ |
 | 2 | Appointments and scheduling | **Complete** | ۱۴۰۵/۰۷/۱۲ | ۱۴۰۵/۰۷/۱۲ |
-| 3 | Customers, services, staff | Not started | — | — |
+| 3 | Customers, services, staff | **Complete** | ۱۴۰۵/۰۷/۱۳ | ۱۴۰۵/۰۷/۱۳ |
 | 4 | Treatment cycles | Not started | — | — |
 | 5 | Payments and debts | Not started | — | — |
 | 6 | Messages and notifications | Not started | — | — |
@@ -27,7 +27,7 @@
 | 10 | Reports, settings, tenancy, licensing | Not started | — | — |
 | 11 | Hardening and full verification | Not started | — | — |
 
-**Current phase:** Phase 2 is **complete**. Phase 3 has not started.
+**Current phase:** Phase 3 is **complete**. Phase 4 has not started.
 
 **Legend.** Not started · In progress · Blocked · Complete.
 
@@ -45,19 +45,21 @@
 | Root files (README, .gitignore, .env.example, LICENSE) | Complete |
 | `.claude/` (settings, agents, commands, context, memory) | Complete |
 | Package manifest | Complete — all dependencies pinned, no styled component library |
-| Application code (`src/`) | Complete for Phases 1 and 2 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, the app shell, the four panel shells, and the three scheduling pages |
+| Application code (`src/`) | Complete for Phases 1–3 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, `modules/customers`, `modules/services`, `modules/staff`, the app shell, the four panel shells, the three scheduling pages, the seven customer/service/staff pages, and the `Popover`/`Combobox`/`JalaliDatePicker` controls |
 | Prisma schema | Complete — one portable schema, 25 models, validating as SQLite and PostgreSQL |
 | Migrations | Complete — the SQLite migration list and the PostgreSQL RLS policies |
 | Vazirmatn | Complete — five weights self-hosted in `src/app/fonts/` with the OFL 1.1 licence and authors file |
-| Test suite | Complete for Phases 1 and 2 — 44 files, 1098 tests |
-| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1098 tests |
+| Test suite | 48 files, 1116 tests — complete for Phases 1 and 2; Phase 3 added 4 files and 18 tests covering the six scenarios the phase named |
+| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1116 tests. The coverage thresholds are red; see `../reports/phase-03-report.md` §4 |
 | End-to-end suite | Written but **not executed** — Playwright's pinned Chromium cannot be downloaded on the build machine. See `../reports/phase-02-report.md` §4 |
 
 Phase 0 produced the specification for the codebase. Phase 1 produced the
 codebase. Phase 2 produced the appointment lifecycle, the slot engine and the three
-scheduling pages. What did not run in this environment is recorded in
-`../reports/phase-02-report.md` §4 — the e2e execution and the behavioural
-cross-tenant suite against a live PostgreSQL. Neither is a code gap.
+scheduling pages. Phase 3 produced the customer file and its leads, the service
+catalogue, the staff panel and its audit trail. What did not run in this environment
+is recorded in `../reports/phase-03-report.md` §4 — the e2e execution, the behavioural
+cross-tenant suite against a live PostgreSQL, and the coverage floors the phase left
+red by instruction. Only the last is a decision; the first two are environmental.
 
 ---
 
@@ -158,6 +160,53 @@ day it was labelled as. The report's §2 names each one and its fix.
 
 ---
 
+## Phase 3 — what was delivered
+
+**Complete**, started and completed ۱۴۰۵/۰۷/۱۳. The closing report is
+`../reports/phase-03-report.md`; §3 names the seven things that broke and the fix for
+each, and §4 names what the phase deliberately left.
+
+- [x] **DoD 1** — the mobile dedupe is a tenant-local fact: the same number in the
+      same tenant offers the existing record, and in another tenant is a new row
+      neither tenant's read can see
+- [x] **DoD 2** — a lead converts on the booking that first names it and keeps the
+      acquisition source it arrived with
+- [x] **DoD 3** — no service delete exists. The assertion is over the barrel's own
+      surface, because "the path does not exist" is a claim about the module and not
+      about a refusal
+- [x] **DoD 4** — deactivation closes the booking path and leaves every past
+      appointment's price, deposit and duration where they were
+- [x] **DoD 5** — a permission change is what the next request reads, verified by
+      resolving the affected person's context from their session token the way a
+      request does
+- [x] **DoD 6** — the manager column is locked by the module that owns the rule,
+      before any write. The **audit of the refused attempt** is the app tier's and is
+      covered by contract, not by a test; §4 names what closes it
+- [x] **DoD 7** — every permission change writes one row with the actor, the target
+      and both before/after sets, in the same transaction
+- [x] **DoD 8** — another doctor's patient is a `NotFoundError` and never a
+      `PermissionError`, because the rule is a `where` clause and not a post-read guard
+- [ ] **DoD 9** — the axe and responsive pass over the seven pages. The static
+      gates that *are* observable pass — `check:i18n` clean, lint clean with zero
+      warnings — but Playwright's Chromium cannot be downloaded here. Same blocker as
+      Phases 1 and 2
+
+**Three modules, seven pages, three controls.** `customers`, `services` and `staff`
+follow `appointments/` as it actually is — `index.ts`, `catalog.ts`, `lib/`, `types/`,
+`tests/` — and not the eight-directory shape the task text listed, which the module it
+pointed at does not have. The seven pages are `/reception/customers`, `/reception/leads`,
+`/admin/customers`, `/admin/customer/[id]`, `/admin/services`, `/admin/staff` and
+`/doctor/customers`. `Popover`, `Combobox` and `JalaliDatePicker` are new; the first is
+the wrapper §17 required and the config had already anticipated, and the other two
+compose it.
+
+**The coverage floors are red, by instruction.** Global is 47.31% lines against the
+relaxed 60% floor. The two targets the phase named by name are green —
+`core/localization` at 80% and `roles-permissions` at 100% — and the four files with the
+largest holes are named in the report's §4, `staff/lib/leave.ts` first.
+
+---
+
 ## Nothing is blocked
 
 The session that opened this phase had no working package manager, so nothing had
@@ -165,10 +214,10 @@ ever been executed. That is no longer true, and nothing has been blocked since.
 Node 24.19.0, npm 11.17.0 and git 2.50.1 all run, and the whole gate passes:
 
 ```
-npm run build    →  11 routes, exit 0
+npm run build    →  17 routes, exit 0
 npm run verify   →  db:generate · typecheck · lint · check:files · check:i18n
                    check:overrides · check:schema · check:rls · test
-                   44 files, 1098 tests, exit 0
+                   48 files, 1116 tests, exit 0
 ```
 
 One consequence worth recording: `src/generated/` is ignored, and `verify`

@@ -89,7 +89,7 @@ export async function loadDayGrid(args: {
   const [doctors, rows, options] = await Promise.all([
     doctorsOnDay({ tx: args.tx, tenantId: args.ctx.tenantId, weekday: jalaliWeekday(args.localDate) }),
     clinicDay({ tx: args.tx, ctx: args.ctx, clinicId: args.clinicId, localDate: args.localDate }),
-    loadPopupOptions({ tx: args.tx, tenantId: args.ctx.tenantId }),
+    loadPopupOptions({ tx: args.tx, ctx: args.ctx }),
   ])
 
   return { doctors, rows, services: options.services, customers: options.customers }
