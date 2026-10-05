@@ -43,14 +43,6 @@
 // what makes the RLS policies in `prisma/migrations-pg/` read exactly as
 // `database-migration.md` §4 writes them:
 // `ALTER TABLE "customers" … "tenantId" = current_setting('app.tenant_id', true)`.
-//
-// **Deletion is not modelled.** Immutable rule 10 keeps a service that is
-// deactivated, and §7.8 states that no hard delete exists on `Service`, `Payment`
-// or `Appointment`. Prisma's default referential action for a required relation
-// refuses the delete at the engine; the rule itself is enforced in the module
-// layer and covered by tests (§7). No application code path deletes a row from
-// those three tables, and there is none to add.
-// ─────────────────────────────────────────────────────────────────────────────
 
 generator client {
   provider = "prisma-client"
