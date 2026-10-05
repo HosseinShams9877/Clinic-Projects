@@ -45,6 +45,7 @@ const TRANSITION_SELECT = {
   doctorId: true,
   clinicId: true,
   cycleId: true,
+  scheduledAt: true,
   resultRecordedAt: true,
 } as const
 
@@ -57,6 +58,8 @@ export interface TransitionRow {
   readonly doctorId: string
   readonly clinicId: string
   readonly cycleId: string | null
+  /** The slot's instant, which the cycle's `startedAt` and due dates are built from. */
+  readonly scheduledAt: Date
   readonly resultRecordedAt: Date | null
 }
 

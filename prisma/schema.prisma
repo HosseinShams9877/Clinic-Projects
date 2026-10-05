@@ -106,13 +106,14 @@ model Tenant {
 
 // The tenant's settings row — `02-architecture.md` §13.2: "In the tenant's
 // settings row, in the database." It carries the module override declarations,
-// the eight behavioural toggles of `04-roles-permissions.md` §4, and the clinic
+// the eight behavioural toggles of `04-roles-permissions.md` §4, the two cycle
+// settings that same document's §5 keeps with the cycle engine, and the clinic
 // policy values `03-data-model.md` §4 refers to as `settings.*`.
 //
-// `overrides` and `toggles` are JSON in a String column, parsed through Zod on
-// read (§5, and `13.3`: "Resolution is per request"). NULL means the same thing
-// for both: nothing is declared, so every default applies — the state of every
-// tenant at onboarding (§13.4).
+// `overrides`, `toggles` and `cycleSettings` are JSON in a String column, parsed
+// through Zod on read (§5, and `13.3`: "Resolution is per request"). NULL means
+// the same thing for all three: nothing is declared, so every default applies —
+// the state of every tenant at onboarding (§13.4).
 model TenantSettings {
   id       String @id @default(cuid())
   tenantId String @unique
@@ -120,6 +121,12 @@ model TenantSettings {
 
   overrides String?
   toggles   String?
+
+  // `04-roles-permissions.md` §5's two cycle settings, as the JSON blob the cycles
+  // module owns — kept out of `toggles` because §5 states they "read like behavioural
+  // toggles but sit with the cycle engine", and the eight of §4 are a closed list the
+  // permission module owns. NULL is both settings at their documented ON default.
+  cycleSettings String?
 
   // The policy values §4 names but does not fix. NULL is the absence of a
   // decision, not a value: a NULL `debtGraceDays` means no grace period, a NULL

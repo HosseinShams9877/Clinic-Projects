@@ -36,6 +36,15 @@
  * the row directly would have been one line fewer and a rule the catalogue did not
  * keep.
  *
+ * ## Why the cycle is handed to `cycles` and never reached for
+ *
+ * `recordResult` returns the completed session's own facts, and this file hands them to
+ * `cycles`' `recordCompletedSession` inside the same transaction. The two modules do not
+ * touch each other's tables: the appointment row is the appointments module's, the
+ * cycle row is the cycles module's, and the boundary between them is a value passed
+ * across. A booking that continues a course takes the cycle off the desk's list the
+ * same way — `noteCycleBooking`, in the same transaction as the slot it wrote.
+ *
  * ## Why failures are sentences and never exceptions
  *
  * An action's contract is a result a component renders. A thrown error surfaces as
@@ -54,6 +63,7 @@ import { AppointmentSource } from '@/core/constants'
 import { asLocalDate, asLocalTime } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import type { TenantContext } from '@/core/tenant'
+import { ValidationError } from '@/core/types'
 import {
   blockHours,
   bookAppointment,
@@ -64,6 +74,7 @@ import {
   recordResult,
 } from '@/modules/appointments'
 import { loadBookableService } from '@/modules/services'
+import { noteCycleBooking, recordCompletedSession } from '@/modules/cycles'
 import type { Panel } from '@/app/_shell/navigation'
 import { resolveStaffPanel } from '@/app/_shell/session'
 
@@ -80,10 +91,23 @@ export interface BookingInput {
   readonly serviceId: string
   readonly localDate: string
   readonly localTime: string
+  /**
+   * The customer's id, when the caller already holds it — a cycle's next session is
+   * booked for the customer the row names, and the id is the row's own.
+   */
   readonly customerId?: string
-  readonly mobile: string
-  readonly firstName: string
+  /** The mobile the desk typed, used to find or create the customer when no id is given. */
+  readonly mobile?: string
+  readonly firstName?: string
   readonly lastName?: string
+  /**
+   * The cycle this session continues, when the desk books from the contact list.
+   *
+   * Carried onto the row so the completed session finds its course through the first
+   * anchor (`cycles`' `resolveCycleId`), and used after the write to take the cycle off
+   * the desk's list in the same request that booked it — rule 5's first exit.
+   */
+  readonly cycleId?: string
 }
 
 /** The fields the slot-block popup collects. */
@@ -139,6 +163,54 @@ function revalidateAppointments(): void {
 }
 
 /**
+ * Re-renders the three cycle pages a completion or a booking moved.
+ *
+ * A completed session changes a cycle's counts and its due date, and a booking from the
+ * contact list takes the cycle off it — so the desk's list and the manager's oversight
+ * are both stale after either write. Revalidating the paths is what keeps the page the
+ * person closes and the page they open next from disagreeing.
+ */
+function revalidateCycles(): void {
+  revalidatePath('/reception/cycles')
+  revalidatePath('/admin/cycles')
+  revalidatePath('/doctor/cycles')
+}
+
+/**
+ * The customer a booking is for — the id a caller already holds, or the mobile the desk
+ * typed.
+ *
+ * The two callers of `BookingInput` are two shapes of the same question: the popup
+ * resolves a person by mobile because the mobile is the identity the desk knows, and a
+ * cycle's next session is booked for the customer the row already names. One helper
+ * because the two must not drift into two ways of finding a customer in one action.
+ *
+ * @throws ValidationError — neither an id nor a mobile was given, which is a caller the
+ *   popup cannot produce and the cycle form cannot reach either.
+ */
+async function resolveBookingCustomer(args: {
+  readonly tx: ScopeArgs['tx']
+  readonly ctx: TenantContext
+  readonly input: BookingInput
+}): Promise<string> {
+  if (args.input.customerId !== undefined) return args.input.customerId
+  if (args.input.mobile === undefined || args.input.firstName === undefined) {
+    throw new ValidationError('A booking needs either a customer id or a mobile and a first name.', {
+      messageKey: 'error.unhandledCase',
+      detail: {},
+    })
+  }
+
+  return resolveCustomerId({
+    tx: args.tx,
+    ctx: args.ctx,
+    mobile: args.input.mobile,
+    firstName: args.input.firstName,
+    lastName: args.input.lastName,
+  })
+}
+
+/**
  * «نوبت جدید» — books an appointment from the reception desk.
  *
  * The amounts come from the service row and from nowhere else (see the header), and
@@ -150,15 +222,7 @@ export async function createBookingAction(
 ): Promise<ActionResult> {
   const result = await inTenantScope(panel, async ({ tx, ctx }) => {
     const service = await loadBookableService({ tx, ctx, serviceId: input.serviceId })
-    const customerId =
-      input.customerId ??
-      (await resolveCustomerId({
-        tx,
-        ctx,
-        mobile: input.mobile,
-        firstName: input.firstName,
-        lastName: input.lastName,
-      }))
+    const customerId = await resolveBookingCustomer({ tx, ctx, input })
 
     const created = await bookAppointment({
       tx,
@@ -173,12 +237,20 @@ export async function createBookingAction(
       priceAtBooking: service.price,
       depositAmount: service.depositAmount,
       source: AppointmentSource.Reception,
+      cycleId: input.cycleId,
     })
+
+    if (input.cycleId !== undefined) {
+      // Rule 5's first exit, in the transaction that wrote the slot: the customer who
+      // just booked is not a customer the desk should be calling.
+      await noteCycleBooking({ tx, tenantId: ctx.tenantId, cycleId: input.cycleId })
+    }
     return created
   })
 
   if (!('id' in result)) return result
   revalidateAppointments()
+  revalidateCycles()
   return { ok: true, appointmentId: result.id }
 }
 
@@ -191,15 +263,7 @@ export async function createBookingAction(
 export async function quickBookAction(panel: Panel, input: BookingInput): Promise<ActionResult> {
   const result = await inTenantScope(panel, async ({ tx, ctx, userId }) => {
     const service = await loadBookableService({ tx, ctx, serviceId: input.serviceId })
-    const customerId =
-      input.customerId ??
-      (await resolveCustomerId({
-        tx,
-        ctx,
-        mobile: input.mobile,
-        firstName: input.firstName,
-        lastName: input.lastName,
-      }))
+    const customerId = await resolveBookingCustomer({ tx, ctx, input })
 
     const created = await bookOwnAppointment({
       tx,
@@ -214,12 +278,18 @@ export async function quickBookAction(panel: Panel, input: BookingInput): Promis
       priceAtBooking: service.price,
       depositAmount: service.depositAmount,
       source: AppointmentSource.Reception,
+      cycleId: input.cycleId,
     })
+
+    if (input.cycleId !== undefined) {
+      await noteCycleBooking({ tx, tenantId: ctx.tenantId, cycleId: input.cycleId })
+    }
     return created
   })
 
   if (!('id' in result)) return result
   revalidateAppointments()
+  revalidateCycles()
   return { ok: true, appointmentId: result.id }
 }
 
@@ -261,17 +331,44 @@ export async function markArrivedAction(panel: Panel, appointmentId: string): Pr
 
 /**
  * «انجام شد» — the outcome that starts a cycle, recorded from the desk.
+ *
+ * The cycle is created here and not inside the appointments module: `recordResult`
+ * answers the completed session's own facts, and this action hands them to the module
+ * that owns the course, in the same transaction. The handoff is one directional — the
+ * cycles module never reads an appointment through anything but its own relation, and
+ * the appointments module never writes a cycle.
  */
 export async function recordResultAction(
   panel: Panel,
   appointmentId: string,
 ): Promise<ActionResult> {
   const result = await inTenantScope(panel, async ({ tx, ctx }) => {
-    return recordResult({ tx, ctx, appointmentId, now: realClock() })
+    const completed = await recordResult({ tx, ctx, appointmentId, now: realClock() })
+
+    // A row the transition accepted is a real booking and holds both a customer and a
+    // service — `loadTransitionRow` refuses slot blocks, which are the only rows that
+    // do not. The branch is the schema's own invariant, stated so the facts the cycle
+    // is built from are non-null where the cycle module reads them.
+    if (completed.customerId !== null && completed.serviceId !== null) {
+      await recordCompletedSession({
+        tx,
+        ctx,
+        facts: {
+          appointmentId: completed.id,
+          customerId: completed.customerId,
+          serviceId: completed.serviceId,
+          doctorId: completed.doctorId,
+          scheduledAt: completed.scheduledAt,
+        },
+        now: realClock(),
+      })
+    }
+    return completed
   })
 
   if (!('id' in result)) return result
   revalidateAppointments()
+  revalidateCycles()
   return { ok: true, appointmentId: result.id }
 }
 

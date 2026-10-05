@@ -638,6 +638,76 @@ export const LEADS_PAGE = {
 } as const satisfies Record<string, unknown>
 
 /**
+ * The treatment-cycle surfaces — the desk's contact list, the manager's oversight, and
+ * the doctor's own courses.
+ *
+ * The three pages render the same row and differ in which rows and which writes, so the
+ * copy names the three audiences and shares one set of column headers and action
+ * labels: a course that the desk calls about is the same course the manager reads, and
+ * a sentence spelled twice would be a sentence the two pages could disagree about.
+ *
+ * The abandonment reasons are not restated here — they are the closed list
+ * `04-roles-permissions.md` §6 owns, and the page renders them from the cycles module's
+ * own `ABANDONMENT_REASON_LABELS`.
+ */
+export const CYCLES_PAGE = {
+  reception: {
+    title: 'دوره‌های فعال با موعد رسیده',
+    lead: 'مشتریانی که موعد جلسه بعدی رسیده و هنوز نوبت ندارند. تماس بگیرید و نتیجه را ثبت کنید.',
+  },
+  admin: {
+    title: 'دوره‌های درمان',
+    lead: 'نگاه کلی کلینیک به دوره‌های در حال انجام، موعد رسیده و ریزش. تکمیل دوره‌های نامحدود را مدیر انجام می‌دهد.',
+  },
+  doctor: {
+    title: 'چرخه درمان',
+    lead: 'دوره‌های درمانی که شما آن‌ها را انجام می‌دهید.',
+  },
+  columns: {
+    customer: 'مشتری',
+    service: 'خدمت',
+    doctor: 'پزشک',
+    progress: 'جلسات',
+    /** The noun the unbounded course's progress column names, as in «۳ جلسه». */
+    session: 'جلسه',
+    /** The separator the bounded course's progress column reads, as in «۳ از ۶». */
+    of: 'از',
+    interval: 'فاصله',
+    nextDue: 'موعد جلسه بعدی',
+    lastContact: 'آخرین تماس',
+    nextContact: 'تماس بعدی',
+    status: 'وضعیت',
+    reason: 'علت ریزش',
+    mobile: 'شماره موبایل',
+    actions: 'عملیات',
+  },
+  actions: {
+    contact: 'ثبت نتیجه تماس',
+    contactTitle: 'ثبت نتیجه تماس',
+    nextContactAt: 'تاریخ تماس بعدی',
+    confirm: 'ثبت',
+    book: 'رزرو جلسه بعدی',
+    bookDate: 'روز',
+    bookTime: 'ساعت',
+    abandon: 'منصرف شد',
+    abandonTitle: 'ثبت ریزش دوره',
+    abandonReason: 'علت ریزش',
+    abandonReasonPrompt: 'علت ریزش را از فهرست انتخاب کنید.',
+    abandonConfirmYes: 'بله، منصرف شد',
+    complete: 'تکمیل دوره',
+    completeConfirm: 'این دوره تکمیل شود؟ برای دوره‌های نامحدود تنها مدیر این کار را انجام می‌دهد.',
+    completeConfirmYes: 'بله، تکمیل شد',
+    cancel: 'انصراف',
+    saved: 'ثبت شد.',
+  },
+  empty: {
+    list: 'هیچ دوره‌ای برای تماس در دسترس نیست.',
+    clinic: 'هنوز دوره‌ای ثبت نشده است.',
+    doctor: 'شما هنوز دوره‌ای ندارید.',
+  },
+} as const satisfies Record<string, unknown>
+
+/**
  * The services catalogue, and the deactivation that replaces deletion.
  *
  * The page renders the catalogue's own columns and the state that replaces a remove,

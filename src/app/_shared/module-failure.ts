@@ -1,12 +1,12 @@
 /**
- * The one place a Phase 3 module's `AppError` key becomes the Persian sentence a
- * page or a Server Action renders.
+ * The one place a module's `AppError` key becomes the Persian sentence a page or a
+ * Server Action renders.
  *
  * `05-conventions.md` §7 keeps English in the error and Persian in the catalog, and
  * a Server Action is where the two meet. `_appointments/support.ts` is this file for
- * the three scheduling pages; the customers, services and staff surfaces need the
- * same lookup over four catalogs instead of three, and they share one file rather
- * than three copies because the lookup's whole reason to exist is that a key's
+ * the three scheduling pages; the customers, services, staff and cycles surfaces need
+ * the same lookup over five catalogs instead of four, and they share one file rather
+ * than five copies because the lookup's whole reason to exist is that a key's
  * *owner* is the one place a sentence is written — a second copy would be the copy
  * that drops a key.
  *
@@ -43,10 +43,14 @@ import {
   MESSAGES as STAFF_MESSAGES,
   type StaffMessageKey,
 } from '@/modules/staff'
+import {
+  MESSAGES as CYCLES_MESSAGES,
+  type CyclesMessageKey,
+} from '@/modules/cycles'
 
 /**
- * The Persian sentence for a failure one of the three Phase 3 modules raised, or the
- * catalog's one apology for a failure no catalog names.
+ * The Persian sentence for a failure one of the five modules raised, or the catalog's
+ * one apology for a failure no catalog names.
  *
  * Returns the apology for a non-`AppError` throw as well, which a caller treats as
  * "the platform failed" — the same sentence, arrived by the other path.
@@ -54,6 +58,7 @@ import {
 export function moduleFailureMessage(error: unknown): string {
   if (!isAppError(error)) return UNEXPECTED
   const key = error.messageKey
+  if (isCyclesKey(key)) return CYCLES_MESSAGES[key]
   if (isCustomersKey(key)) return CUSTOMER_MESSAGES[key]
   if (isServicesKey(key)) return SERVICE_MESSAGES[key]
   if (isStaffKey(key)) return STAFF_MESSAGES[key]
@@ -63,6 +68,11 @@ export function moduleFailureMessage(error: unknown): string {
 
 /** The one apology, read once so every caller names the same sentence. */
 const UNEXPECTED = VALIDATION_MESSAGES['error.unhandledCase']
+
+/** Whether the key is one `cycles`'s catalog holds a sentence for. */
+function isCyclesKey(key: string): key is CyclesMessageKey {
+  return key in CYCLES_MESSAGES
+}
 
 /** Whether the key is one `customers`'s catalog holds a sentence for. */
 function isCustomersKey(key: string): key is CustomersMessageKey {
