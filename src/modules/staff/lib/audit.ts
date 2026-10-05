@@ -54,6 +54,16 @@ export const AuditAction = {
   LeaveRequested: 'leave.requested',
   LeaveApproved: 'leave.approved',
   LeaveRejected: 'leave.rejected',
+  /**
+   * A discount granted on a receipt (Phase 5, immutable rule 7).
+   *
+   * The row names who granted it, which is the reason the audit exists at all: a
+   * discount is money the clinic chose not to collect, and the trail is what tells
+   * the manager who made that choice.
+   */
+  PaymentDiscountGranted: 'payment.discount_granted',
+  /** A refund handed back on a cancellation, which is a payment in reverse. */
+  PaymentRefunded: 'payment.refunded',
 } as const
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction]
 
@@ -61,6 +71,8 @@ export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction]
 export const AuditEntity = {
   Membership: 'membership',
   LeaveRequest: 'leave_request',
+  /** A receipt — the entity a discount or a refund is recorded against. */
+  Payment: 'payment',
 } as const
 export type AuditEntity = (typeof AuditEntity)[keyof typeof AuditEntity]
 

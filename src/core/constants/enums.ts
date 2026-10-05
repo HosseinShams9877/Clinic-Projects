@@ -339,6 +339,14 @@ export const ServiceCategory = {
 } as const
 export type ServiceCategory = (typeof ServiceCategory)[keyof typeof ServiceCategory]
 
+/** `03-data-model.md` §4.4 — `TenantSettings.depositRefundPolicy`, on cancellation. */
+export const DepositRefundPolicy = {
+  Full: 'FULL',
+  Half: 'HALF',
+  None: 'NONE',
+} as const
+export type DepositRefundPolicy = (typeof DepositRefundPolicy)[keyof typeof DepositRefundPolicy]
+
 /* ── Run-time validators ──────────────────────────────────────────────────────
  *
  * The database does not enforce these sets (`03-data-model.md` §5), so every

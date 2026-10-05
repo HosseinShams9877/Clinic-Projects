@@ -47,9 +47,17 @@ import {
   MESSAGES as CYCLES_MESSAGES,
   type CyclesMessageKey,
 } from '@/modules/cycles'
+import {
+  MESSAGES as PAYMENTS_MESSAGES,
+  type PaymentsMessageKey,
+} from '@/modules/payments'
+import {
+  MESSAGES as DEBTS_MESSAGES,
+  type DebtsMessageKey,
+} from '@/modules/debts'
 
 /**
- * The Persian sentence for a failure one of the five modules raised, or the catalog's
+ * The Persian sentence for a failure one of the seven modules raised, or the catalog's
  * one apology for a failure no catalog names.
  *
  * Returns the apology for a non-`AppError` throw as well, which a caller treats as
@@ -58,6 +66,8 @@ import {
 export function moduleFailureMessage(error: unknown): string {
   if (!isAppError(error)) return UNEXPECTED
   const key = error.messageKey
+  if (isDebtsKey(key)) return DEBTS_MESSAGES[key]
+  if (isPaymentsKey(key)) return PAYMENTS_MESSAGES[key]
   if (isCyclesKey(key)) return CYCLES_MESSAGES[key]
   if (isCustomersKey(key)) return CUSTOMER_MESSAGES[key]
   if (isServicesKey(key)) return SERVICE_MESSAGES[key]
@@ -68,6 +78,16 @@ export function moduleFailureMessage(error: unknown): string {
 
 /** The one apology, read once so every caller names the same sentence. */
 const UNEXPECTED = VALIDATION_MESSAGES['error.unhandledCase']
+
+/** Whether the key is one `debts`'s catalog holds a sentence for. */
+function isDebtsKey(key: string): key is DebtsMessageKey {
+  return key in DEBTS_MESSAGES
+}
+
+/** Whether the key is one `payments`'s catalog holds a sentence for. */
+function isPaymentsKey(key: string): key is PaymentsMessageKey {
+  return key in PAYMENTS_MESSAGES
+}
 
 /** Whether the key is one `cycles`'s catalog holds a sentence for. */
 function isCyclesKey(key: string): key is CyclesMessageKey {

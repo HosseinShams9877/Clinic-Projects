@@ -60,10 +60,16 @@ describe('JOB_REGISTRY', () => {
   it('holds one handler per module that has shipped its job, keyed by the kind the module owns', () => {
     // Phase 1 asserted the empty registry, because none of §12's six modules
     // existed. Phase 2 shipped the first one — `appointments`'s lifecycle sweep —
-    // and Phase 4 added the second, `cycles`'s next-due sweep. The four after them
-    // land the same way: a kind per module, from the module's barrel.
-    expect(JOB_REGISTRY.kinds).toEqual(['appointment.lifecycle', 'cycles.next-due'])
+    // Phase 4 added the second, `cycles`'s next-due sweep, and Phase 5 the third,
+    // `payments`' nightly reconciliation. The three after them land the same way:
+    // a kind per module, from the module's barrel.
+    expect(JOB_REGISTRY.kinds).toEqual([
+      'appointment.lifecycle',
+      'cycles.next-due',
+      'payments.reconcile',
+    ])
     expect(typeof JOB_REGISTRY.handlers['appointment.lifecycle']?.run).toBe('function')
     expect(typeof JOB_REGISTRY.handlers['cycles.next-due']?.run).toBe('function')
+    expect(typeof JOB_REGISTRY.handlers['payments.reconcile']?.run).toBe('function')
   })
 })

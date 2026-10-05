@@ -18,8 +18,8 @@
 | 1 | Platform foundation | **Complete** | ۱۴۰۵/۰۷/۰۹ | ۱۴۰۵/۰۷/۱۲ |
 | 2 | Appointments and scheduling | **Complete** | ۱۴۰۵/۰۷/۱۲ | ۱۴۰۵/۰۷/۱۲ |
 | 3 | Customers, services, staff | **Complete** | ۱۴۰۵/۰۷/۱۳ | ۱۴۰۵/۰۷/۱۳ |
-| 4 | Treatment cycles | Not started | — | — |
-| 5 | Payments and debts | Not started | — | — |
+| 4 | Treatment cycles | **Complete** | ۱۴۰۵/۰۷/۱۳ | ۱۴۰۵/۰۷/۱۳ |
+| 5 | Payments and debts | **Complete** | ۱۴۰۵/۰۷/۱۳ | ۱۴۰۵/۰۷/۱۳ |
 | 6 | Messages and notifications | Not started | — | — |
 | 7 | Campaigns, audiences, assistant | Not started | — | — |
 | 8 | Public site | Not started | — | — |
@@ -27,7 +27,7 @@
 | 10 | Reports, settings, tenancy, licensing | Not started | — | — |
 | 11 | Hardening and full verification | Not started | — | — |
 
-**Current phase:** Phase 3 is **complete**. Phase 4 has not started.
+**Current phase:** Phase 5 is **complete**. Phase 6 has not started.
 
 **Legend.** Not started · In progress · Blocked · Complete.
 
@@ -41,23 +41,26 @@
 | Roadmap (`docs/roadmap/`, 3 files) | Complete |
 | Setup guides (`docs/setup/`, 5 files) | Complete |
 | Changelog convention (`docs/changelog/`) | Complete |
-| Phase reports (`reports/`) | Complete for Phases 0, 1 and 2 |
+| Phase reports (`reports/`) | Complete for Phases 0–5 |
 | Root files (README, .gitignore, .env.example, LICENSE) | Complete |
 | `.claude/` (settings, agents, commands, context, memory) | Complete |
 | Package manifest | Complete — all dependencies pinned, no styled component library |
-| Application code (`src/`) | Complete for Phases 1–3 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, `modules/customers`, `modules/services`, `modules/staff`, the app shell, the four panel shells, the three scheduling pages, the seven customer/service/staff pages, and the `Popover`/`Combobox`/`JalaliDatePicker` controls |
-| Prisma schema | Complete — one portable schema, 25 models, validating as SQLite and PostgreSQL |
+| Application code (`src/`) | Complete for Phases 1–5 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, `modules/customers`, `modules/services`, `modules/staff`, `modules/cycles`, `modules/payments`, `modules/debts`, the app shell, the four panel shells, the three scheduling pages, the seven customer/service/staff pages, the three cycles pages, the four payments/debts pages, and the `Popover`/`Combobox`/`JalaliDatePicker` controls |
+| Prisma schema | Complete — one portable schema, 26 models, 899 lines, validating as SQLite and PostgreSQL |
 | Migrations | Complete — the SQLite migration list and the PostgreSQL RLS policies |
 | Vazirmatn | Complete — five weights self-hosted in `src/app/fonts/` with the OFL 1.1 licence and authors file |
-| Test suite | 48 files, 1116 tests — complete for Phases 1 and 2; Phase 3 added 4 files and 18 tests covering the six scenarios the phase named |
-| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1116 tests. The coverage thresholds are red; see `../reports/phase-03-report.md` §4 |
+| Test suite | 53 files, 1124 tests — complete for Phases 1–4; Phase 5 added the exactly-three tests its instruction fixed (the balance, the absent `balance` column, the absent deletion path) |
+| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1124 tests. The coverage thresholds are red; see `../reports/phase-05-report.md` §6 |
 | End-to-end suite | Written but **not executed** — Playwright's pinned Chromium cannot be downloaded on the build machine. See `../reports/phase-02-report.md` §4 |
 
 Phase 0 produced the specification for the codebase. Phase 1 produced the
 codebase. Phase 2 produced the appointment lifecycle, the slot engine and the three
 scheduling pages. Phase 3 produced the customer file and its leads, the service
-catalogue, the staff panel and its audit trail. What did not run in this environment
-is recorded in `../reports/phase-03-report.md` §4 — the e2e execution, the behavioural
+catalogue, the staff panel and its audit trail. Phase 4 produced the treatment-cycle
+engine and its contact list. Phase 5 produced the ledger — the only writers of a
+financial fact, the computed balance, the debt buckets and the nightly
+reconciliation that fails on drift. What did not run in this environment is recorded
+in `../reports/phase-05-report.md` §7 — the e2e execution, the behavioural
 cross-tenant suite against a live PostgreSQL, and the coverage floors the phase left
 red by instruction. Only the last is a decision; the first two are environmental.
 
@@ -207,6 +210,72 @@ largest holes are named in the report's §4, `staff/lib/leave.ts` first.
 
 ---
 
+## Phase 4 — what was delivered
+
+**Complete**, started and completed ۱۴۰۵/۰۷/۱۳. The closing report is
+`../reports/phase-04-report.md`.
+
+- [x] A cycle is created on the first `COMPLETED` and advanced on every one after,
+      with the counts derived from the appointment rows and never incremented
+- [x] The interval is read from the cycle and not the service, so a course the desk
+      shortened stays shortened
+- [x] The next-due date is computed through the localization layer's day arithmetic,
+      so a boundary never walks back a month
+- [x] The contact list's entry and exit rules — a cycle enters when its due date has
+      passed and no future appointment exists, and exits on a booking, an
+      abandonment, or a completion
+- [x] The `cycles.next-due` worker job, registered beside `appointment.lifecycle`
+- [x] `reception/cycles`, `admin/cycles` and `doctor/cycles`, sharing one table
+- [ ] The axe and responsive pass over the three pages — same Chromium blocker as
+      every phase before it
+
+**Three pages, one shared table, three row actions.** The doctor's read is scoped by
+`doctorId` in the query, so another doctor's courses are absent from the read and not
+refused after it — the same rule Phase 3 established for the customer file.
+
+---
+
+## Phase 5 — what was delivered
+
+**Complete**, started and completed ۱۴۰۵/۰۷/۱۳. The closing report is
+`../reports/phase-05-report.md`; §4 records the one build failure whose fix a later
+phase has to know about — the `payments` barrel reaching the browser bundle through
+`@/app/catalog`.
+
+- [x] **DoD 1** — `balance = Σ charges − Σ payments − Σ discounts`, asserted across a
+      deposit, a partial payment, a discount and a refund, through the module's own
+      writers and its own read
+- [x] **DoD 2** — no `balance` column exists anywhere in `prisma/schema.prisma`;
+      asserted by parsing the file, with the two models the balance is computed from
+      named so the parser cannot pass vacuously
+- [x] **DoD 3** — `payments.reconcile` re-derives every customer's three sums and
+      **throws** when any drifted, because a reconciliation that quietly repaired
+      itself would hide the second writer it exists to detect
+- [x] **DoD 4** — no deletion in either barrel's runtime exports, enumerated by name
+- [x] **DoD 5** — the discount toggle off refuses any discount at all, and the
+      secretary's cap bounds the amount, where a NULL cap is no discount rather than
+      no ceiling
+- [x] **DoD 6** — every discount writes an audit row naming the granter, inside the
+      same transaction as the receipt
+- [x] **DoD 7** — the four buckets, worst-first, with an override taking precedence
+      over the computed date
+- [x] **DoD 8** — a payment against another tenant's appointment is answered absent by
+      `findUnique({ where: { tenantId, id } })` and never written
+- [ ] **DoD 9** — the axe and responsive pass over the four pages. Same Chromium
+      blocker, fifth phase running
+
+**Two modules, four pages, one worker job.** `payments` is the only writer of a
+financial fact; `debts` is a computed view that writes nothing but the follow-up. The
+three staff pages share one table and differ only in the copy block and the writes they
+offer; the customer's own ledger is scoped by the session's `customerId` in the `where`
+and carries no permission primitive at all.
+
+**OQ-3 is closed.** The recomputable cache is written in the same transaction as the
+receipt, re-derived nightly, and the reconciliation fails loudly on drift. The one
+question the roadmap left for Phase 5 is answered.
+
+---
+
 ## Nothing is blocked
 
 The session that opened this phase had no working package manager, so nothing had
@@ -214,10 +283,10 @@ ever been executed. That is no longer true, and nothing has been blocked since.
 Node 24.19.0, npm 11.17.0 and git 2.50.1 all run, and the whole gate passes:
 
 ```
-npm run build    →  17 routes, exit 0
+npm run build    →  24 routes, exit 0
 npm run verify   →  db:generate · typecheck · lint · check:files · check:i18n
                    check:overrides · check:schema · check:rls · test
-                   48 files, 1116 tests, exit 0
+                   53 files, 1124 tests, exit 0
 ```
 
 One consequence worth recording: `src/generated/` is ignored, and `verify`
@@ -249,7 +318,7 @@ questions from Phase 0 stand, and the first half of one of them is now closed:
 |---|---|---|
 | OQ-1 — public page count (six vs eight) | Phase 8 | open |
 | OQ-2 — the two tables damaged by PDF extraction | before Phase 1 | **half closed.** The two tables it was raised about are recovered and now enforced in code: the 16 permissions and 3 role defaults in `src/core/constants/enums.ts`, and the 8 toggles with their default on/off states in `src/modules/roles-permissions` (the 96-case matrix in `tests/matrix.test.ts` transcribes `04-roles-permissions.md` §2 independently of the implementation). **The other half is open**: the four tables OQ-2 asked to be re-checked — campaign types, audience groups, automatic messages, acquisition sources — have still not been checked against the demo. Phases 6 and 7 depend on them. |
-| OQ-3 — the recomputable balance cache | Phase 5 | open |
+| OQ-3 — the recomputable balance cache | Phase 5 | **closed by Phase 5.** The cache is written in the same transaction as the receipt, re-derived nightly by `payments.reconcile`, and the reconciliation throws when it finds drift |
 
 ---
 

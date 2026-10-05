@@ -53,8 +53,12 @@ import {
 } from '@/core/localization'
 import { isAppError, NotFoundError } from '@/core/types'
 
-import { CUSTOMER_PROFILE_PAGE, PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS } from '@/app/catalog'
+import { CUSTOMER_PROFILE_PAGE } from '@/app/catalog'
 import { loadCustomerProfile } from '@/app/_customers/page-data'
+import {
+  PAYMENT_KIND_LABELS,
+  PAYMENT_METHOD_LABELS,
+} from '@/modules/payments'
 import {
   ConsentForm,
   DoctorNoteForm,

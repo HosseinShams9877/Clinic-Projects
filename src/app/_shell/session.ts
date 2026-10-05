@@ -46,7 +46,12 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { getEnv } from '@/core/config/env'
-import { getTenantContext, getTenantContextForCustomer, unscopedPrisma } from '@/core/db'
+import {
+  getTenantContext,
+  getTenantContextForCustomer,
+  tenantContextOf,
+  unscopedPrisma,
+} from '@/core/db'
 import { TenantResolutionError } from '@/core/db/context'
 import { realClock } from '@/core/lib/clock'
 import {
@@ -184,11 +189,23 @@ export async function requireCustomerPanel(): Promise<ResolvedCustomerPanel> {
     throw error
   })
 
-  return Object.freeze({ tenantId: resolved.tenantId, customerId: asCustomerId(resolved.customerId) })
+  return Object.freeze({
+    permissions: tenantContextOf({ tenantId: resolved.tenantId, role: 'customer' }),
+    tenantId: resolved.tenantId,
+    customerId: asCustomerId(resolved.customerId),
+  })
 }
 
-/** The facts the account panel renders from, once the session resolved a customer. */
+/**
+ * The facts the account panel renders from, once the session resolved a customer.
+ *
+ * `permissions` is the db scope's `TenantContext` and not `@/core/tenant`'s: the latter
+ * is membership-shaped, carrying a role that is one of exactly three and overrides a
+ * customer holds neither of. The account panel has no permission primitive, so the
+ * scope's only reader is `runInTenantScope`, which takes this type.
+ */
 export interface ResolvedCustomerPanel {
+  readonly permissions: ReturnType<typeof tenantContextOf>
   readonly tenantId: TenantId
   /** The authenticated customer. Never accepted from an input. */
   readonly customerId: CustomerId

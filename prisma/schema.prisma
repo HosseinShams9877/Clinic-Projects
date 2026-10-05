@@ -126,6 +126,9 @@ model TenantSettings {
   // product's shipped values are an open question — see the Phase 1 report.
   debtGraceDays          Int?
   depositRefundPolicy    String?
+  // «سقف تخفیف منشی» — the ceiling bounding toggle 3. NULL is no ceiling set,
+  // which for a secretary is no discount at all.
+  secretaryDiscountCap   BigInt?
   sendWindowStart        String?
   sendWindowEnd          String?
   dailyMessageCap        Int?
@@ -177,10 +180,9 @@ model Clinic {
 
 // A person who can log in (§6). Staff authenticate with a mobile number and a
 // password; `passwordHash` is therefore required, and the row is deactivated
-// rather than deleted so that the audit trail keeps naming it.
-//
-// The role is **not** here. It lives on `Membership`, because a person's role is
-// a fact about their relationship to a tenant, not about them.
+// rather than deleted so that the audit trail keeps naming it. The role is
+// **not** here — it lives on `Membership`, because a person's role is a fact
+// about their relationship to a tenant, not about them.
 model User {
   id       String @id @default(cuid())
   tenantId String
@@ -219,13 +221,12 @@ model User {
 
 // `User ──< Membership >── Tenant`, plus the role, the clinic scope (§3.1's
 // secondary boundary) and the per-user overrides `04-roles-permissions.md` §2.2
-// defines.
-//
-// `role` is a String, not a native enum (§5). The three values and the sixteen
-// permissions are in `src/core/constants`; `overrides` is a JSON String holding
-// `{ "granted": [...], "revoked": [...] }`, read through `parsePermissionOverrides`
-// in `src/core/tenant`, which drops a slug the release no longer knows and
-// refuses a row it cannot parse rather than silently granting nothing.
+// defines. `role` is a String, not a native enum (§5). The three values and the
+// sixteen permissions are in `src/core/constants`; `overrides` is a JSON String
+// holding `{ "granted": [...], "revoked": [...] }`, read through
+// `parsePermissionOverrides` in `src/core/tenant`, which drops a slug the release
+// no longer knows and refuses a row it cannot parse rather than silently granting
+// nothing.
 //
 // §2.2's formula is `effective(user) = (roleDefault(role) ∪ granted) \ revoked`.
 // The manager column is locked (§2.3), and the lock is enforced on the write path
@@ -255,19 +256,18 @@ model Membership {
 // A session. `09-security.md` §10: the session lives in an httpOnly, `Secure`,
 // `SameSite=Lax` cookie and the server holds only a hash of the token, so a
 // database disclosure does not hand over a usable credential. Rotation on login
-// revokes the previous row and writes a new one; `rotatedAt` records the handover
-// so a replayed old token is visible rather than merely refused.
+// revokes the previous row; `rotatedAt` records the handover so a replayed old
+// token is visible rather than merely refused.
 //
 // Exactly one of `userId` and `customerId` is set (`09-security.md` §7): a staff
-// member's session resolves to a `User` and through it the membership that carries
-// the role; a customer's resolves to a `Customer`, and every query the customer
-// panel runs is scoped to that id **in addition to** the tenant. Neither column is
-// an input — §7: "A customer-supplied `customerId` would be an instant horizontal
-// privilege escalation across the entire patient database, so it does not exist as
-// an input anywhere." Both are nullable rather than one required-plus-one-excluded
-// because SQLite has no CHECK the schema can express across two columns in a way
-// the two engines agree on; the module layer writes exactly one and the resolution
-// reads exactly one.
+// member's session resolves to a `User` and through it the membership that
+// carries the role; a customer's resolves to a `Customer`, and every query the
+// customer panel runs is scoped to that id **in addition to** the tenant.
+// Neither column is an input — §7: "A customer-supplied `customerId` would be an
+// instant horizontal privilege escalation across the entire patient database, so
+// it does not exist as an input anywhere." Both are nullable rather than one
+// required-plus-one-excluded because SQLite has no CHECK the schema can express
+// across two columns in a way the two engines agree on.
 model Session {
   id       String @id @default(cuid())
   tenantId String
@@ -539,14 +539,13 @@ model BeforeAfterImage {
 
 // §2.2, and the row `SlotBlock` is modelled on: a closed hour is an
 // appointment-shaped row with `isSlotBlock = true`, no customer, no service and
-// a NULL `slotKey`, which is what keeps a block from colliding with the booking
-// it exists to prevent. Every lifecycle sweep filters `isSlotBlock = false`; a
-// block holds its slot and does nothing else.
+// a NULL `slotKey`, which keeps a block from colliding with the booking it
+// exists to prevent. Every lifecycle sweep filters `isSlotBlock = false`.
 //
-// `scheduledAt` is the UTC instant, canonical for ordering and arithmetic;
-// `localDate` and `localTime` are the clinic-local Jalali values, which is what
-// a day grid compares and what makes the «۱۰:۳۰، ۲۹ شهریور» identity of the slot
-// a string rather than a timezone conversion (§3.1).
+// `scheduledAt` is the UTC instant; `localDate` and `localTime` are the
+// clinic-local Jalali values, which is what a day grid compares and what makes
+// the «۱۰:۳۰، ۲۹ شهریور» identity of the slot a string, not a timezone
+// conversion (§3.1).
 //
 // `priceAtBooking` is snapshotted: a later price change must not alter what a
 // past appointment charged (§4.2). `slotKey` holds `scheduledAt` as an ISO-8601
@@ -591,6 +590,13 @@ model Appointment {
   rescheduledFrom Appointment[] @relation("AppointmentReschedule")
   resultRecordedAt DateTime?
 
+  // The debt a completed appointment carries: the last follow-up, the next one the
+  // desk booked, and a due date the customer promised. There is no `debts` table
+  // (`03-data-model.md` §4.3), so the follow-up lives on the charge it is about.
+  debtFollowUpAt      DateTime?
+  debtNextContactAt   DateTime?
+  debtDueDateOverride DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -607,8 +613,7 @@ model Appointment {
 }
 
 // The clinic's working shifts, and the base the doctor's own hours are a
-// sub-range of. `weekday` is 0–6 with Saturday as 0 (`06-constants.md`), which
-// is the week's first day in Iran.
+// sub-range of. `weekday` is 0–6 with Saturday as 0 (`06-constants.md`).
 model ClinicShift {
   id       String @id @default(cuid())
   tenantId String
@@ -694,8 +699,7 @@ model LeaveRequest {
 // §2.3. `isActive` is the deactivation that replaces deletion (immutable rule
 // 10): an inactive service leaves the public list and the booking picker and
 // stays for the history of every appointment that used it. `defaultSessions` and
-// `defaultIntervalDays` seed a new cycle; the cycle then holds its own copy,
-// because §2.4.1 rule 2 reads the interval from the cycle.
+// `defaultIntervalDays` seed a new cycle, which then holds its own copy.
 model Service {
   id       String @id @default(cuid())
   tenantId String
@@ -755,13 +759,11 @@ model ServiceDoctor {
 
 // §2.4. Created when an appointment reaches `COMPLETED` — not at booking, not at
 // arrival (§2.4.1 rule 1). `intervalDays` is snapshotted from the service at
-// creation and read from here afterwards, so a customer whose third session
-// slipped by a week has their fourth slip too (rule 2). `nextDueDate` is
+// creation and read from here afterwards (rule 2). `nextDueDate` is
 // `lastSessionAt + intervalDays` (rule 3).
 //
 // `inContactList` is the flag §2.4.1 rules 4 and 5 maintain: it is set when
-// `nextDueDate` has passed **and** no future appointment exists for the cycle —
-// the second condition is what keeps the call list worth reading.
+// `nextDueDate` has passed **and** no future appointment exists for the cycle.
 //
 // The UNIQUE on `(tenantId, customerId, serviceId, startedAt)` allows the same
 // customer to repeat the same service later, and refuses two identical cycles on

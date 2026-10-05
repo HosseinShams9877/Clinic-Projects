@@ -50,6 +50,7 @@
 import type { TransactionClient } from '@/core/db/scope'
 import { APPOINTMENT_LIFECYCLE_JOB_KIND, lifecycleJobHandler } from '@/modules/appointments'
 import { CYCLE_DUE_JOB_KIND, cycleDueJobHandler } from '@/modules/cycles'
+import { PAYMENTS_RECONCILE_JOB_KIND, reconcileJobHandler } from '@/modules/payments'
 
 import type { ClaimedJob } from './queue'
 
@@ -130,12 +131,13 @@ export function build(entries: UnbuiltJobRegistry): JobRegistry {
  * Phase 1 shipped this empty, and that was correct: none of §12's six modules
  * existed, and a handler registered for a module that is not written is a
  * placeholder by another name. Phase 2 landed the first one — `appointments`'
- * lifecycle sweep — and Phase 4 the second, `cycles`' hourly next-due sweep. The
- * four after it arrive with their own modules the same way: a handler is imported
- * from the module's barrel, because the module is the only place the job's own
- * vocabulary is offered from.
+ * lifecycle sweep — Phase 4 the second, `cycles`' hourly next-due sweep, and Phase 5
+ * the third, `payments`' nightly reconciliation. The three after it arrive with
+ * their own modules the same way: a handler is imported from the module's barrel,
+ * because the module is the only place the job's own vocabulary is offered from.
  */
 export const JOB_REGISTRY: JobRegistry = build({
   [APPOINTMENT_LIFECYCLE_JOB_KIND]: lifecycleJobHandler,
   [CYCLE_DUE_JOB_KIND]: cycleDueJobHandler,
+  [PAYMENTS_RECONCILE_JOB_KIND]: reconcileJobHandler,
 })

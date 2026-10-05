@@ -12,7 +12,61 @@
 
 ---
 
-## ۱۴۰۵/۰۷/۱۳ — Phase 3 closed; the two `TenantContext` types, and a snapshot that isn't there
+## ۱۴۰۵/۰۷/۱۳ — Phases 4 and 5 closed; a module that audits is a server-only barrel
+
+**The fact.** `npm run build` (24 routes) and `npm run verify` (53 files, 1124
+tests) both exit 0. Phases 4 and 5 are closed in `docs/roadmap/progress.md`,
+`reports/phase-04-report.md` and `reports/phase-05-report.md`. Note that
+`progress.md` had not received its Phase 4 row — Phase 4 was committed but
+recorded as *Not started* — so this commit advanced two rows at once.
+
+**A barrel that reaches `staff` or `auth` is not browser-safe, and the failure is
+not where it lands.** `next build` died with
+`Module not found: Can't resolve '@node-rs/argon2-wasm32-wasi'` inside
+`global-error.tsx` — a page that never imports a module. The chain was
+`global-error` → `@/app/catalog` → `@/modules/payments` → `lib/record.ts` →
+`@/modules/staff` → `lib/memberships.ts` → `@/modules/auth` → `password.ts` →
+the dynamic `import('@node-rs/argon2/browser.js')`, which resolves to a package
+this machine has not installed. **A dynamic import is still resolved for the
+browser graph**, so making the audit call lazy fixes nothing.
+
+**Why it matters.** `appointments`, `customers`, `cycles` and `services` are
+client-safe — their `lib` reaches no module but `roles-permissions`. `payments`
+is the first module that records an audit, and `staff/lib/audit.ts` is what pulls
+the hashing path in. Any future module that writes an audit row inherits this.
+
+**What to do instead.** Keep the barrel intact (§10 rule 1 — the barrel is the
+only public surface) and move the label consumption to the server boundary: the
+page reads the module's catalog on the server and hands the client component
+already-built `ComboboxOption[]` lists as props. Never re-export a module barrel
+through `@/app/catalog` — `catalog.ts` is imported by the client `global-error`,
+so it is a browser entrypoint. Type-only imports (`import type`) erase the graph
+and are safe, which is the pattern `staff-login.tsx` already used.
+
+**The balance is computed and the reconciliation throws.** `payments` is the only
+writer of a financial fact; `debts` writes nothing but the follow-up. A `REFUND`
+row carries a negative `amount`, which is what makes `Σ amount` the paid side in
+both directions. `Customer.chargedTotal/discountTotal/paidTotal` are recomputable
+caches written in the same transaction as the receipt, and `runReconciliation`
+**corrects drift and then throws** — a reconciliation that quietly repaired
+itself would hide the second writer it exists to detect. Do not "fix" the throw.
+
+**Three tests, no more, and the coverage floors stayed red.** The phase's
+instruction fixed the count at exactly three (the balance, the absent `balance`
+column, the absent deletion path) and said not to chase a number. The four
+largest holes are named in the report's §6 — `payments/lib/record.ts` first.
+Phase 11 is where the posture is revisited.
+
+**Tests deleted to get the gate green: none.** Every failure was a defect in the
+build or the type at a call site.
+
+**What still has not run**, unchanged since Phase 1 and still not a code gap:
+Playwright's Chromium cannot be downloaded here, so the e2e and axe pass over the
+four new pages are unexecuted (DoD 9 is unchecked for the fifth phase running);
+and the cross-tenant suite needs a live PostgreSQL. `check:rls` covers the
+policies statically and fails closed, now over 24 tenant-scoped tables.
+
+---
 
 **The fact.** `npm run build` (17 routes) and `npm run verify` (48 files, 1116 tests)
 both exit 0. Phase 3 is closed in `docs/roadmap/progress.md` and

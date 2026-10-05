@@ -841,24 +841,92 @@ export const STAFF_PAGE = {
 } as const satisfies Record<string, unknown>
 
 /**
- * The two payment enumerations the customer profile renders, which no module owns yet.
+ * The four debt surfaces' copy — Phase 5.
  *
- * `payments` is a later phase, and the profile's payment history reads the columns the
- * `customers` module's own query already joins; the labels for the two closed sets the
- * rows hold are here because a page renders them and a label has to live somewhere.
- * When `payments` lands, its own catalog takes the two records and this page imports
- * them there — the same handover `_appointments/options.ts` documents for the
- * services and customers reads Phase 2 held.
+ * The three staff pages are one row read through three permissions, and the copy each
+ * one renders is its own because the three facts are different: the desk owes a call,
+ * the manager oversees, and the doctor reads their own. The customer's own history is
+ * the fourth surface and the one with no permission at all.
  */
-export const PAYMENT_METHOD_LABELS: Readonly<Record<string, string>> = {
-  CASH: 'نقدی',
-  CARD: 'کارت',
-  ONLINE: 'آنلاین',
-}
+export const DEBTS_PAGE = {
+  reception: {
+    title: 'بدهکاران',
+    lead: 'بدهی‌های گذشته از سررسید، از قدیمی‌ترین. تماس بگیرید، نتیجه را ثبت کنید و در صورت نیاز سررسید را تغییر دهید.',
+  },
+  admin: {
+    title: 'بدهی‌ها',
+    lead: 'نگاه کلی کلینیک به بدهی‌های باز. این صفحه فقط خواندنی است؛ ثبت پرداخت و پیگیری در صفحه پیشخوان انجام می‌شود.',
+  },
+  doctor: {
+    title: 'بدهی‌های من',
+    lead: 'بدهی‌های مراجعینی که جلسه‌های آن‌ها را شما انجام داده‌اید.',
+  },
+  columns: {
+    customer: 'مشتری',
+    mobile: 'شماره موبایل',
+    charged: 'مبلغ کل',
+    discount: 'تخفیف',
+    paid: 'پرداختی',
+    balance: 'بدهی',
+    dueDate: 'سررسید',
+    followUp: 'آخرین پیگیری',
+    nextContact: 'تماس بعدی',
+    actions: 'عملیات',
+  },
+  buckets: {
+    overdue30: 'بیش از ۳۰ روز',
+    overdue7: 'بیش از ۷ روز',
+    overdue: 'گذشته از سررسید',
+    dueSoon: 'نزدیک سررسید',
+    empty: 'بدهی‌ای در این دسته نیست.',
+  },
+  actions: {
+    payment: 'ثبت پرداخت',
+    paymentTitle: 'ثبت پرداخت',
+    amount: 'مبلغ پرداختی',
+    method: 'روش پرداخت',
+    methodEmpty: 'روشی یافت نشد.',
+    kind: 'نوع پرداخت',
+    kindEmpty: 'نوعی یافت نشد.',
+    discountAmount: 'مبلغ تخفیف',
+    discountReason: 'علت تخفیف',
+    note: 'یادداشت',
+    confirm: 'ثبت',
+    cancel: 'انصراف',
+    followUp: 'ثبت پیگیری',
+    followUpTitle: 'ثبت پیگیری',
+    nextContactAt: 'تاریخ تماس بعدی',
+    reschedule: 'تغییر سررسید',
+    rescheduleTitle: 'تغییر سررسید',
+    dueDate: 'سررسید جدید',
+    saved: 'ثبت شد.',
+  },
+} as const satisfies Record<string, unknown>
 
-export const PAYMENT_KIND_LABELS: Readonly<Record<string, string>> = {
-  DEPOSIT: 'بیعانه',
-  PARTIAL: 'جزیی',
-  FINAL: 'تسویه',
-  REFUND: 'بازگشت',
-}
+/**
+ * The customer's own money — `account/payments.html`, «پرداخت‌های من».
+ *
+ * The panel has no permission primitive; the session's own `customerId` is the scope,
+ * and the copy names what the customer sees rather than what the clinic owes.
+ */
+export const PAYMENTS_PAGE = {
+  title: 'پرداخت‌های من',
+  lead: 'پرداخت‌های شما و بدهی باز شما. هر پرداخت به یک نوبت ثبت شده است.',
+  columns: {
+    date: 'تاریخ',
+    appointment: 'نوبت',
+    kind: 'نوع',
+    method: 'روش',
+    amount: 'مبلغ',
+    discount: 'تخفیف',
+    note: 'یادداشت',
+  },
+  summary: {
+    charged: 'مبلغ کل',
+    discount: 'تخفیف',
+    paid: 'پرداختی',
+    balance: 'بدهی باز',
+    settled: 'هیچ بدهی بازی ندارید.',
+  },
+  empty: 'هنوز پرداختی ثبت نشده است.',
+} as const satisfies Record<string, unknown>
