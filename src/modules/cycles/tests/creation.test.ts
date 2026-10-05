@@ -36,8 +36,7 @@ import type { TenantContext } from '@/core/tenant'
 import type { PrismaClient } from '@/generated/prisma/client'
 
 import { recordCompletedSession } from '../lib/creation'
-import { bookAppointment } from '@/modules/appointments/lib/book'
-import { recordArrival } from '@/modules/appointments/lib/transition'
+import { bookAppointment, promoteToAwaitingArrival, recordArrival } from '@/modules/appointments'
 
 import {
   createTestDatabase,
@@ -62,6 +61,7 @@ const CLINIC_ID = asClinicId('clinic-a')
 const DOCTOR_ID: UserId = asUserId('doctor-a')
 const CUSTOMER_ID = 'customer-a'
 const SERVICE_ID = 'service-a'
+const SECOND_CUSTOMER_ID = 'customer-b'
 
 let database: TestDatabase
 let unscoped: PrismaClient
@@ -208,6 +208,22 @@ function factsFor(appointmentId: string, scheduledAt: Date) {
   }
 }
 
+/** The facts for a completed session of a customer that is not the default one. */
+function factsForCustomer(customerId: string, appointmentId: string, scheduledAt: Date) {
+  return {
+    tx: unscoped as never,
+    ctx: context(),
+    facts: {
+      appointmentId,
+      customerId,
+      serviceId: SERVICE_ID,
+      doctorId: DOCTOR_ID,
+      scheduledAt,
+    },
+    now: scheduledAt,
+  }
+}
+
 /**
  * A booking the desk recorded a result for, as the appointments module hands it over.
  *
@@ -226,12 +242,34 @@ async function completeSlot(patch: { readonly localDate?: LocalDate; readonly lo
   return { booked, scheduledAt }
 }
 
+/** `completeSlot`, but for a customer the caller names. */
+async function completeSlotFor(
+  customerId: string,
+  patch: { readonly localDate?: LocalDate; readonly localTime?: LocalTime } = {},
+) {
+  const booked = await bookAppointment({
+    ...bookArgs(patch),
+    customerId,
+  })
+  const scheduledAt = toUtcInstant(patch.localDate ?? DAY, patch.localTime ?? SLOT, UTC_OFFSET)
+  await unscoped.appointment.update({
+    where: { id: booked.id },
+    data: { status: AppointmentStatus.Completed, resultRecordedAt: scheduledAt },
+  })
+  return { booked, scheduledAt }
+}
+
 describe('recordCompletedSession', () => {
   it('creates the cycle once on the completion, and not on booking or arrival', async () => {
     // DoD 1. The two transitions the desk records first are the two the specification
     // names as the wrong moment, and a cycle on either is a list full of people whose
     // session never happened.
     const booked = await bookAppointment(bookArgs())
+
+    // `BOOKED` does not go straight to `ARRIVED` — the state machine requires the
+    // sweep's `AWAITING_ARRIVAL` step first, and the test walks the same path a real
+    // day would: the clock promotes the booking, then the desk records the arrival.
+    await promoteToAwaitingArrival(unscoped as never, TENANT_ID, new Date('2026-09-30T09:00:00Z'))
     await recordArrival({
       tx: unscoped as never,
       ctx: context(),
@@ -240,7 +278,16 @@ describe('recordCompletedSession', () => {
     })
     expect(await unscoped.treatmentCycle.count()).toBe(0)
 
+    // The desk's last step is the result, and it is the result — `COMPLETED` and
+    // `resultRecordedAt` — that `recordCompletedSession` counts. Writing it here is
+    // the handoff `recordResultAction` makes, and the reason the count is derived
+    // from the row's status rather than incremented by the caller.
     const scheduledAt = toUtcInstant(DAY, SLOT, UTC_OFFSET)
+    await unscoped.appointment.update({
+      where: { id: booked.id },
+      data: { status: AppointmentStatus.Completed, resultRecordedAt: scheduledAt },
+    })
+
     await recordCompletedSession(factsFor(booked.id, scheduledAt))
     expect(await unscoped.treatmentCycle.count()).toBe(1)
 
@@ -315,12 +362,30 @@ describe('recordCompletedSession', () => {
       addLocalDays(lastLocal, 14),
     )
 
-    // The course that starts after the change is the one that reads the new default.
-    const newCourse = await completeSlot({
+    // A *different customer* starts a course after the catalogue change, so the module
+    // resolves them to a new cycle rather than continuing the first customer's — the
+    // second anchor (`customerId, serviceId, doctorId`) would otherwise attach them to
+    // the open course that already exists, which is correct behaviour and not what
+    // this case is about.
+    await unscoped.customer.create({
+      data: {
+        id: SECOND_CUSTOMER_ID,
+        tenantId: TENANT_ID,
+        mobile: '09130000002',
+        firstName: 'مشتری دوم',
+        searchName: 'مشتری دوم',
+        lifecycle: CustomerLifecycle.Customer,
+      },
+    })
+
+    const newCourse = await completeSlotFor(SECOND_CUSTOMER_ID, {
       localDate: asLocalDate('1405-08-02'),
       localTime: asLocalTime('11:00'),
     })
-    await recordCompletedSession(factsFor(newCourse.booked.id, newCourse.scheduledAt))
+    await recordCompletedSession(
+      factsForCustomer(SECOND_CUSTOMER_ID, newCourse.booked.id, newCourse.scheduledAt),
+    )
+
     expect(await unscoped.treatmentCycle.count()).toBe(2)
     const started = await unscoped.treatmentCycle.findFirstOrThrow({
       where: { startedAt: newCourse.scheduledAt },
