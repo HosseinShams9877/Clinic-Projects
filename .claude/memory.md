@@ -12,6 +12,70 @@
 
 ---
 
+## ۱۴۰۵/۰۷/۱۵ — Phase 8 closed; a gate that read the caller's copy of a fact
+
+**The fact.** Phase 8 (the eight public pages, `public-site`, the booking
+wizard, the consultation form, two Server Actions) is committed as `78a8a0e`.
+Verify is green at **60 files, 1141 tests**; build is 32 routes. The schema is
+untouched at 1000 lines — the phase reads what Phases 2 and 3 wrote, and both
+gates are toggles on a settings row that already existed.
+
+**The bug the DoD test caught is the same shape as Phase 7's argon2 chain, one
+layer down: a rule that read the caller's copy of a fact the database owns.**
+Toggle 6's deposit gate first checked `args.depositAmount` — the snapshot a
+booking captures onto its row. The test passed `0n` and the gate opened, because
+the public site is a caller the clinic never vetted. `bookPublicAppointment`
+now reads the service row and gates on its `depositAmount`; the caller's
+snapshot is still what the row *stores*, it is just no longer what the rule
+*reads*.
+
+**Why it matters.** The pattern is now three phases wide and it is worth naming:
+**any `BookArgs`-style snapshot struct is a write shape, not a rule input.** A
+guard keyed on a snapshot field is a guard the caller supplies its own answer
+to. The rule reads the row — `serviceDeposit` does one `findFirst` on the write
+path, and the toggle check sits behind it. Watch for this wherever a phase adds
+a gate to a path that already had a snapshot type.
+
+**The public site's principal is a type, not a bypassed check.** The two writes
+go through `appointments.bookPublicAppointment` and `customers.createPublicLead`
+— same guards and sentences as the desk's, with the staff permission replaced by
+the principal the action names. `TenantPrincipal` is new in `@/core/tenant`:
+`role: Role | 'public'`, no membership. The two permission-free reads
+(`loadBookableService`, `createOrFindCustomer`) take it instead of
+`TenantContext`, and `TenantContext` still satisfies it, so no staff call site
+changed. If a later phase needs a third permission-free path, widen a signature
+to `TenantPrincipal` — do **not** cast to `as never`, which is what the actions
+did first and which loses the narrowing on `ctx.clinicId` and every field after
+it.
+
+**Three lint rules that cost an hour, and the shapes that satisfy them.**
+
+- *Persian outside a catalog is an error, anywhere* — including an `aria-label`
+  and a `join('، ')`. The separator is now `PERSIAN_LIST_SEPARATOR` in the
+  localization catalog beside `ZWNJ`, because a keyboard's `,` silently
+  replaces it. Plan for the catalog round-trip before writing a component, not
+  after.
+- *`new Date()` is banned under `src/`*, client components included. A client
+  island that needs "today" takes it as a prop from the server component, which
+  reads `realClock()`. There is no client-side exemption and no inline
+  workaround.
+- *Every export of a `'use server'` file must be async.* Turbopack enforces it
+  at build, not at typecheck, so an unused sync helper passes `tsc` and fails
+  `next build`.
+
+**`src/app/catalog.ts` is full.** 993/1000 lines and ADR-0007 forbids splitting
+it. A new surface's copy goes in its own module's catalog (`RENDER_IGNORES`
+allows `src/modules/*/catalog.ts`), and the eight pages' copy is
+`src/modules/public-site/catalog.ts` for that reason. The next surface should
+assume the same.
+
+**OQ-1 is closed.** All eight pages exist in `src/app/(public)/` — a route
+group, because the root `/` is already the panels' `panels.html` and a group
+contributes no URL segment. What stays open is the visual check, the same
+Chromium gap every phase records.
+
+---
+
 ## ۱۴۰۵/۰۷/۱۴ — Phase 7 closed; the argon2 error was an import chain, again
 
 **The fact.** Phase 7 (`audience-groups`, `campaigns`, `campaign-assistant`,

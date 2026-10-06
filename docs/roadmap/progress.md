@@ -22,12 +22,12 @@
 | 5 | Payments and debts | **Complete** | ۱۴۰۵/۰۷/۱۳ | ۱۴۰۵/۰۷/۱۳ |
 | 6 | Messages and notifications | **Complete** | ۱۴۰۵/۰۷/۱۴ | ۱۴۰۵/۰۷/۱۴ |
 | 7 | Campaigns, audiences, assistant | **Complete** | ۱۴۰۵/۰۷/۱۴ | ۱۴۰۵/۰۷/۱۴ |
-| 8 | Public site | Not started | — | — |
+| 8 | Public site | **Complete** | ۱۴۰۵/۰۷/۱۵ | ۱۴۰۵/۰۷/۱۵ |
 | 9 | Customer panel | Not started | — | — |
 | 10 | Reports, settings, tenancy, licensing | Not started | — | — |
 | 11 | Hardening and full verification | Not started | — | — |
 
-**Current phase:** Phase 7 is **complete**. Phase 8 has not started.
+**Current phase:** Phase 8 is **complete**. Phase 9 has not started.
 
 **Legend.** Not started · In progress · Blocked · Complete.
 
@@ -41,15 +41,15 @@
 | Roadmap (`docs/roadmap/`, 3 files) | Complete |
 | Setup guides (`docs/setup/`, 5 files) | Complete |
 | Changelog convention (`docs/changelog/`) | Complete |
-| Phase reports (`reports/`) | Complete for Phases 0–7 |
+| Phase reports (`reports/`) | Complete for Phases 0–8 |
 | Root files (README, .gitignore, .env.example, LICENSE) | Complete |
 | `.claude/` (settings, agents, commands, context, memory) | Complete |
 | Package manifest | Complete — all dependencies pinned, no styled component library |
-| Application code (`src/`) | Complete for Phases 1–7 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, `modules/customers`, `modules/services`, `modules/staff`, `modules/cycles`, `modules/payments`, `modules/debts`, `modules/notifications`, `modules/messages`, `modules/audience-groups`, `modules/campaigns`, `modules/campaign-assistant`, the app shell, the four panel shells, the three scheduling pages, the seven customer/service/staff pages, the three cycles pages, the four payments/debts pages, the reception desk, the `admin/campaigns` page, and the `Popover`/`Combobox`/`JalaliDatePicker` controls |
+| Application code (`src/`) | Complete for Phases 1–8 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, `modules/customers`, `modules/services`, `modules/staff`, `modules/cycles`, `modules/payments`, `modules/debts`, `modules/notifications`, `modules/messages`, `modules/audience-groups`, `modules/campaigns`, `modules/campaign-assistant`, `modules/public-site`, the app shell, the four panel shells, the three scheduling pages, the seven customer/service/staff pages, the three cycles pages, the four payments/debts pages, the reception desk, the `admin/campaigns` page, the `Popover`/`Combobox`/`JalaliDatePicker` controls, and the eight public pages with their header, footer, booking wizard and consultation form |
 | Prisma schema | Complete — one portable schema, 29 models, 1000 lines (ADR-0007’s ceiling, not past it), validating as SQLite and PostgreSQL |
 | Migrations | Complete — the SQLite migration list and the PostgreSQL RLS policies |
 | Vazirmatn | Complete — five weights self-hosted in `src/app/fonts/` with the OFL 1.1 licence and authors file |
-| Test suite | 59 files, 1138 tests — complete for Phases 1–5; Phase 6 added the exactly-three tests its instruction fixed (the seven triggers, the consent suppression, the 90-day window and the priority order), and Phase 7 added its own three (the eight audience groups, the approval gate, the assistant's closed sets) |
+| Test suite | 60 files, 1141 tests — complete for Phases 1–5; Phase 6 added the exactly-three tests its instruction fixed (the seven triggers, the consent suppression, the 90-day window and the priority order), Phase 7 added its own three (the eight audience groups, the approval gate, the assistant's closed sets), and Phase 8 added the three its DoD names (the holiday gate, the deposit gate, the consent-filtered gallery) |
 | Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1138 tests. The coverage thresholds are red; see `../reports/phase-07-report.md` §6 |
 | End-to-end suite | Written but **not executed** — Playwright's pinned Chromium cannot be downloaded on the build machine. See `../reports/phase-02-report.md` §4 |
 
@@ -355,6 +355,37 @@ every other phase, not a code gap.
 
 ---
 
+## Phase 8 — what was delivered
+
+**Complete**, started and completed ۱۴۰۵/۰۷/۱۵. The closing report is
+`../reports/phase-08-report.md`; §3 records the one decision a later phase has to know
+about — the two permission-free module paths, and why the public site's principal is a
+module type and not a bypassed check.
+
+- [x] **DoD 3** — a booking of a deposit-bearing service is refused while toggle 6 is
+  off, because the gate reads the service's own row and not an amount the caller
+  supplied
+- [x] **DoD 4** — a booking on a holiday is refused while toggle 7 is off, through the
+  same `loadSlotDay` the desk's grid consults
+- [x] **DoD 6** — no before/after image renders without recorded written consent, and a
+  revoked consent stops it rendering, because the gate is a `where` clause in the read
+- [x] `public-site` behind its barrel — the eight pages' reads and all their Persian copy
+- [x] The eight pages in `src/app/(public)/` with the 76px header and the shared footer,
+  and the booking wizard and the consultation form as their two client islands
+- [x] The two Server Actions, and the `bookPublicAppointment` and `createPublicLead`
+  module paths they call
+- [ ] The axe and responsive pass over the eight pages — same Chromium blocker as every
+      phase before it, seventh phase running
+
+**One module, eight pages, two actions.** `public-site` owns the catalogue, the team and
+the gallery as reads a visitor sees, and the copy is in its own catalog because
+`src/app/catalog.ts` is at ADR-0007's ceiling. The two writes are the two the phase's own
+deliverable names, and each goes through the module the desk uses — same guards, same
+sentences, with the staff permission replaced by the principal the action names. The
+tenant is resolved from the host on every one of the eight, and no page receives one.
+
+---
+
 ## Nothing is blocked
 
 The session that opened this phase had no working package manager, so nothing had
@@ -362,10 +393,10 @@ ever been executed. That is no longer true, and nothing has been blocked since.
 Node 24.19.0, npm 11.17.0 and git 2.50.1 all run, and the whole gate passes:
 
 ```
-npm run build    →  24 routes, exit 0
+npm run build    →  32 routes, exit 0
 npm run verify   →  db:generate · typecheck · lint · check:files · check:i18n
                    check:overrides · check:schema · check:rls · test
-                   59 files, 1138 tests, exit 0
+                   60 files, 1141 tests, exit 0
 ```
 
 One consequence worth recording: `src/generated/` is ignored, and `verify`
@@ -395,7 +426,7 @@ questions from Phase 0 stand, and the first half of one of them is now closed:
 
 | Question | Needed by | State |
 |---|---|---|
-| OQ-1 — public page count (six vs eight) | Phase 8 | open |
+| OQ-1 — public page count (six vs eight) | Phase 8 | **closed by Phase 8.** All eight are built — `index`, `services`, `service-detail`, `booking`, `doctors`, `about`, `contact` and `panels` — in the `src/app/(public)/` route group, each mapped to the `public-site` module by `02-architecture.md` §9. The route group is what makes the count eight rather than six: the root `/` is already the panels' entry, so the eight live alongside it under a group that contributes no URL segment. What stays open is the visual check against the demo, the same Chromium gap every phase records. |
 | OQ-2 — the two tables damaged by PDF extraction | before Phase 1 | **closed by Phase 7.** The two tables it was raised about are recovered and enforced in code: the 16 permissions and 3 role defaults in `src/core/constants/enums.ts`, and the 8 toggles with their default on/off states in `src/modules/roles-permissions` (the 96-case matrix in `tests/matrix.test.ts` transcribes `04-roles-permissions.md` §2 independently of the implementation). The other two of the four — the automatic message kinds with their triggers, and the send rules with their order, both in `src/core/constants` — were settled by Phase 6. The last two — campaign types and audience groups — are settled by this phase in `src/core/constants` and `src/modules/audience-groups`, exercised by the Phase 7 DoD 1 test. What remains open is not a table but the *behavioural* check against the demo, which is the Chromium and PostgreSQL gap every phase records. |
 | OQ-3 — the recomputable balance cache | Phase 5 | **closed by Phase 5.** The cache is written in the same transaction as the receipt, re-derived nightly by `payments.reconcile`, and the reconciliation throws when it finds drift |
 
