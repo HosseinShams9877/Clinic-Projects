@@ -12,7 +12,65 @@
 
 ---
 
-## ۱۴۰۵/۰۷/۱۳ — Phases 4 and 5 closed; a module that audits is a server-only barrel
+## ۱۴۰۵/۰۷/۱۴ — Phase 7 closed; the argon2 error was an import chain, again
+
+**The fact.** Phase 7 (`audience-groups`, `campaigns`, `campaign-assistant`,
+`admin/campaigns`, two new worker jobs) is committed as `12544de` and pushed to
+`origin` — **a remote now exists** (`github.com/HosseinShams9877/Clinic-Projects`),
+which makes the "no remote is configured / `git push` is impossible" claims in the
+entries below stale. The schema landed on **1000 lines exactly**, ADR-0007's
+ceiling, met and not passed.
+
+**The build error was not argon2. It was a client component reaching a
+server-only barrel — the Phase 5 failure, one module later.** `next build` died
+with `Can't resolve '@node-rs/argon2-wasm32-wasi'`, and the chain was
+`booking-dialog.tsx` (client) → `appointments/lib/book` → `@/modules/campaigns`
+→ `@/modules/messages` → `@node-rs/argon2`. The attribution call was the only
+thing `book.ts` needed `campaigns` for.
+
+**Why it matters.** `appointments`, `customers`, `cycles` and `services` are
+client-safe *only while their `lib` reaches no module but `roles-permissions`*.
+That invariant is easy to break with one import and it breaks the whole client
+bundle, not the file you edited. `payments` broke it in Phase 5, `appointments`
+in Phase 7, and **any future module that writes an audit, an attribution or a
+campaign row inherits `messages`/`staff`/`auth` and breaks it again.**
+
+**What to do instead — and the two things that do *not* work.** A lazy
+`await import('@/modules/campaigns')` inside the function body fixes nothing: a
+dynamic import is still resolved for the browser graph. Installing the wasm
+package fixes nothing: argon2 cannot run in the browser at all. The fix is
+Phase 5's — **keep the barrel intact and move the call to the server boundary.**
+Here the attribution moved out of `book.ts` into the `'use server'` booking
+action, called after the write inside the same tenant-scoped transaction, so it
+stays atomic with the slot. `book.ts` no longer imports `campaigns` and the
+module is client-safe again.
+
+**The assistant's guarantee is a barrel, not a comment.** `campaign-assistant`
+re-exports no write, no client and no send — so "the assistant never returns or
+accepts a clinical field" is checkable by the *signature* of
+`interpretCampaignBrief` (DoD 3 asserts it takes no transaction, no tenant, no
+customer id). A barrel that re-exported a write would make the guarantee
+uncheckable. The proposal carries an audience-group *name*, resolved by
+`campaigns` against rows `audience-groups` own.
+
+**The `each-tenant` job books its successor once, in the owning iteration.**
+`audience-groups.refresh` is `09-security.md` §8's named case — every tenant's
+groups re-evaluated, one scoped transaction per tenant. A recurring job cannot
+rewrite its own row (`done` is terminal), so the handler enqueues its successor
+inside the same transaction as the refresh — but the loop runs it once per
+tenant, so a successor booked in every iteration would be a successor per
+tenant. Book it from the owning iteration only.
+
+**Three test files, no more, and the coverage floors stayed red** (sixth phase
+running). The instruction fixed the count at three — the eight audience groups,
+the approval gate, the assistant's closed sets — and said not to chase a number.
+DoD 9 (axe + responsive) is unobserved for the same Chromium reason as every
+phase before it; Phase 11 is where the posture is revisited.
+
+**Tests deleted to get the gate green: none.** The only build failure was the
+import chain above.
+
+---
 
 **The fact.** `npm run build` (24 routes) and `npm run verify` (53 files, 1124
 tests) both exit 0. Phases 4 and 5 are closed in `docs/roadmap/progress.md`,

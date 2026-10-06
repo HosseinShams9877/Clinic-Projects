@@ -21,13 +21,13 @@
 | 4 | Treatment cycles | **Complete** | ۱۴۰۵/۰۷/۱۳ | ۱۴۰۵/۰۷/۱۳ |
 | 5 | Payments and debts | **Complete** | ۱۴۰۵/۰۷/۱۳ | ۱۴۰۵/۰۷/۱۳ |
 | 6 | Messages and notifications | **Complete** | ۱۴۰۵/۰۷/۱۴ | ۱۴۰۵/۰۷/۱۴ |
-| 7 | Campaigns, audiences, assistant | Not started | — | — |
+| 7 | Campaigns, audiences, assistant | **Complete** | ۱۴۰۵/۰۷/۱۴ | ۱۴۰۵/۰۷/۱۴ |
 | 8 | Public site | Not started | — | — |
 | 9 | Customer panel | Not started | — | — |
 | 10 | Reports, settings, tenancy, licensing | Not started | — | — |
 | 11 | Hardening and full verification | Not started | — | — |
 
-**Current phase:** Phase 6 is **complete**. Phase 7 has not started.
+**Current phase:** Phase 7 is **complete**. Phase 8 has not started.
 
 **Legend.** Not started · In progress · Blocked · Complete.
 
@@ -41,16 +41,16 @@
 | Roadmap (`docs/roadmap/`, 3 files) | Complete |
 | Setup guides (`docs/setup/`, 5 files) | Complete |
 | Changelog convention (`docs/changelog/`) | Complete |
-| Phase reports (`reports/`) | Complete for Phases 0–6 |
+| Phase reports (`reports/`) | Complete for Phases 0–7 |
 | Root files (README, .gitignore, .env.example, LICENSE) | Complete |
 | `.claude/` (settings, agents, commands, context, memory) | Complete |
 | Package manifest | Complete — all dependencies pinned, no styled component library |
-| Application code (`src/`) | Complete for Phases 1–6 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, `modules/customers`, `modules/services`, `modules/staff`, `modules/cycles`, `modules/payments`, `modules/debts`, `modules/notifications`, `modules/messages`, the app shell, the four panel shells, the three scheduling pages, the seven customer/service/staff pages, the three cycles pages, the four payments/debts pages, the reception desk, and the `Popover`/`Combobox`/`JalaliDatePicker` controls |
+| Application code (`src/`) | Complete for Phases 1–7 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, `modules/customers`, `modules/services`, `modules/staff`, `modules/cycles`, `modules/payments`, `modules/debts`, `modules/notifications`, `modules/messages`, `modules/audience-groups`, `modules/campaigns`, `modules/campaign-assistant`, the app shell, the four panel shells, the three scheduling pages, the seven customer/service/staff pages, the three cycles pages, the four payments/debts pages, the reception desk, the `admin/campaigns` page, and the `Popover`/`Combobox`/`JalaliDatePicker` controls |
 | Prisma schema | Complete — one portable schema, 29 models, 1000 lines (ADR-0007’s ceiling, not past it), validating as SQLite and PostgreSQL |
 | Migrations | Complete — the SQLite migration list and the PostgreSQL RLS policies |
 | Vazirmatn | Complete — five weights self-hosted in `src/app/fonts/` with the OFL 1.1 licence and authors file |
-| Test suite | 56 files, 1129 tests — complete for Phases 1–5; Phase 6 added the exactly-three tests its instruction fixed (the seven triggers, the consent suppression, the 90-day window and the priority order) |
-| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1129 tests. The coverage thresholds are red; see `../reports/phase-06-report.md` §5 |
+| Test suite | 59 files, 1138 tests — complete for Phases 1–5; Phase 6 added the exactly-three tests its instruction fixed (the seven triggers, the consent suppression, the 90-day window and the priority order), and Phase 7 added its own three (the eight audience groups, the approval gate, the assistant's closed sets) |
+| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1138 tests. The coverage thresholds are red; see `../reports/phase-07-report.md` §6 |
 | End-to-end suite | Written but **not executed** — Playwright's pinned Chromium cannot be downloaded on the build machine. See `../reports/phase-02-report.md` §4 |
 
 Phase 0 produced the specification for the codebase. Phase 1 produced the
@@ -61,8 +61,11 @@ engine and its contact list. Phase 5 produced the ledger — the only writers of
 financial fact, the computed balance, the debt buckets and the nightly
 reconciliation that fails on drift. Phase 6 produced the messaging half of the
 product — the seven triggers, the delivery ledger, consent as a hard filter, the
-90-day window and the one-per-day priority order, and the desk's own morning. What
-did not run in this environment is recorded in `../reports/phase-06-report.md` §6 — the e2e execution, the behavioural
+90-day window and the one-per-day priority order, and the desk's own morning.
+Phase 7 produced the campaign half — the eight built-in audience groups and their
+nightly refresh, the campaign and its two-column approval gate, and the assistant
+that reads a Persian brief into a proposal without ever touching a clinical fact.
+What did not run in this environment is recorded in `../reports/phase-07-report.md` §7 — the e2e execution, the behavioural
 cross-tenant suite against a live PostgreSQL, and the coverage floors the phase left
 red by instruction. Only the last is a decision; the first two are environmental.
 
@@ -310,6 +313,48 @@ silently changed which message a customer receives would be invisible in review.
 
 ---
 
+## Phase 7 — what was delivered
+
+**Complete**, started and completed ۱۴۰۵/۰۷/۱۴. The closing report is
+`../reports/phase-07-report.md`; §4 records the one build failure a later phase
+has to know about — the argon2 import chain, which was an import chain and not an
+argon2 problem, fixed by moving the campaign attribution out of
+`appointments/lib/book.ts` and into the server-only booking action.
+
+- [x] **DoD 1** — all eight built-in audience groups evaluate to the correct sets:
+  exactly one customer per group and nobody else, the inactive customer and the
+  lead excluded from every group, and a cycle whose customer already booked
+  excluded
+- [x] **DoD 2** — no campaign dispatches before approval: a draft is never scanned
+  even when its `scheduledAt` has passed, a row forced to `ACTIVE` without the two
+  approval columns is refused, and a campaign sends only through the real path —
+  submit, a second person approves, activate
+- [x] **DoD 3** — the assistant takes no transaction, no tenant and no customer id,
+  rejects a clinical field at compile time and at read time, and answers a proposal
+  whose fields stay inside the closed sets
+- [x] `audience-groups`, `campaigns` and `campaign-assistant` behind their barrels,
+  and `admin/campaigns` — the builder, the assistant and the results table
+- [x] The `audience-groups.refresh` and `campaigns.dispatch` worker jobs, taking the
+  registry from four kinds to six
+- [ ] The axe and responsive pass over the campaign page — same Chromium blocker as
+      every phase before it, sixth phase running
+
+**Three modules, one page, two worker jobs.** `audience-groups` owns the eight
+built-in groups as queries the tenant owns — seeded by the page and not by a
+migration, so a later release can add a ninth. `campaigns` owns the approval gate,
+and the attribution that links a booking to the campaign that last reached its
+customer. `campaign-assistant` owns one thing — reading a Persian brief into a
+proposal — and its barrel re-exports no write, so the guarantee is checkable. The
+schema reached **1000 lines exactly**, ADR-0007's ceiling, met and not passed.
+
+**OQ-2's remaining half is settled in code.** The two tables the open question left
+to this phase — campaign types and audience groups — are enforced in `src/core/constants`
+and `src/modules/audience-groups` and exercised by DoD 1. What stays open is the
+behavioural check against the demo, which is the same Chromium and PostgreSQL gap as
+every other phase, not a code gap.
+
+---
+
 ## Nothing is blocked
 
 The session that opened this phase had no working package manager, so nothing had
@@ -320,7 +365,7 @@ Node 24.19.0, npm 11.17.0 and git 2.50.1 all run, and the whole gate passes:
 npm run build    →  24 routes, exit 0
 npm run verify   →  db:generate · typecheck · lint · check:files · check:i18n
                    check:overrides · check:schema · check:rls · test
-                   56 files, 1129 tests, exit 0
+                   59 files, 1138 tests, exit 0
 ```
 
 One consequence worth recording: `src/generated/` is ignored, and `verify`
@@ -351,7 +396,7 @@ questions from Phase 0 stand, and the first half of one of them is now closed:
 | Question | Needed by | State |
 |---|---|---|
 | OQ-1 — public page count (six vs eight) | Phase 8 | open |
-| OQ-2 — the two tables damaged by PDF extraction | before Phase 1 | **half closed.** The two tables it was raised about are recovered and now enforced in code: the 16 permissions and 3 role defaults in `src/core/constants/enums.ts`, and the 8 toggles with their default on/off states in `src/modules/roles-permissions` (the 96-case matrix in `tests/matrix.test.ts` transcribes `04-roles-permissions.md` §2 independently of the implementation). **The other half is open**: two of the four tables OQ-2 asked to be re-checked are now settled in code — the automatic message kinds with their triggers, and the send rules with their order, both in `src/core/constants`. The other two — campaign types and audience groups — are Phase 7's and remain unchecked against the demo. |
+| OQ-2 — the two tables damaged by PDF extraction | before Phase 1 | **closed by Phase 7.** The two tables it was raised about are recovered and enforced in code: the 16 permissions and 3 role defaults in `src/core/constants/enums.ts`, and the 8 toggles with their default on/off states in `src/modules/roles-permissions` (the 96-case matrix in `tests/matrix.test.ts` transcribes `04-roles-permissions.md` §2 independently of the implementation). The other two of the four — the automatic message kinds with their triggers, and the send rules with their order, both in `src/core/constants` — were settled by Phase 6. The last two — campaign types and audience groups — are settled by this phase in `src/core/constants` and `src/modules/audience-groups`, exercised by the Phase 7 DoD 1 test. What remains open is not a table but the *behavioural* check against the demo, which is the Chromium and PostgreSQL gap every phase records. |
 | OQ-3 — the recomputable balance cache | Phase 5 | **closed by Phase 5.** The cache is written in the same transaction as the receipt, re-derived nightly by `payments.reconcile`, and the reconciliation throws when it finds drift |
 
 ---
