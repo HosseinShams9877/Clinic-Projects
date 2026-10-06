@@ -71,6 +71,8 @@ export {
 
 export { customerMessageHistory, lastCampaignSendFor, lastDeliveredSend, sendsToday } from './lib/ledger'
 
+export { flushSendQueue, runAutomaticDispatch } from './lib/dispatch'
+
 export {
   recordCampaignSuppression,
   sendCampaignMessage,

@@ -55,6 +55,18 @@ import {
   MESSAGES as DEBTS_MESSAGES,
   type DebtsMessageKey,
 } from '@/modules/debts'
+import {
+  MESSAGES as CAMPAIGN_MESSAGES,
+  type CampaignsMessageKey,
+} from '@/modules/campaigns'
+import {
+  MESSAGES as AUDIENCE_MESSAGES,
+  type AudienceGroupsMessageKey,
+} from '@/modules/audience-groups'
+import {
+  MESSAGES as ASSISTANT_MESSAGES,
+  type CampaignAssistantMessageKey,
+} from '@/modules/campaign-assistant'
 
 /**
  * The Persian sentence for a failure one of the seven modules raised, or the catalog's
@@ -66,6 +78,9 @@ import {
 export function moduleFailureMessage(error: unknown): string {
   if (!isAppError(error)) return UNEXPECTED
   const key = error.messageKey
+  if (isAssistantKey(key)) return ASSISTANT_MESSAGES[key]
+  if (isAudienceKey(key)) return AUDIENCE_MESSAGES[key]
+  if (isCampaignsKey(key)) return CAMPAIGN_MESSAGES[key]
   if (isDebtsKey(key)) return DEBTS_MESSAGES[key]
   if (isPaymentsKey(key)) return PAYMENTS_MESSAGES[key]
   if (isCyclesKey(key)) return CYCLES_MESSAGES[key]
@@ -82,6 +97,21 @@ const UNEXPECTED = VALIDATION_MESSAGES['error.unhandledCase']
 /** Whether the key is one `debts`'s catalog holds a sentence for. */
 function isDebtsKey(key: string): key is DebtsMessageKey {
   return key in DEBTS_MESSAGES
+}
+
+/** Whether the key is one `campaign-assistant`'s catalog holds a sentence for. */
+function isAssistantKey(key: string): key is CampaignAssistantMessageKey {
+  return key in ASSISTANT_MESSAGES
+}
+
+/** Whether the key is one `audience-groups`'s catalog holds a sentence for. */
+function isAudienceKey(key: string): key is AudienceGroupsMessageKey {
+  return key in AUDIENCE_MESSAGES
+}
+
+/** Whether the key is one `campaigns`'s catalog holds a sentence for. */
+function isCampaignsKey(key: string): key is CampaignsMessageKey {
+  return key in CAMPAIGN_MESSAGES
 }
 
 /** Whether the key is one `payments`'s catalog holds a sentence for. */

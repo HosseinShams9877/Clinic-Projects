@@ -55,6 +55,7 @@ export type {
 export type { AudienceGroupsModule } from './types'
 
 export { AUDIENCE_GROUP_DESCRIPTIONS, AUDIENCE_GROUP_LABELS, MESSAGES } from './catalog'
+export type { AudienceGroupsMessageKey } from './catalog'
 
 export {
   AUDIENCE_FIELDS,

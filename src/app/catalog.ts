@@ -986,3 +986,112 @@ export const DESK_PAGE = {
   /** The page's whole point, shown when every section is empty. */
   empty: 'کار امروز تمام است.',
 } as const satisfies Record<string, unknown>
+
+/**
+ * The campaigns surface — `02-architecture.md` §9's `admin/campaigns.html`, and the one
+ * page the eighth module's three halves meet on: the builder, the assistant, and the
+ * results table.
+ *
+ * The page's own copy is the chrome around the three, for the same reason the other
+ * pages' is: the modules own the sentences their functions *raise* (`campaigns.notApproved`
+ * and its neighbours, through `MESSAGES`), while a page's titles, field labels, button
+ * labels and empty states are composition the app tier does from those.
+ *
+ * The assistant's own two sentences are not restated here either. The low-confidence
+ * hint is `campaign-assistant`'s catalog, because it is the module's own voice — the
+ * assistant naming its own uncertainty — and the brief's field error is the same
+ * module's `MESSAGES`.
+ */
+export const CAMPAIGNS_PAGE = {
+  title: `کمپین${ZWNJ}ها`,
+  lead: 'ساخت کمپین با کمک دستیار، پیش‌نمایش تعداد مخاطبان، تأیید و فعال‌سازی، و گزارش ارسال‌ها.',
+  builder: {
+    title: 'کمپین جدید',
+    lead: 'متن کوتاهی بنویسید؛ دستیار یک پیشنهاد می‌دهد. می‌توانید آن را ویرایش کنید.',
+    /** The assistant's box, which the manager fills before the form is. */
+    assistant: {
+      title: 'دستیار کمپین',
+      lead: 'هدف کمپین را به فارسی بنویسید تا گروه مخاطبان و متن پیشنهاد شوند.',
+      placeholder: 'مثلاً: یک کمپین بساز برای همه مشتریانی که تاریخ تولدشان در مهر است',
+      interpret: 'پیشنهاد بگیر',
+      /** The label of the button that takes a proposal into the builder's fields. */
+      apply: 'اعمال پیشنهاد',
+    },
+    fields: {
+      name: 'نام کمپین',
+      type: 'نوع کمپین',
+      channel: 'کانال ارسال',
+      audienceGroup: 'گروه مخاطبان',
+      messageText: 'متن پیام',
+      scheduleKind: 'زمان‌بندی',
+      localDate: 'تاریخ ارسال',
+      localTime: 'ساعت ارسال',
+      dailyCap: 'سقف ارسال روزانه',
+      isRecurring: 'تکرار شونده',
+    },
+    /** The schedule field's three options, keyed as the enum is. */
+    scheduleOptions: {
+      ONE_TIME: 'یک‌بار',
+      DAILY_AT: 'روزانه در ساعت مشخص',
+      MONTHLY_DAY: 'ماهانه در روز مشخص',
+    },
+    hints: {
+      /** The count the preview renders beside the group the manager chose. */
+      audienceCount: (n: number) => `${toPersianDigits(n)} مشتری در این گروه`,
+      /** The count's loading state, before a number arrives. */
+      audienceCountLoading: 'در حال شمارش مخاطبان…',
+      /** The `{name}` and `{amount}` placeholders the text may carry. */
+      placeholders: 'از {name} برای نام مشتری و {amount} برای مبلغ مانده استفاده کنید.',
+      dailyCap: 'خالی یعنی بدون سقف.',
+    },
+    validation: {
+      /** The date the schedule kinds below a recurring one need and the form did not send. */
+      scheduleRequired: 'تاریخ ارسال کمپین الزامی است.',
+      /** A daily cap that is not a whole number, which the column cannot store. */
+      dailyCap: 'سقف ارسال روزانه باید یک عدد صحیح باشد.',
+    },
+    actions: {
+      create: 'ساخت پیش‌نویس کمپین',
+      created: 'پیش‌نویس کمپین ساخته شد.',
+      cancel: 'انصراف',
+    },
+  },
+  /** The row's own five states, each the one action a state permits. */
+  rowActions: {
+    submit: 'ارسال برای تأیید',
+    submitted: 'کمپین برای تأیید ارسال شد.',
+    approve: 'تأیید',
+    approved: 'کمپین تأیید شد.',
+    activate: 'فعال کردن',
+    activated: 'کمپین فعال شد.',
+    pause: 'توقف موقت',
+    paused: 'کمپین متوقف شد.',
+    resume: 'از سرگیری',
+    resumed: 'کمپین از سر گرفته شد.',
+    /** The gate's own sentence, when the approver is the creator. */
+    cannotApproveOwn: 'تأیید کمپین باید توسط شخص دیگری غیر از سازنده آن انجام شود.',
+  },
+  /** The results table's own columns and counts. */
+  results: {
+    title: 'گزارش کمپین‌ها',
+    columns: {
+      name: 'نام کمپین',
+      type: 'نوع',
+      audience: 'گروه مخاطبان',
+      status: 'وضعیت',
+      schedule: 'زمان‌بندی',
+      sent: 'ارسال شده',
+      suppressed: 'متوقف شده',
+      appointments: 'نوبت‌های ناشی از کمپین',
+      createdAt: 'تاریخ ساخت',
+      actions: 'عملیات',
+    },
+    /** The two counts a row carries, as one line each. */
+    counts: {
+      none: 'بدون ارسال',
+      one: 'یک ارسال',
+      many: (n: number) => `${toPersianDigits(n)} ارسال`,
+    },
+    empty: 'هنوز کمپینی ساخته نشده است.',
+  },
+} as const satisfies Record<string, unknown>

@@ -31,8 +31,11 @@
  * night on the same clock.
  */
 
-import type { TransactionClient } from '@/core/db/scope'
-import { requireTenantContext } from '@/core/db'
+// `requireTenantContext` comes from the scope and not the barrel, because the barrel
+// re-exports the client and the adapter it builds, and this module is reachable from
+// client components through the modules that evaluate a group — a module-scope reach
+// for the adapter would pull it into the browser bundle.
+import { requireTenantContext, type TransactionClient } from '@/core/db/scope'
 import { JobStatus } from '@/worker/status'
 import { enqueueJob } from '@/worker/queue'
 import type { JobHandler } from '@/worker/registry'

@@ -97,6 +97,42 @@ export const RECURRING_PHRASES: ReadonlyArray<{
 export const ONE_TIME_PHRASES: readonly string[] = ['فقط یک بار', 'یک‌بار', 'یک بار']
 
 /**
+ * The Jalali month names a brief may name, as the assistant reads a date out of one.
+ *
+ * Scenario four's sentence — «تاریخ تولدشان در مهر است» — names a month and no day, and
+ * the month is the whole of the date a birthday campaign needs: the group is
+ * «متولدین این ماه» and the run is the month's first morning. The list is here and not
+ * in `core/localization` because a calendar's month names are a calendar's vocabulary
+ * and the assistant's reading of a sentence is its own.
+ */
+export const JALALI_MONTH_PHRASES: ReadonlyArray<{
+  readonly month: number
+  readonly phrases: readonly string[]
+}> = [
+  { month: 1, phrases: ['فروردین'] },
+  { month: 2, phrases: ['اردیبهشت'] },
+  { month: 3, phrases: ['خرداد'] },
+  { month: 4, phrases: ['تیر'] },
+  { month: 5, phrases: ['مرداد'] },
+  { month: 6, phrases: ['شهریور'] },
+  { month: 7, phrases: ['مهر'] },
+  { month: 8, phrases: ['آبان'] },
+  { month: 9, phrases: ['آذر'] },
+  { month: 10, phrases: ['دی'] },
+  { month: 11, phrases: ['بهمن'] },
+  { month: 12, phrases: ['اسفند'] },
+]
+
+/**
+ * The message text the assistant proposes when no type matched, which is a text the
+ * manager always rewrites — the point of the low-confidence flag is that the proposal
+ * is a starting shape and not an answer, and a text that names no purpose is the honest
+ * shape for a brief that named none.
+ */
+export const ASSISTANT_FALLBACK_TEXT =
+  '{name} عزیز، پیشنهاد ویژه‌ای از کلینیک برای شما داریم. برای رزرو نوبت با ما تماس بگیرید.'
+
+/**
  * The sentence the assistant names its own uncertainty with, for a brief it could not
  * match to a purpose. The page renders it beside the proposal, so a manager reading the
  * type knows it is a default and not a reading of what they wrote.

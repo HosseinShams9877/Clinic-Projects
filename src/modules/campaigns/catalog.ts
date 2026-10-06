@@ -22,6 +22,7 @@
  */
 
 import type {
+  AudienceGroupKey,
   CampaignScheduleKind,
   CampaignStatus,
   CampaignType,
@@ -101,7 +102,7 @@ export const CAMPAIGN_TYPE_DESCRIPTIONS: Readonly<Record<CampaignType, string>> 
  * audience that purpose is for. A manager may change it; the preselect is what makes
  * the eight types different from one another on the first interaction.
  */
-export const CAMPAIGN_TYPE_DEFAULT_GROUP: Readonly<Record<CampaignType, string>> = {
+export const CAMPAIGN_TYPE_DEFAULT_GROUP: Readonly<Record<CampaignType, AudienceGroupKey>> = {
   BIRTHDAY: 'BIRTHDAY',
   WINBACK: 'DORMANT',
   NEXT_SESSION: 'CYCLE_DUE',

@@ -185,6 +185,7 @@ async function debtors({ tx, tenantId, now }: EvaluatorArgs): Promise<readonly s
 
   const debtors: string[] = []
   for (const row of appointments) {
+    if (row.customerId === null) continue
     const sum = byAppointment.get(row.id)
     const { balance } = asBalance(
       row.priceAtBooking,

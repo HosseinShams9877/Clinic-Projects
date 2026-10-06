@@ -44,6 +44,7 @@ import type {
   AudienceField,
   AudienceOperator,
   AudienceValue,
+  ConditionsPredicate,
   GroupPredicate,
 } from '../types'
 
@@ -203,7 +204,7 @@ export function conditionsToFilters(
  * A built-in's predicate is a key, and an ad-hoc group's is conditions; the two are
  * not interchangeable, and the builder offers the conditions form only.
  */
-export function isAdHocPredicate(predicate: GroupPredicate): boolean {
+export function isAdHocPredicate(predicate: GroupPredicate): predicate is ConditionsPredicate {
   return predicate.kind === 'CONDITIONS'
 }
 
