@@ -175,8 +175,17 @@ const PANEL_PAGES: Readonly<Record<Panel, readonly NavItem[]>> = {
 
   /* §9's reception panel — 6 pages. The secretary's default is §2.1's 1–12, so
      everything below shows for the default role; the entries are still gated, so a
-     revoked override removes the link and the page it leads to together. */
+     revoked override removes the link and the page it leads to together.
+
+     The desk is the panel's own home and the one page that needs no permission of its
+     own: it composes the queues the permissions below gate, and a section a role
+     cannot act on is a section the page does not render rather than one it refuses. */
   reception: [
+    {
+      label: NAV_LABELS.desk,
+      href: '/reception/desk',
+      icon: 'home',
+    },
     { label: PANEL_HOMES.reception, href: '/reception', icon: 'appointment' },
     {
       label: NAV_LABELS.appointments,

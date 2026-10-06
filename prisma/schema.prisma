@@ -132,6 +132,10 @@ model TenantSettings {
   sendWindowStart        String?
   sendWindowEnd          String?
   dailyMessageCap        Int?
+  // The «پیامها» tab's channel map: which of SMS / WhatsApp each of the seven
+  // automatic messages goes on, as JSON the `messages` module parses. NULL is
+  // every automatic message on SMS.
+  messageSettings        String?
 
   // The booking mode `06-constants.md` §4.4 defines — which of the three ways the
   // clinic offers its time a customer booking goes through. NULL is the default,
@@ -487,9 +491,9 @@ model Customer {
 }
 
 // Channel consent, with the timestamp and the source that justify it (§6).
-// `02-architecture.md` and immutable rule 5: customer consent outranks the
-// clinic, so the row is what a send is checked against, and a withdrawn consent
-// is a row with `revokedAt` set rather than a deleted row.
+// `02-architecture.md` and immutable rule 5: customer consent outranks the clinic,
+// so the row is what a send is checked against, and a withdrawn consent is a row
+// with `revokedAt` set rather than a deleted row.
 model ConsentRecord {
   id         String   @id @default(cuid())
   tenantId   String
@@ -546,7 +550,6 @@ model BeforeAfterImage {
 // clinic-local Jalali values, which is what a day grid compares and what makes
 // the «۱۰:۳۰، ۲۹ شهریور» identity of the slot a string, not a timezone
 // conversion (§3.1).
-//
 // `priceAtBooking` is snapshotted: a later price change must not alter what a
 // past appointment charged (§4.2). `slotKey` holds `scheduledAt` as an ISO-8601
 // UTC string for a real booking — see the escape-hatch note at the top.
@@ -814,9 +817,9 @@ model TreatmentCycle {
 
 // §2.5. Every payment attaches to **one specific appointment**, never merely to
 // the customer, which is what makes a per-appointment balance possible. A
-// discount is `discountAmount` on this row — part of the amount charged, not an
-// addition to it — and `discountByUserId` records who applied it (immutable rule
-// 7). There is no delete path: a correction is a new `REFUND` row.
+// discount is `discountAmount` on this row — part of the amount charged — and
+// `discountByUserId` records who applied it (immutable rule 7). There is no
+// delete path: a correction is a new `REFUND` row.
 model Payment {
   id       String @id @default(cuid())
   tenantId String
@@ -875,8 +878,7 @@ model MessageTemplate {
 
 // §2.6. `status` cannot reach `ACTIVE` without `approvedByUserId` and
 // `approvedAt` — immutable rule 4 ("no bulk send without human approval") is a
-// schema-level constraint, not a UI convention, and the module layer refuses the
-// transition that would break it.
+// schema-level constraint, not a UI convention.
 //
 // `audienceGroupId` points at a **query** (§2.7), not a list. `audienceLockedAt`
 // records the moment the audience was frozen for a one-time send.
@@ -928,11 +930,9 @@ model Campaign {
 
 // The delivery ledger (§2.6). This is what makes "a person receives no duplicate
 // message within 90 days" enforceable, and what lets the customer profile list
-// every message ever sent. `suppressedReason` is why a message was **not** sent —
-// no consent, the daily cap, outside the send window, or inside the duplicate
-// window — and §7.6 makes the row rather than the send the unit of record: a
-// message without consent exists here as `SUPPRESSED`, so the decision is
-// auditable instead of invisible.
+// every message ever sent. `suppressedReason` is why a message was **not** sent,
+// and §7.6 makes the row rather than the send the unit of record: a message
+// without consent exists here as `SUPPRESSED`, so the decision is auditable.
 model MessageSend {
   id       String @id @default(cuid())
   tenantId String

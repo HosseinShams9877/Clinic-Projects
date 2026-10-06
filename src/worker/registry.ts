@@ -51,6 +51,10 @@ import type { TransactionClient } from '@/core/db/scope'
 import { APPOINTMENT_LIFECYCLE_JOB_KIND, lifecycleJobHandler } from '@/modules/appointments'
 import { CYCLE_DUE_JOB_KIND, cycleDueJobHandler } from '@/modules/cycles'
 import { PAYMENTS_RECONCILE_JOB_KIND, reconcileJobHandler } from '@/modules/payments'
+import {
+  MESSAGES_DISPATCH_JOB_KIND,
+  messagesDispatchJobHandler,
+} from '@/modules/messages'
 
 import type { ClaimedJob } from './queue'
 
@@ -132,12 +136,14 @@ export function build(entries: UnbuiltJobRegistry): JobRegistry {
  * existed, and a handler registered for a module that is not written is a
  * placeholder by another name. Phase 2 landed the first one — `appointments`'
  * lifecycle sweep — Phase 4 the second, `cycles`' hourly next-due sweep, and Phase 5
- * the third, `payments`' nightly reconciliation. The three after it arrive with
- * their own modules the same way: a handler is imported from the module's barrel,
- * because the module is the only place the job's own vocabulary is offered from.
+ * the third, `payments`' nightly reconciliation. Phase 6 lands the fourth,
+ * `messages`' fifteen-minute dispatch, and the two after it arrive with their own
+ * modules the same way: a handler is imported from the module's barrel, because the
+ * module is the only place the job's own vocabulary is offered from.
  */
 export const JOB_REGISTRY: JobRegistry = build({
   [APPOINTMENT_LIFECYCLE_JOB_KIND]: lifecycleJobHandler,
   [CYCLE_DUE_JOB_KIND]: cycleDueJobHandler,
   [PAYMENTS_RECONCILE_JOB_KIND]: reconcileJobHandler,
+  [MESSAGES_DISPATCH_JOB_KIND]: messagesDispatchJobHandler,
 })

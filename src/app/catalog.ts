@@ -21,7 +21,7 @@
  * the reason the catalog exists: this is where the literals are allowed to be.
  */
 
-import { ZWNJ } from '@/core/localization'
+import { toPersianDigits, ZWNJ } from '@/core/localization'
 
 /** The product's name. It is the tab title, the bookmark, and the install name. */
 export const APP_NAME = 'سامانه مدیریت کلینیک'
@@ -156,6 +156,8 @@ export const PANEL_SCOPE = {
  * staff's «نوبت‌ها».
  */
 export const NAV_LABELS = {
+  /** The reception panel's desk — the day's work list, named for the page itself. */
+  desk: 'میز کار امروز',
   /** The panel's home. The label is `PANEL_HOMES[panel]`, not this one. */
   appointments: `نوبت${ZWNJ}ها`,
   customers: 'مشتریان',
@@ -929,4 +931,58 @@ export const PAYMENTS_PAGE = {
     settled: 'هیچ بدهی بازی ندارید.',
   },
   empty: 'هنوز پرداختی ثبت نشده است.',
+} as const satisfies Record<string, unknown>
+
+/**
+ * The secretary's work list — `02-architecture.md` §9's `reception/desk.html`, and
+ * the one page that names the day's whole work.
+ *
+ * The desk is a list and not a dashboard: each section is a queue the receptionist
+ * clears, and the day is done when the page is empty. The copy is phrased as counts
+ * rather than as prose, because a count is what a receptionist calls down and the
+ * empty state is the product's answer to the question the page exists for.
+ */
+export const DESK_PAGE = {
+  title: 'میز کار امروز',
+  lead: 'کارهای امروز: نوبت‌ها، نتایج ثبت‌نشده، تماس دوره‌ها، مانده‌حساب، لیدهای جدید و پیام‌های امروز.',
+  /** The six sections, as the page orders them — the day's own order of work. */
+  sections: {
+    appointments: 'نوبت‌های امروز',
+    unrecorded: 'نتایج ثبت‌نشده',
+    arrivals: 'منتظر ورود',
+    cycles: 'تماس دوره‌های درمان',
+    debts: 'مانده‌حساب سررسید شده',
+    leads: 'لیدهای جدید',
+    reminders: 'پیام‌های امروز',
+  },
+  /** The one-line summary the section's header carries beside its name. */
+  counts: {
+    one: 'یک مورد',
+    /** Persian plural, for the counts above one. */
+    many: (n: number) => `${toPersianDigits(n)} مورد`,
+    none: 'موردی نیست',
+  },
+  columns: {
+    time: 'ساعت',
+    name: 'نام و نام خانوادگی',
+    mobile: 'موبایل',
+    service: 'خدمت',
+    doctor: 'پزشک',
+    status: 'وضعیت',
+    kind: 'نوع پیام',
+    text: 'متن پیام',
+  },
+  /** The cycle row's service and the session the desk owes a call about, one line. */
+  sessionOf: (serviceName: string, sessionNumber: number) =>
+    `${serviceName} — جلسه ${toPersianDigits(sessionNumber)}`,
+  /** The row's link into the page that owns the work. */
+  links: {
+    allAppointments: 'همه نوبت‌ها',
+    allCycles: 'همه دوره‌ها',
+    allDebts: 'همه مانده‌حساب',
+    allLeads: 'همه لیدها',
+    allCustomers: 'همه مشتریان',
+  },
+  /** The page's whole point, shown when every section is empty. */
+  empty: 'کار امروز تمام است.',
 } as const satisfies Record<string, unknown>
