@@ -301,8 +301,10 @@ const AUDIENCE_GROUP_KEYS = [
  * A unique slug for an ad-hoc group, which the UNIQUE `(tenantId, key)` pair requires
  * and which nothing else reads.
  */
+let slugCounter = 0
 function randomSlug(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  slugCounter += 1
+  return `adhoc-${slugCounter.toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 /** The row as the module's own shape, with the predicate parsed. */

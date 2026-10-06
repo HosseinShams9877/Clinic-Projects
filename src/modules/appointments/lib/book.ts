@@ -65,7 +65,6 @@ import {
   type AppErrorOptions,
 } from '@/core/types'
 import { requirePermission } from '@/modules/roles-permissions'
-import { attributeAppointmentToCampaign } from '@/modules/campaigns'
 
 import type { AppointmentsMessageKey } from '../catalog'
 import { blockRanges, type Range } from './slots'
@@ -123,6 +122,14 @@ export interface CreatedAppointment {
  * every caller writes the same row. The role is therefore not a parameter of the
  * record, and a test that books the same slot three times with three contexts gets
  * three rows that differ only in their ids.
+ *
+ * The campaign attribution is the *caller's* to make, not this function's. It used to
+ * run here, and that made this file import `@/modules/campaigns`, which imports
+ * `@/modules/messages`, which reaches `@node-rs/argon2` — a Node-only module that
+ * cannot be in the browser graph. `book.ts` is reachable from client components (the
+ * booking dialog), so the static import broke `next build`. The attribution now runs
+ * in the Server Action (`src/app/_appointments/actions.ts`), which is server-only and
+ * may import whichever barrel it needs.
  *
  * @throws PermissionError — the caller holds no `manage_appointments`.
  * @throws DomainError, as `appointment.slotTaken` — the slot was booked between the
@@ -260,10 +267,9 @@ async function loadSlotDay(
  * Writes the booking row, converting a unique-index violation into the catalog's
  * sentence for the race the index settled.
  *
- * A booking whose source is a campaign is attributed to the campaign that last reached
- * its customer, which is the one fact the results table names a campaign by (`campaigns`'s
- * own attribution read, called here because the booking is the one path that knows the
- * appointment's origin).
+ * No campaign attribution runs here — see the note on `bookAppointment`. The caller
+ * that owns the attribution is the Server Action, which is server-only; this file is
+ * reachable from the browser and may not import a module that reaches argon2.
  */
 async function createBookingRow(
   args: BookArgs,
@@ -273,7 +279,7 @@ async function createBookingRow(
   const slotKey = scheduledAt.toISOString()
 
   try {
-    const created = await args.tx.appointment.create({
+    return await args.tx.appointment.create({
       data: {
         tenantId: args.ctx.tenantId,
         clinicId: args.clinicId,
@@ -295,16 +301,6 @@ async function createBookingRow(
       },
       select: APPOINTMENT_SELECT,
     })
-
-    await attributeAppointmentToCampaign({
-      tx: args.tx,
-      tenantId: args.ctx.tenantId,
-      appointmentId: created.id,
-      customerId: args.customerId,
-      source: sourceOrDefault(args.source),
-    })
-
-    return created
   } catch (error) {
     if (isUniqueViolation(error)) {
       throw appointmentError(

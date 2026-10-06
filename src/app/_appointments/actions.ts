@@ -8,6 +8,15 @@
  * because the module is where those live and an action that re-implemented a rule
  * would be the second implementation that drifts.
  *
+ * ## Why the campaign attribution lives here and not in the module
+ *
+ * `attributeAppointmentToCampaign` belongs to `campaigns`, which imports `messages`,
+ * which reaches `@node-rs/argon2` — a Node-only module. The appointments *module* is
+ * reachable from client components (the booking dialog), so the attribution cannot
+ * live in `book.ts`: a static import there puts argon2 in the browser graph and
+ * `next build` fails. This action is server-only, so the attribution runs here, in
+ * the same transaction that wrote the booking row, immediately after the row exists.
+ *
  * ## Why every action resolves the panel again
  *
  * The shell resolved the same cookie a moment ago, and this is the same one indexed
@@ -73,6 +82,7 @@ import {
   recordNoShow,
   recordResult,
 } from '@/modules/appointments'
+import { attributeAppointmentToCampaign } from '@/modules/campaigns'
 import { loadBookableService } from '@/modules/services'
 import { noteCycleBooking, recordCompletedSession } from '@/modules/cycles'
 import type { Panel } from '@/app/_shell/navigation'
@@ -177,6 +187,17 @@ function revalidateCycles(): void {
 }
 
 /**
+ * Re-renders the manager's campaign page, which the attribution may have moved.
+ *
+ * The attribution links an appointment to a campaign, and the manager's results table
+ * names the resulting count. A booking that attributed is a count the table must show,
+ * so the path is revalidated on the same rule as the three above.
+ */
+function revalidateCampaigns(): void {
+  revalidatePath('/admin/campaigns')
+}
+
+/**
  * The customer a booking is for — the id a caller already holds, or the mobile the desk
  * typed.
  *
@@ -215,6 +236,10 @@ async function resolveBookingCustomer(args: {
  *
  * The amounts come from the service row and from nowhere else (see the header), and
  * the customer is resolved by mobile because the mobile is the identity.
+ *
+ * The attribution runs here and not in the module (see the header): the appointment
+ * exists after `bookAppointment` returns, and the campaign that last reached the
+ * customer is named by the source the desk sent.
  */
 export async function createBookingAction(
   panel: Panel,
@@ -240,6 +265,14 @@ export async function createBookingAction(
       cycleId: input.cycleId,
     })
 
+    await attributeAppointmentToCampaign({
+      tx,
+      tenantId: ctx.tenantId,
+      appointmentId: created.id,
+      customerId,
+      source: AppointmentSource.Reception,
+    })
+
     if (input.cycleId !== undefined) {
       // Rule 5's first exit, in the transaction that wrote the slot: the customer who
       // just booked is not a customer the desk should be calling.
@@ -251,6 +284,7 @@ export async function createBookingAction(
   if (!('id' in result)) return result
   revalidateAppointments()
   revalidateCycles()
+  revalidateCampaigns()
   return { ok: true, appointmentId: result.id }
 }
 
@@ -281,6 +315,14 @@ export async function quickBookAction(panel: Panel, input: BookingInput): Promis
       cycleId: input.cycleId,
     })
 
+    await attributeAppointmentToCampaign({
+      tx,
+      tenantId: ctx.tenantId,
+      appointmentId: created.id,
+      customerId,
+      source: AppointmentSource.Reception,
+    })
+
     if (input.cycleId !== undefined) {
       await noteCycleBooking({ tx, tenantId: ctx.tenantId, cycleId: input.cycleId })
     }
@@ -290,6 +332,7 @@ export async function quickBookAction(panel: Panel, input: BookingInput): Promis
   if (!('id' in result)) return result
   revalidateAppointments()
   revalidateCycles()
+  revalidateCampaigns()
   return { ok: true, appointmentId: result.id }
 }
 

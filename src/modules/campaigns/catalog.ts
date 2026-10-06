@@ -26,7 +26,7 @@ import type {
   CampaignScheduleKind,
   CampaignStatus,
   CampaignType,
-  Channel,
+
 } from '@/core/constants'
 import { ZWNJ } from '@/core/localization'
 

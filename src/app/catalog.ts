@@ -1,25 +1,4 @@
-/**
- * The document-level Persian strings.
- *
- * One of Phase 1's rules is that **no Persian string literal appears in a
- * component** — it comes from the catalog. `layout.tsx` is a component, and its
- * `metadata` block is user-visible text: it is the browser tab title, the
- * bookmark, and the line a search engine shows. So it belongs here.
- *
- * It is a file in `src/app/` rather than in `@/core/localization/catalog` because
- * of the dependency direction (`02-architecture.md` §10 rule 3): `core` may not
- * know about `modules`, and it certainly may not know the product's own name. The
- * app tier owns its document metadata; `core` owns the vocabulary that is shared
- * by everything below it.
- *
- * `07-localization.md` §7.2 namespaces the catalog per module and specifies that
- * it is "a plain object, not a runtime lookup with a fallback chain". These are
- * plain strings, exported, and imported where they are used — the same shape, one
- * level up.
- *
- * `scripts/check-i18n.mjs` excludes this file from the Persian-literal rule for
- * the reason the catalog exists: this is where the literals are allowed to be.
- */
+
 
 import { toPersianDigits, ZWNJ } from '@/core/localization'
 
@@ -45,47 +24,7 @@ export const APP_TITLE_TEMPLATE = `%s | ${APP_NAME}`
  */
 export const APP_DESCRIPTION = `سامانه مدیریت نوبت، پرونده مشتریان و پیگیری درمان کلینیک${ZWNJ}های زیبایی`
 
-/* ─────────────────────────────────────────────────────────────────────────────
- * The surfaces of Phase 1: the two ways in, the two login forms, and the four
- * panel shells.
- *
- * Everything below is app-tier copy. The module catalogs own a module's own
- * vocabulary — `LOGIN_LABELS` belongs to `auth` — and this file owns the copy the
- * app tier composes *from* those modules: the panel names, the navigation labels
- * and the sentences a form needs that no module raises. `02-architecture.md` §6
- * puts composition in `src/app/`, and copy is composition, not business logic.
- *
- * ## Why the panel names and the nav labels are here and not in the modules
- *
- * The page inventory (`02-architecture.md` §9) is the source of truth for which
- * pages belong to which panel, and it is expressed in routes, not in copy: the
- * document names `admin/debts.html` and never names the Persian on the link to it.
- * The routes are the app tier's, so the labels on them are too. A label that lived
- * in `debts`'s catalog would be a label Phase 3's `debts` module would have to
- * agree with, and the panel's inventory would then be readable from two places —
- * the routes here and the labels there — that only one of them controls.
- *
- * ## The plural suffixes
- *
- * «نوبت‌ها», «کمپین‌ها» and «گزارش‌ها» carry a ZWNJ before «ها» for the reason
- * `catalog/enums.ts` records at length: the source documents write these compounds
- * run together because a search for U+200C across `docs/knowledge/` returns
- * nothing, and standard Persian orthography joins them. The product renders
- * standard orthography.
- *
- * ## The four panel names
- *
- * `02-architecture.md` §9 names the panels by role — Manager, Doctor, Reception,
- * Customer — and gives no Persian for any of them. The four below are this tier's
- * own; a later design pass may rename them, and renaming is one edit here because
- * no component spells a panel name.
- *
- * The four panel *homes* are not this tier's invention: `02-architecture.md` §7
- * names them, in the `dashboard` row, as the role-scoped home surfaces —
- * «داشبورد من», «برنامه من», «میز کار امروز» and the customer's dashboard. They
- * are quoted here because the `dashboard` module that owns them is not built, and
- * Phase 1's shells need the names the homes will have.
- * ─────────────────────────────────────────────────────────────────────────── */
+
 
 /** The two ways in, as `panels.html` presents them (`02-architecture.md` §9). */
 export const PANELS_PAGE = {
@@ -280,31 +219,6 @@ export const GLOBAL_ERROR_PAGE = {
   retry: 'تلاش دوباره',
 } as const satisfies Record<string, string>
 
-/* ── Phase 2's appointments surfaces ─────────────────────────────────────────
- *
- * The three pages `02-architecture.md` §9 names for the `appointments` module —
- * `reception/appointments.html`, `admin/appointments.html` and the doctor's
- * «برنامه من». Their copy is here and not in the module's catalog for the same
- * reason the panel names are: the module owns the sentences its functions *raise*
- * (`appointment.slotTaken` and its five neighbours), while a page's own titles,
- * button labels and empty states are composition the app tier does from those.
- * A page title in the module catalog would be a page the module knows about, and
- * §6 puts pages in `src/app/`.
- *
- * The sentences the module raises are not repeated here. They reach a page through
- * `MESSAGES` and the message renderer, which is also the only place a number is
- * substituted into Persian.
- * ─────────────────────────────────────────────────────────────────────────── */
-
-/**
- * The three surfaces' shared chrome: the tabs a receptionist switches between and
- * the labels a day grid's cells carry.
- *
- * The tab keys are the module's own vocabulary — the day, the week and the
- * cartable — because a receptionist's three views of one day are three names the
- * product already has for them, and a fourth set of labels would be a fourth set
- * the translation has to keep up.
- */
 export const APPOINTMENTS_PAGE = {
   reception: {
     title: 'نوبت‌های امروز',
@@ -933,15 +847,7 @@ export const PAYMENTS_PAGE = {
   empty: 'هنوز پرداختی ثبت نشده است.',
 } as const satisfies Record<string, unknown>
 
-/**
- * The secretary's work list — `02-architecture.md` §9's `reception/desk.html`, and
- * the one page that names the day's whole work.
- *
- * The desk is a list and not a dashboard: each section is a queue the receptionist
- * clears, and the day is done when the page is empty. The copy is phrased as counts
- * rather than as prose, because a count is what a receptionist calls down and the
- * empty state is the product's answer to the question the page exists for.
- */
+
 export const DESK_PAGE = {
   title: 'میز کار امروز',
   lead: 'کارهای امروز: نوبت‌ها، نتایج ثبت‌نشده، تماس دوره‌ها، مانده‌حساب، لیدهای جدید و پیام‌های امروز.',
@@ -987,21 +893,7 @@ export const DESK_PAGE = {
   empty: 'کار امروز تمام است.',
 } as const satisfies Record<string, unknown>
 
-/**
- * The campaigns surface — `02-architecture.md` §9's `admin/campaigns.html`, and the one
- * page the eighth module's three halves meet on: the builder, the assistant, and the
- * results table.
- *
- * The page's own copy is the chrome around the three, for the same reason the other
- * pages' is: the modules own the sentences their functions *raise* (`campaigns.notApproved`
- * and its neighbours, through `MESSAGES`), while a page's titles, field labels, button
- * labels and empty states are composition the app tier does from those.
- *
- * The assistant's own two sentences are not restated here either. The low-confidence
- * hint is `campaign-assistant`'s catalog, because it is the module's own voice — the
- * assistant naming its own uncertainty — and the brief's field error is the same
- * module's `MESSAGES`.
- */
+
 export const CAMPAIGNS_PAGE = {
   title: `کمپین${ZWNJ}ها`,
   lead: 'ساخت کمپین با کمک دستیار، پیش‌نمایش تعداد مخاطبان، تأیید و فعال‌سازی، و گزارش ارسال‌ها.',
@@ -1035,7 +927,7 @@ export const CAMPAIGNS_PAGE = {
       DAILY_AT: 'روزانه در ساعت مشخص',
       MONTHLY_DAY: 'ماهانه در روز مشخص',
     },
-    hints: {
+       hints: {
       /** The count the preview renders beside the group the manager chose. */
       audienceCount: (n: number) => `${toPersianDigits(n)} مشتری در این گروه`,
       /** The count's loading state, before a number arrives. */
@@ -1043,6 +935,10 @@ export const CAMPAIGNS_PAGE = {
       /** The `{name}` and `{amount}` placeholders the text may carry. */
       placeholders: 'از {name} برای نام مشتری و {amount} برای مبلغ مانده استفاده کنید.',
       dailyCap: 'خالی یعنی بدون سقف.',
+      /** The Jalali date field's placeholder, as the builder's form shows it. */
+      datePlaceholder: '۱۴۰۵-۰۷-۰۱',
+      /** The time field's own placeholder, which is also the value it carries by default. */
+      defaultTime: '09:00',
     },
     validation: {
       /** The date the schedule kinds below a recurring one need and the form did not send. */

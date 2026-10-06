@@ -48,7 +48,6 @@ import {
   createCampaignAction,
   interpretBriefAction,
   previewAudienceCountAction,
-  type ActionResult,
   type AssistantProposal,
   type CampaignFormInput,
 } from './actions'
@@ -260,7 +259,7 @@ export function CampaignBuilder({
                     dir="ltr"
                     inputMode="numeric"
                     defaultValue={dateFromProposal(proposal)}
-                    placeholder="۱۴۰۵-۰۷-۰۱"
+                    placeholder={CAMPAIGNS_PAGE.builder.hints.datePlaceholder}
                   />
                 </Field>
                 {scheduleKind === 'ONE_TIME' ? (
@@ -269,8 +268,8 @@ export function CampaignBuilder({
                       name="localTime"
                       dir="ltr"
                       inputMode="numeric"
-                      defaultValue={proposal?.scheduledTime ?? '09:00'}
-                      placeholder="09:00"
+                      defaultValue={proposal?.scheduledTime ?? CAMPAIGNS_PAGE.builder.hints.defaultTime}
+                      placeholder={CAMPAIGNS_PAGE.builder.hints.defaultTime}
                     />
                   </Field>
                 ) : null}
@@ -281,8 +280,8 @@ export function CampaignBuilder({
                   name="localTime"
                   dir="ltr"
                   inputMode="numeric"
-                  defaultValue={proposal?.scheduledTime ?? '09:00'}
-                  placeholder="09:00"
+                  defaultValue={proposal?.scheduledTime ?? CAMPAIGNS_PAGE.builder.hints.defaultTime}
+                  placeholder={CAMPAIGNS_PAGE.builder.hints.defaultTime}
                 />
               </Field>
             )}
@@ -436,44 +435,47 @@ function AssistantBox({
 
 /* ── The live count ────────────────────────────────────────────────────────── */
 
-/** The count's three states: loading, a number, or the sentence a failure returned. */
+/** The count's three states, each remembering which group it answers. */
 type CountState =
-  | { readonly status: 'idle' }
-  | { readonly status: 'loading' }
-  | { readonly status: 'count'; readonly value: number }
-  | { readonly status: 'error'; readonly message: string }
+  | { readonly status: 'idle'; readonly groupId: null }
+  | { readonly status: 'count'; readonly groupId: string; readonly value: number }
+  | { readonly status: 'error'; readonly groupId: string; readonly message: string }
 
 /**
  * The audience's live size, re-fetched whenever the group changes.
  *
  * Skipped while no group is chosen, because a count of nothing is not a number the
  * manager reads.
+ *
+ * The loading state is derived from what the state's own `groupId` says, not set
+ * inside the effect: `setState` in an effect body is a cascading render, so the effect
+ * only fetches and the render decides what to show. A `groupId` that differs from the
+ * state's is a count that has not arrived yet.
  */
 function useAudienceCount(groupId: string | null): { readonly hint: string | undefined } {
-  const [state, setState] = useState<CountState>({ status: 'idle' })
+  const [state, setState] = useState<CountState>({ status: 'idle', groupId: null })
 
   useEffect(() => {
-    if (groupId === null) {
-      setState({ status: 'idle' })
-      return
-    }
-    setState({ status: 'loading' })
+    if (groupId === null) return
     let cancelled = false
     void (async () => {
       const outcome = await previewAudienceCountAction(groupId)
       if (cancelled) return
-      if (outcome.ok) setState({ status: 'count', value: outcome.count })
-      else setState({ status: 'error', message: outcome.message })
+      if (outcome.ok) setState({ status: 'count', groupId, value: outcome.count })
+      else setState({ status: 'error', groupId, message: outcome.message })
     })()
     return () => {
       cancelled = true
     }
   }, [groupId])
 
-  if (state.status === 'loading') return { hint: CAMPAIGNS_PAGE.builder.hints.audienceCountLoading }
+  if (groupId === null) return { hint: undefined }
+  if (state.groupId !== groupId) {
+    return { hint: CAMPAIGNS_PAGE.builder.hints.audienceCountLoading }
+  }
   if (state.status === 'count') return { hint: CAMPAIGNS_PAGE.builder.hints.audienceCount(state.value) }
   if (state.status === 'error') return { hint: state.message }
-  return { hint: undefined }
+  return { hint: CAMPAIGNS_PAGE.builder.hints.audienceCountLoading }
 }
 
 /* ── The pieces the builder shares ─────────────────────────────────────────── */
@@ -555,4 +557,3 @@ function checked(form: HTMLFormElement, name: string): boolean {
 function stopPropagation(event: React.MouseEvent): void {
   event.stopPropagation()
 }
-

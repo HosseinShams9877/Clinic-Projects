@@ -48,7 +48,6 @@ import {
   ASSISTANT_FALLBACK_TEXT,
   CAMPAIGN_TYPE_PHRASES,
   JALALI_MONTH_PHRASES,
-  ONE_TIME_PHRASES,
   RECURRING_PHRASES,
 } from '../catalog'
 import type { CampaignBrief, CampaignProposal } from '../types'
