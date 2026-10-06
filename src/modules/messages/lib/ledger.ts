@@ -140,6 +140,66 @@ export async function sendAlreadyRecorded(
 }
 
 /**
+ * Writes a ledger row for a campaign message, before the gateway is called.
+ *
+ * The campaign's half of `recordSend`: `campaignId` names the send and
+ * `automaticKind` is `null`, because a campaign send is not one of the seven moments
+ * and the column that records which one it was holds none of them. The status and the
+ * clock are the same two facts, for the same two reasons (`recordSend`'s header).
+ */
+export async function recordCampaignRow(args: {
+  readonly tx: TransactionClient
+  readonly tenantId: string
+  readonly customerId: string
+  readonly channel: Channel
+  readonly campaignId: string
+  readonly renderedText: string
+  readonly status: 'QUEUED' | 'SUPPRESSED' | 'FAILED'
+  readonly suppressedReason: string | null
+  readonly now: Date
+}): Promise<MessageSendRow> {
+  const row = await args.tx.messageSend.create({
+    data: {
+      tenantId: args.tenantId,
+      customerId: args.customerId,
+      campaignId: args.campaignId,
+      automaticKind: null,
+      templateId: null,
+      channel: args.channel,
+      renderedText: args.renderedText,
+      status: args.status,
+      suppressedReason: args.suppressedReason,
+      sentAt: null,
+      createdAt: args.now,
+    },
+    select: SEND_SELECT,
+  })
+
+  return asRow(row)
+}
+
+/**
+ * Whether this campaign already recorded a send for this customer.
+ *
+ * The campaign dispatch's idempotency read, keyed on `(customer, campaign)` rather than
+ * `(customer, kind)`: a recurring campaign sends again next period, and the kind does
+ * not change between periods, so the campaign's own id is the key that distinguishes
+ * one period's send from the next one's absence.
+ */
+export async function campaignSendRecorded(
+  tx: TransactionClient,
+  tenantId: string,
+  customerId: string,
+  campaignId: string,
+): Promise<boolean> {
+  const row = await tx.messageSend.findFirst({
+    where: { tenantId, customerId, campaignId },
+    select: { id: true },
+  })
+  return row !== null
+}
+
+/**
  * The customer's most recent delivered message, or `null` — the 90-day window's read.
  *
  * Reads the statuses that reached the customer, so a suppression does not close the
@@ -158,6 +218,33 @@ export async function lastDeliveredSend(
   })
   if (row === null || row.sentAt === null) return null
   return { sentAt: row.sentAt }
+}
+
+/**
+ * The customer's most recent delivered *campaign* message, or `null`.
+ *
+ * The attribution read: a booking whose source is a campaign belongs to the campaign that
+ * was last in front of the customer, and this names it. Reads the same delivered statuses
+ * `lastDeliveredSend` does, so a send that never left the clinic does not earn a campaign
+ * a booking it did not produce.
+ */
+export async function lastCampaignSendFor(
+  tx: TransactionClient,
+  tenantId: string,
+  customerId: string,
+): Promise<{ readonly campaignId: string; readonly sentAt: Date } | null> {
+  const row = await tx.messageSend.findFirst({
+    where: {
+      tenantId,
+      customerId,
+      campaignId: { not: null },
+      status: { in: [...DELIVERED_STATUSES] },
+    },
+    orderBy: { sentAt: 'desc' },
+    select: { campaignId: true, sentAt: true },
+  })
+  if (row === null || row.campaignId === null || row.sentAt === null) return null
+  return { campaignId: row.campaignId, sentAt: row.sentAt }
 }
 
 /** How many delivered messages the customer has received since the local day began. */

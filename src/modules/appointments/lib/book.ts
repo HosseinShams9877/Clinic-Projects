@@ -65,6 +65,7 @@ import {
   type AppErrorOptions,
 } from '@/core/types'
 import { requirePermission } from '@/modules/roles-permissions'
+import { attributeAppointmentToCampaign } from '@/modules/campaigns'
 
 import type { AppointmentsMessageKey } from '../catalog'
 import { blockRanges, type Range } from './slots'
@@ -258,6 +259,11 @@ async function loadSlotDay(
 /**
  * Writes the booking row, converting a unique-index violation into the catalog's
  * sentence for the race the index settled.
+ *
+ * A booking whose source is a campaign is attributed to the campaign that last reached
+ * its customer, which is the one fact the results table names a campaign by (`campaigns`'s
+ * own attribution read, called here because the booking is the one path that knows the
+ * appointment's origin).
  */
 async function createBookingRow(
   args: BookArgs,
@@ -267,7 +273,7 @@ async function createBookingRow(
   const slotKey = scheduledAt.toISOString()
 
   try {
-    return await args.tx.appointment.create({
+    const created = await args.tx.appointment.create({
       data: {
         tenantId: args.ctx.tenantId,
         clinicId: args.clinicId,
@@ -289,6 +295,16 @@ async function createBookingRow(
       },
       select: APPOINTMENT_SELECT,
     })
+
+    await attributeAppointmentToCampaign({
+      tx: args.tx,
+      tenantId: args.ctx.tenantId,
+      appointmentId: created.id,
+      customerId: args.customerId,
+      source: sourceOrDefault(args.source),
+    })
+
+    return created
   } catch (error) {
     if (isUniqueViolation(error)) {
       throw appointmentError(
@@ -556,7 +572,7 @@ function asStatus(value: string): AppointmentStatus {
 }
 
 /** The source, or the reception desk when the row does not carry a recognisable one. */
-function sourceOrDefault(source: string): string {
+function sourceOrDefault(source: string): AppointmentSource {
   return isMember(AppointmentSource, source) ? source : AppointmentSource.Reception
 }
 

@@ -17,7 +17,8 @@
  * 2. **The templates** — the read, the channel's seven, the idempotent seed, and the
  *    validation that makes an unknown placeholder a settings error (DoD 7).
  * 3. **The ledger** — `MessageSend`'s writes and reads, which are the send log the
- *    customer record and the desk's feed render.
+ *    customer record and the desk's feed render, and the campaign delivery that writes
+ *    the same ledger for a campaign's sends.
  * 4. **The dispatch** — the job that turns `notifications`' seven triggers into
  *    delivered messages, and the queue the send window holds.
  * 5. **The gateway** — the adapter the provider is reached through, replaceable before
@@ -68,12 +69,14 @@ export {
   validateTemplateText,
 } from './lib/templates'
 
-export { customerMessageHistory } from './lib/ledger'
+export { customerMessageHistory, lastCampaignSendFor, lastDeliveredSend, sendsToday } from './lib/ledger'
 
 export {
-  flushSendQueue,
-  runAutomaticDispatch,
-} from './lib/dispatch'
+  recordCampaignSuppression,
+  sendCampaignMessage,
+  campaignSendRecordedFor,
+  type CampaignSuppressedReason,
+} from './lib/campaign-delivery'
 
 export {
   DISPATCH_TICK_INTERVAL_MS,
