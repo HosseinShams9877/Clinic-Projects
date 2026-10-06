@@ -54,6 +54,13 @@ export interface BookingSettings {
    * at all: with the toggle on, holidays are ordinary days.
    */
   readonly bookingOnHolidays: boolean
+  /**
+   * Toggle 6 — whether online booking may be made without the service's deposit.
+   * Off by default, so a clinic that wants the deposit collected up front keeps its
+   * requirement, and the public booking that cannot collect one is refused rather
+   * than silently booking a deposit the clinic never received.
+   */
+  readonly onlineBookingNoDeposit: boolean
   /** `TenantSettings.utcOffsetMinutes`, for the instant a booking stores. */
   readonly utcOffsetMinutes: number
 }
@@ -63,6 +70,7 @@ export const DEFAULT_BOOKING_SETTINGS: BookingSettings = Object.freeze({
   mode: BookingMode.FixedSlot,
   doctorSelfBooking: TOGGLE_DEFAULTS[Toggle.DoctorSelfBooking],
   bookingOnHolidays: TOGGLE_DEFAULTS[Toggle.BookingOnHolidays],
+  onlineBookingNoDeposit: TOGGLE_DEFAULTS[Toggle.OnlineBookingNoDeposit],
   utcOffsetMinutes: DEFAULT_CLINIC_UTC_OFFSET_MINUTES,
 })
 
@@ -97,6 +105,7 @@ export async function readBookingSettings(
     mode: modeOrDefault(row.bookingMode),
     doctorSelfBooking: toggleOrDefault(row.toggles, Toggle.DoctorSelfBooking),
     bookingOnHolidays: toggleOrDefault(row.toggles, Toggle.BookingOnHolidays),
+    onlineBookingNoDeposit: toggleOrDefault(row.toggles, Toggle.OnlineBookingNoDeposit),
     utcOffsetMinutes: row.utcOffsetMinutes,
   })
 }

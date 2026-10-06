@@ -84,6 +84,23 @@ export interface PermissionOverrides {
 }
 
 /**
+ * A tenant-scoped principal, which may be a membership or the public site.
+ *
+ * The two permission-free read paths — a bookable service and a customer resolved by
+ * mobile — take this and not `TenantContext`, because the public site holds no role and
+ * neither path resolves a permission. `TenantContext` satisfies it, so every staff
+ * caller is still a valid one.
+ */
+export interface TenantPrincipal {
+  readonly tenantId: TenantId
+  readonly clinicId: ClinicId | null
+  /** A staff role, or `public` for the site itself. */
+  readonly role: Role | 'public'
+  readonly userId: UserId
+  readonly overrides: PermissionOverrides
+}
+
+/**
  * Everything a module needs to know about *who* is calling and *where*.
  *
  * Passed as one argument to every module function, because the alternative — a

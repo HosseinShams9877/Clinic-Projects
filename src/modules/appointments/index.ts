@@ -52,7 +52,16 @@ export {
   TIME_RANGE_MORNING,
 } from './catalog'
 
-export { blockHours, bookAppointment, bookOwnAppointment, cancelAppointment, rescheduleAppointment } from './lib/book'
+export {
+  blockHours,
+  bookAppointment,
+  bookOwnAppointment,
+  bookPublicAppointment,
+  cancelAppointment,
+  rescheduleAppointment,
+} from './lib/book'
+
+export type { PublicBookArgs, PublicBookingContext } from './lib/book'
 
 export { readBookingSettings, DEFAULT_BOOKING_SETTINGS } from './lib/settings'
 

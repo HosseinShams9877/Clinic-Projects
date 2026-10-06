@@ -30,7 +30,7 @@
  */
 
 import { AcquisitionSource, isMember, LeadStatus } from '@/core/constants'
-import type { TenantContext } from '@/core/tenant'
+import type { TenantContext, TenantPrincipal } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 import { isValidMobile, normalizeMobile } from '@/core/localization'
 import { NotFoundError, ValidationError, type AppErrorOptions } from '@/core/types'
@@ -166,6 +166,50 @@ export async function createLead(args: {
   }
 
   const source = sourceOrDefault(args.acquisitionSource)
+  return createLeadRow(args, source)
+}
+
+/**
+ * The public site's lead — the consultation form's submit.
+ *
+ * The same row and the same validation as the desk's `createLead`, without the desk's
+ * `manage_leads`: the site holds no role, and the principal is the surface itself. The
+ * source is fixed to `Website` here and is not an argument, because the form is the only
+ * surface this path serves and a body that named a source would be a bucket the report
+ * counts that the caller picked.
+ */
+export async function createPublicLead(args: {
+  readonly tx: TransactionClient
+  readonly ctx: TenantPrincipal
+  readonly mobile: string
+  readonly firstName: string
+  readonly lastName?: string
+  readonly note?: string
+}): Promise<LeadRow> {
+  return createLeadRow(args, AcquisitionSource.Website)
+}
+
+/** The write the two lead paths share, so the row they write is one shape. */
+async function createLeadRow(
+  args: {
+    readonly tx: TransactionClient
+    readonly ctx: TenantContext | TenantPrincipal
+    readonly mobile: string
+    readonly firstName: string
+    readonly lastName?: string
+    readonly note?: string
+  },
+  source: string | null,
+): Promise<LeadRow> {
+  const mobile = normalizeMobile(args.mobile)
+  if (!isValidMobile(mobile)) {
+    throw customerValidationError(
+      `The value ${JSON.stringify(args.mobile)} is not a valid mobile number.`,
+      'customer.mobileInvalid',
+      {},
+    )
+  }
+
   const firstName = args.firstName.trim()
   const lastName = args.lastName?.trim() || null
 

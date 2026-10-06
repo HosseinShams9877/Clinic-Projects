@@ -25,7 +25,7 @@
  * clinic's catalogue is still nobody else's.
  */
 
-import type { TenantContext } from '@/core/tenant'
+import type { TenantContext, TenantPrincipal } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 import { DomainError, NotFoundError } from '@/core/types'
 import { requirePermission } from '@/modules/roles-permissions'
@@ -147,7 +147,7 @@ export async function bookableServices(args: {
  */
 export async function loadBookableService(args: {
   readonly tx: TransactionClient
-  readonly ctx: TenantContext
+  readonly ctx: TenantPrincipal
   readonly serviceId: string
 }): Promise<ServiceRow> {
   const row = await args.tx.service.findFirst({
@@ -181,7 +181,7 @@ export async function loadBookableService(args: {
  */
 export async function serviceDoctors(args: {
   readonly tx: TransactionClient
-  readonly ctx: TenantContext
+  readonly ctx: TenantPrincipal
   readonly serviceId: string
 }): Promise<readonly ServiceDoctorRow[]> {
   const rows = await args.tx.serviceDoctor.findMany({

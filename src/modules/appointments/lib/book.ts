@@ -48,7 +48,8 @@ import {
   AppointmentStatus,
   isMember,
 } from '@/core/constants'
-import type { TenantContext } from '@/core/tenant'
+import type { PermissionOverrides, TenantContext } from '@/core/tenant'
+import type { ClinicId, TenantId, UserId } from '@/core/types'
 import type { TransactionClient } from '@/core/db/scope'
 import {
   asLocalTime,
@@ -115,6 +116,27 @@ export interface CreatedAppointment {
 }
 
 /**
+ * The context the public site books under: a tenant, and a role none of the three staff
+ * roles is, so the permission guard the desk's booking opens with is not this path's
+ * guard — the principal is the site itself, and the gates are the day, the deposit and
+ * the slot.
+ */
+export interface PublicBookingContext {
+  readonly tenantId: TenantId
+  readonly clinicId: ClinicId | null
+  readonly role: 'public'
+  readonly userId: UserId
+  /** Empty by construction: the public site holds no role and no overrides. */
+  readonly overrides: PermissionOverrides
+}
+
+/** `BookArgs`, with the context the public site supplies in place of a membership's. */
+export type PublicBookArgs = Omit<BookArgs, 'ctx'> & { readonly ctx: PublicBookingContext }
+
+/** Either booking path's arguments, for the guards they share. */
+type AnyBookArgs = BookArgs | PublicBookArgs
+
+/**
  * Books an appointment.
  *
  * The same record shape for a doctor, a secretary and a manager (DoD 3) — the role
@@ -144,6 +166,66 @@ export async function bookAppointment(args: BookArgs): Promise<CreatedAppointmen
   await assertSlotBookable(args, settings)
 
   return createBookingRow(args, settings)
+}
+
+/**
+ * The public site's booking — `02-architecture.md` §9's `booking.html`.
+ *
+ * The same row, the same guards and the same sentences as the desk's booking, with one
+ * difference and it is the only one: **there is no membership**. A visitor holds no
+ * session, so there is no `manage_appointments` to require and no `userId` to record.
+ * The permission check is replaced by the context the caller supplies, and the caller
+ * is a Server Action that resolved the tenant from the host and named a principal the
+ * permission primitive refuses — which is the honest answer to "may a stranger book",
+ * and not a bypass of the check the desk's path keeps.
+ *
+ * The two domain gates the public site's own deliverable names are here, and they are
+ * the same two the desk's path already had:
+ *
+ * - **Toggle 7** — a holiday is not bookable, through the same `loadSlotDay` the desk's
+ *   grid consults, so a day the site offers and a day the desk shows cannot disagree.
+ * - **Toggle 6** — a service with a deposit is refused when the toggle is off, because
+ *   the public site cannot collect the money and a booking that skipped the deposit
+ *   would be a deposit the clinic never received and a row that pretends it did.
+ *
+ * @throws DomainError, as `appointment.depositRequired` — toggle 6 is off and the
+ *   service carries a deposit the public site cannot capture.
+ * @throws DomainError, as `appointment.closed` — the doctor does not work this day, or
+ *   the day is a holiday the clinic does not book.
+ * @throws DomainError, as `appointment.slotTaken` — the slot was booked between the
+ *   wizard and the write.
+ */
+export async function bookPublicAppointment(args: PublicBookArgs): Promise<CreatedAppointment> {
+  const settings = await readBookingSettings(args.tx, args.ctx.tenantId)
+
+  const deposit = await serviceDeposit(args)
+  if (deposit > 0n && !settings.onlineBookingNoDeposit) {
+    throw appointmentError(
+      `Service ${args.serviceId} carries a deposit of ${deposit} and the ` +
+        `${'ONLINE_BOOKING_NO_DEPOSIT'} toggle is off, so the public site cannot book it.`,
+      'appointment.depositRequired',
+      { serviceId: args.serviceId, depositAmount: String(deposit) },
+    )
+  }
+
+  await assertSlotBookable(args, settings)
+  return createBookingRow(args, settings)
+}
+
+/**
+ * The service's own deposit, read on the write path.
+ *
+ * Not the caller's `depositAmount`: that field is the snapshot a booking captures, and
+ * the public site is a caller the clinic did not vet. A gate that trusted it would be a
+ * gate a request that passed `0n` walked straight through, and the row would carry a
+ * deposit the clinic never received. The service row is the gate's only source.
+ */
+async function serviceDeposit(args: AnyBookArgs): Promise<bigint> {
+  const service = await args.tx.service.findFirst({
+    where: { id: args.serviceId, tenantId: args.ctx.tenantId },
+    select: { depositAmount: true },
+  })
+  return service?.depositAmount ?? 0n
 }
 
 /**
@@ -182,7 +264,7 @@ export async function bookOwnAppointment(args: BookArgs): Promise<CreatedAppoint
  * here, and the index is what makes one lose. Reordering these two would not close
  * the race; removing the index would.
  */
-async function assertSlotBookable(args: BookArgs, settings: BookingSettings): Promise<void> {
+async function assertSlotBookable(args: AnyBookArgs, settings: BookingSettings): Promise<void> {
   const day = await loadSlotDay(args, settings)
   if (!day.bookable) {
     throw appointmentError(
@@ -209,7 +291,7 @@ async function assertSlotBookable(args: BookArgs, settings: BookingSettings): Pr
  * read is not a lock, and the interval between it and the write is the race.
  */
 async function loadSlotDay(
-  args: BookArgs,
+  args: AnyBookArgs,
   settings: BookingSettings,
 ): Promise<{ readonly bookable: boolean; readonly slotAvailable: boolean }> {
   const weekday = jalaliWeekday(args.localDate)
@@ -272,7 +354,7 @@ async function loadSlotDay(
  * reachable from the browser and may not import a module that reaches argon2.
  */
 async function createBookingRow(
-  args: BookArgs,
+  args: AnyBookArgs,
   settings: BookingSettings,
 ): Promise<CreatedAppointment> {
   const scheduledAt = toUtcInstant(args.localDate, args.localTime, settings.utcOffsetMinutes)

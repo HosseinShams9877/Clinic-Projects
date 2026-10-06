@@ -34,6 +34,7 @@ export type AppointmentsMessageKey =
   | 'appointment.quickBookDisabled'
   | 'appointment.notFound'
   | 'appointment.blockOverlapsBooking'
+  | 'appointment.depositRequired'
 
 /**
  * The sentence for each key.
@@ -58,6 +59,11 @@ export const MESSAGES: Readonly<Record<AppointmentsMessageKey, string>> = {
   // A block that would cover a booking the clinic already has cannot be created;
   // the sentence names the conflict so the receptionist knows which row to look at.
   'appointment.blockOverlapsBooking': `این بازه زمانی شامل نوبتی است که از قبل ثبت شده است و نمی${ZWNJ}توان آن را بست.`,
+
+  // The public site cannot collect a deposit, so a service that requires one is not
+  // bookable there until the clinic turns toggle 6 on. The sentence names the clinic,
+  // because the person at the site cannot fix this and the desk can.
+  'appointment.depositRequired': `این خدمت نیاز به پیش${ZWNJ}پرداخت دارد و از طریق سایت قابل رزرو نیست. لطفاً با کلینیک تماس بگیرید.`,
 }
 
 /* ── §4.3 The 8 states, as §2.2's table labels them ───────────────────────── */

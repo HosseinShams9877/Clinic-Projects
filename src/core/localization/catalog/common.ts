@@ -168,6 +168,15 @@ export const CURRENCY_TOMAN_LABEL = 'تومان'
 /** The percent sign, «٪». A label, so it is here and not in `format.ts`. */
 export const PERCENT_LABEL = '٪'
 
+/**
+ * The Persian comma-plus-space a list is joined with, «، ».
+ *
+ * A label rather than a `join` helper: the two surfaces that join a list (the home and
+ * the doctors page) each decide their own order, and the separator is the one character
+ * a keyboard's `,` silently replaces with something that reads as a Latin comma.
+ */
+export const PERSIAN_LIST_SEPARATOR = '، '
+
 /* ── Messages raised by this layer ───────────────────────────────────────── */
 
 /**

@@ -46,7 +46,7 @@
  * key, and it is the one the index keeps.
  */
 
-import type { TenantContext } from '@/core/tenant'
+import type { TenantPrincipal } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 import {
   CustomerLifecycle,
@@ -98,7 +98,7 @@ export interface DedupedCustomer {
  */
 export async function createOrFindCustomer(args: {
   readonly tx: TransactionClient
-  readonly ctx: TenantContext
+  readonly ctx: TenantPrincipal
   readonly mobile: string
   readonly firstName: string
   readonly lastName?: string

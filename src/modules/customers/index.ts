@@ -51,6 +51,7 @@ export { createOrFindCustomer } from './lib/dedupe'
 
 export {
   createLead,
+  createPublicLead,
   leadCounts,
   listLeads,
   markLeadLost,

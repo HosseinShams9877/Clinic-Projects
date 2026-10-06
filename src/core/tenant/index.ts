@@ -18,7 +18,7 @@
  * public surface. If something is not in the barrel, it is private."
  */
 
-export type { PermissionOverrides, TenantContext } from './types'
+export type { PermissionOverrides, TenantContext, TenantPrincipal } from './types'
 
 export type { ParsedPermissionOverrides } from './lib/overrides'
 export { EMPTY_PERMISSION_OVERRIDES, parsePermissionOverrides } from './lib/overrides'
