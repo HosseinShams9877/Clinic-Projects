@@ -67,9 +67,13 @@ import {
   MESSAGES as ASSISTANT_MESSAGES,
   type CampaignAssistantMessageKey,
 } from '@/modules/campaign-assistant'
+import {
+  MESSAGES as SETTINGS_MESSAGES,
+  type SettingsMessageKey,
+} from '@/modules/settings'
 
 /**
- * The Persian sentence for a failure one of the seven modules raised, or the catalog's
+ * The Persian sentence for a failure one of the modules raised, or the catalog's
  * one apology for a failure no catalog names.
  *
  * Returns the apology for a non-`AppError` throw as well, which a caller treats as
@@ -78,6 +82,7 @@ import {
 export function moduleFailureMessage(error: unknown): string {
   if (!isAppError(error)) return UNEXPECTED
   const key = error.messageKey
+  if (isSettingsKey(key)) return SETTINGS_MESSAGES[key]
   if (isAssistantKey(key)) return ASSISTANT_MESSAGES[key]
   if (isAudienceKey(key)) return AUDIENCE_MESSAGES[key]
   if (isCampaignsKey(key)) return CAMPAIGN_MESSAGES[key]
@@ -142,4 +147,9 @@ function isStaffKey(key: string): key is StaffMessageKey {
 /** Whether the key is one `roles-permissions`'s catalog holds a sentence for. */
 function isRolesKey(key: string): key is RolesPermissionsMessageKey {
   return key in ROLES_MESSAGES
+}
+
+/** Whether the key is one `settings`'s catalog holds a sentence for. */
+function isSettingsKey(key: string): key is SettingsMessageKey {
+  return key in SETTINGS_MESSAGES
 }

@@ -115,15 +115,12 @@ model TenantSettings {
   toggles   String?
 
   // `04-roles-permissions.md` §5's two cycle settings, as the JSON blob the cycles
-  // module owns — kept out of `toggles` because §5 states they "read like behavioural
-  // toggles but sit with the cycle engine", and the eight of §4 are a closed list the
-  // permission module owns. NULL is both settings at their documented ON default.
+  // module owns — kept out of `toggles` because the eight of §4 are a closed list
+  // the permission module owns. NULL is both at their documented ON default.
   cycleSettings String?
 
   // The policy values §4 names but does not fix. NULL is the absence of a
-  // decision, not a value: a NULL `debtGraceDays` means no grace period, a NULL
-  // refund policy means a refund cannot be recorded until one is set. The
-  // product's shipped values are an open question — see the Phase 1 report.
+  // decision, not a value: no grace period, and no refund until one is set.
   debtGraceDays          Int?
   depositRefundPolicy    String?
   // «سقف تخفیف منشی» — the ceiling bounding toggle 3. NULL is no ceiling set,
@@ -133,8 +130,7 @@ model TenantSettings {
   sendWindowEnd          String?
   dailyMessageCap        Int?
   // The «پیامها» tab's channel map: which of SMS / WhatsApp each of the seven
-  // automatic messages goes on, as JSON the `messages` module parses. NULL is
-  // every automatic message on SMS.
+  // automatic messages goes on, as JSON the `messages` module parses. NULL is SMS.
   messageSettings        String?
 
   // The booking mode `06-constants.md` §4.4 defines — which of the three ways the
@@ -143,11 +139,15 @@ model TenantSettings {
   // real slots, which is the mode the day grid is built for.
   bookingMode String?
 
-  // Documented values, so these two do carry a default.
-  //   §6 of `02-architecture.md`: "no duplicate message within 90 days".
-  //   ADR-0009 and `07-localization.md`: Iran Standard Time, a fixed UTC+3:30.
-  // A fixed offset rather than a timezone name is deliberate; the Jalali date is
-  // stored, not derived, so there is no transition to observe.
+  // The «نوبتدهی» tab's lifecycle timings, as JSON the `appointments` module owns
+  // (§5): the slot length the grid offers, the reminder's lead, and how long a
+  // booked slot is held. NULL is each at its documented default.
+  appointmentSettings String?
+
+  // Documented values, so these two do carry a default. §6 of `02-architecture.md`:
+  // "no duplicate message within 90 days". ADR-0009 and `07-localization.md`:
+  // Iran Standard Time, a fixed UTC+3:30 — the Jalali date is stored, not derived,
+  // so a timezone name has no transition to observe.
   duplicateMessageWindowDays Int @default(90)
   utcOffsetMinutes           Int @default(210)
 

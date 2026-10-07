@@ -165,6 +165,14 @@ export const SESSION_ABSOLUTE_LIFETIME_HOURS = 12
 export const SESSION_IDLE_LIFETIME_MINUTES = 120
 
 /**
+ * The «نوبتدهی» tab's three lifecycle timings, as the shipped defaults a clinic that
+ * has never opened the tab gets (`03-data-model.md` §6 stores them on the settings
+ * row and NULL is each of these).
+ */
+export const DEFAULT_SLOT_DURATION_MINUTES = 30
+export const DEFAULT_REMINDER_LEAD_HOURS = 3
+export const DEFAULT_BOOKING_HOLD_MINUTES = 15
+/**
  * `09-security.md` §10 — one-time codes are "short-lived (minutes), single-use,
  * and rate-limited per mobile and per IP".
  */

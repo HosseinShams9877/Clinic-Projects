@@ -64,6 +64,15 @@ export const AuditAction = {
   PaymentDiscountGranted: 'payment.discount_granted',
   /** A refund handed back on a cancellation, which is a payment in reverse. */
   PaymentRefunded: 'payment.refunded',
+  /**
+   * A module override declared on the tenant's settings row (Phase 10).
+   *
+   * An override changes which implementation a tenant runs, so the trail is the only
+   * record of who pointed a clinic at a second implementation of a module.
+   */
+  SettingsOverrideDeclared: 'settings.override_declared',
+  /** An override declaration removed, so the tenant runs the default again. */
+  SettingsOverrideRemoved: 'settings.override_removed',
 } as const
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction]
 
@@ -73,6 +82,8 @@ export const AuditEntity = {
   LeaveRequest: 'leave_request',
   /** A receipt — the entity a discount or a refund is recorded against. */
   Payment: 'payment',
+  /** The tenant's settings row, which an override declaration is recorded against. */
+  TenantSettings: 'tenant_settings',
 } as const
 export type AuditEntity = (typeof AuditEntity)[keyof typeof AuditEntity]
 
