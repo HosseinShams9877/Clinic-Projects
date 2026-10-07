@@ -24,10 +24,10 @@
 | 7 | Campaigns, audiences, assistant | **Complete** | ۱۴۰۵/۰۷/۱۴ | ۱۴۰۵/۰۷/۱۴ |
 | 8 | Public site | **Complete** | ۱۴۰۵/۰۷/۱۵ | ۱۴۰۵/۰۷/۱۵ |
 | 9 | Customer panel | **Complete** | ۱۴۰۵/۰۷/۱۶ | ۱۴۰۵/۰۷/۱۶ |
-| 10 | Reports, settings, tenancy, licensing | Not started | — | — |
+| 10 | Reports, settings, tenancy, licensing | **Complete** | ۱۴۰۵/۰۷/۱۶ | ۱۴۰۵/۰۷/۱۶ |
 | 11 | Hardening and full verification | Not started | — | — |
 
-**Current phase:** Phase 9 is **complete**. Phase 10 has not started.
+**Current phase:** Phase 10 is **complete**. Phase 11 has not started.
 
 **Legend.** Not started · In progress · Blocked · Complete.
 
@@ -41,16 +41,16 @@
 | Roadmap (`docs/roadmap/`, 3 files) | Complete |
 | Setup guides (`docs/setup/`, 5 files) | Complete |
 | Changelog convention (`docs/changelog/`) | Complete |
-| Phase reports (`reports/`) | Complete for Phases 0–9 |
+| Phase reports (`reports/`) | Complete for Phases 0–10 |
 | Root files (README, .gitignore, .env.example, LICENSE) | Complete |
 | `.claude/` (settings, agents, commands, context, memory) | Complete |
 | Package manifest | Complete — all dependencies pinned, no styled component library |
-| Application code (`src/`) | Complete for Phases 1–9 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, `modules/customers`, `modules/services`, `modules/staff`, `modules/cycles`, `modules/payments`, `modules/debts`, `modules/notifications`, `modules/messages`, `modules/audience-groups`, `modules/campaigns`, `modules/campaign-assistant`, `modules/public-site`, the app shell, the four panel shells, the three scheduling pages, the seven customer/service/staff pages, the three cycles pages, the four payments/debts pages, the reception desk, the `admin/campaigns` page, the `Popover`/`Combobox`/`JalaliDatePicker` controls, the eight public pages with their header, footer, booking wizard and consultation form, and the four customer-panel pages with their four Server Actions and two client islands |
-| Prisma schema | Complete — one portable schema, 29 models, 1000 lines (ADR-0007’s ceiling, not past it), validating as SQLite and PostgreSQL |
-| Migrations | Complete — the SQLite migration list and the PostgreSQL RLS policies |
+| Application code (`src/`) | Complete for Phases 1–10 — `core`, `modules/auth`, `modules/roles-permissions`, `modules/registry`, `modules/appointments`, `modules/customers`, `modules/services`, `modules/staff`, `modules/cycles`, `modules/payments`, `modules/debts`, `modules/notifications`, `modules/messages`, `modules/audience-groups`, `modules/campaigns`, `modules/campaign-assistant`, `modules/public-site`, `modules/reports`, `modules/settings`, `modules/tenant-management`, `modules/license`, `modules/dashboard`, the app shell, the four panel shells, the three scheduling pages, the seven customer/service/staff pages, the three cycles pages, the four payments/debts pages, the reception desk, the `admin/campaigns` page, the `Popover`/`Combobox`/`JalaliDatePicker` controls, the eight public pages with their header, footer, booking wizard and consultation form, the four customer-panel pages with their four Server Actions and two client islands, and the three manager pages (the dashboard home, the seven retention reports over a Jalali range, and the six settings tabs with their eleven Server Actions and one client island) |
+| Prisma schema | Complete — one portable schema, 29 models, 1000 lines (ADR-0007’s ceiling, met and not passed), validating as SQLite and PostgreSQL |
+| Migrations | Complete — the SQLite migration list (ten migrations, Phase 10’s `settings_appointment_timings` the latest) and the PostgreSQL RLS policies |
 | Vazirmatn | Complete — five weights self-hosted in `src/app/fonts/` with the OFL 1.1 licence and authors file |
-| Test suite | 61 files, 1144 tests — complete for Phases 1–5; Phase 6 added the exactly-three tests its instruction fixed (the seven triggers, the consent suppression, the 90-day window and the priority order), Phase 7 added its own three (the eight audience groups, the approval gate, the assistant's closed sets), Phase 8 added the three its DoD names (the holiday gate, the deposit gate, the consent-filtered gallery), and Phase 9 added the three its DoD names (the four-page isolation with the 404 on a horizontal reach, the type-level absence of a `customerId` parameter, and the cancellation policy with the deposit policy it composes) |
-| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1144 tests. The coverage thresholds are red; see `../reports/phase-07-report.md` §6 |
+| Test suite | 64 files, 1179 tests — complete for Phases 1–5; Phase 6 added the exactly-three tests its instruction fixed (the seven triggers, the consent suppression, the 90-day window and the priority order), Phase 7 added its own three (the eight audience groups, the approval gate, the assistant's closed sets), Phase 8 added the three its DoD names (the holiday gate, the deposit gate, the consent-filtered gallery), Phase 9 added the three its DoD names (the four-page isolation with the 404 on a horizontal reach, the type-level absence of a `customerId` parameter, and the cancellation policy with the deposit policy it composes), and Phase 10 added the three its instruction fixed (the seven reports computed from seeded rows, the barrel's enumerated financial-free surface, and the eight toggles enforced server-side in one parametrised suite) |
+| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1179 tests. The coverage thresholds are red by instruction; see `../reports/phase-10-report.md` §5 |
 | End-to-end suite | Written but **not executed** — Playwright's pinned Chromium cannot be downloaded on the build machine. See `../reports/phase-02-report.md` §4 |
 
 Phase 0 produced the specification for the codebase. Phase 1 produced the
@@ -72,6 +72,15 @@ four pages — the dashboard with its cycle progress bar, the appointments list
 with cancellation inside a policy window, the aftercare cards, and the profile
 with its consent — where every read and write is scoped by the session's own
 `customerId` and no route accepts one as a parameter.
+Phase 10 produced the manager's three pages and the four modules behind them — the
+seven retention reports the specification closed, computed from real rows and
+carrying no financial figure; the six settings tabs on one tenant row, with the
+eight toggles enforced server-side and the override administration surface as one
+tab; and the two conditional modules on either side of `MULTI_TENANT`,
+`tenant-management` and `license`, each taking the unscoped client for the opposite
+reason. The phase's one gap is recorded in its report's §8: those last two modules
+shipped with barrels and no pages, because the instruction named three pages and it
+named them.
 What did not run in this environment is recorded in `../reports/phase-07-report.md` §7 — the e2e execution, the behavioural
 cross-tenant suite against a live PostgreSQL, and the coverage floors the phase left
 red by instruction. Only the last is a decision; the first two are environmental.
@@ -436,6 +445,49 @@ already Phase 5's and is the fifth page the goal names.
 
 ---
 
+## Phase 10 — what was delivered
+
+**Complete**, started and completed ۱۴۰۵/۰۷/۱۶. The closing report is
+`../reports/phase-10-report.md`; §4 names the nine type errors the build caught and
+where each was, and §8 names the one gap a later phase has to close — the two
+conditional modules shipped with barrels and no pages.
+
+- [x] **The seven retention reports** — each asserted against a seeded dataset whose
+      counts are readable by hand: the return rate as ۱ از ۳, the mean as ۲ sessions,
+      cycles completed ۲ از ۳, no-shows ۱ از ۳, the drop-off curve falling ۴→۳→۲→۲→۱→۱,
+      the last-visit buckets splitting ۱/۱/۰/۱/۱, and the one doctor holding every
+      figure
+- [x] **No financial figure in the reports module** — asserted by enumerating the
+      barrel's eleven function exports and refusing the ten financial names, so a
+      `revenue` report added to it fails the phase's own gate
+- [x] **The eight toggles enforced server-side** — one `describe.each` suite over the
+      eight keys: on resolves, off raises a `DomainError` (not a `PermissionError`, per
+      §4's own distinction), and another tenant's off-state does not reach the first
+- [x] `settings` — six tabs in one read and one write each, seven Zod schemas at the
+      boundary, and the override administration surface as the one «اختیارات» tab,
+      validated against the registry and audited as `settings.override_declared` /
+      `settings.override_removed`
+- [x] `tenant-management` and `license` — the two conditional modules, unscoped by
+      design on opposite sides of `MULTI_TENANT`
+- [x] The three pages — `admin/` (the manager home, replacing Phase 1's placeholder),
+      `admin/reports` (the seven over a Jalali range that defaults to the current
+      month), `admin/settings` (the six tabs on `?tab=`)
+- [x] The eleven Server Actions and the one client island, with the failure sentences
+      coming from the settings catalog through the shared `moduleFailureMessage` chain
+- [ ] The axe and responsive pass over the three pages — same Chromium blocker as every
+      phase before it, ninth phase running
+
+**Five modules, three pages, eleven actions, one island, one migration.** The
+reports module's range vocabulary is its own export because a span of days is read
+the same way wherever it is read, and the dashboard's month is a span of days too —
+so `dashboard` depends on `reports` and not the reverse. `requireToggle` raises
+rather than returning a boolean, because a gate that returns a boolean is a gate a
+caller can forget to check. The schema added one column — `appointmentSettings`,
+the «نوبتدهی» tab's three lifecycle timings — and is still 1000 lines exactly,
+four comments trimmed to pay for the four the column cost.
+
+---
+
 ## Nothing is blocked
 
 The session that opened this phase had no working package manager, so nothing had
@@ -443,10 +495,10 @@ ever been executed. That is no longer true, and nothing has been blocked since.
 Node 24.19.0, npm 11.17.0 and git 2.50.1 all run, and the whole gate passes:
 
 ```
-npm run build    →  36 routes, exit 0
+npm run build    →  37 routes, exit 0
 npm run verify   →  db:generate · typecheck · lint · check:files · check:i18n
                    check:overrides · check:schema · check:rls · test
-                   61 files, 1144 tests, exit 0
+                   64 files, 1179 tests, exit 0
 ```
 
 One consequence worth recording: `src/generated/` is ignored, and `verify`
@@ -461,7 +513,7 @@ are in the phase report's §4:
 
 | Not run | Why |
 |---|---|
-| The e2e suite and the axe pass | Playwright's pinned Chromium cannot be downloaded here. The specs are written and `--list` resolves; a machine that can fetch the browser should run `npm run e2e` and the axe pass over the three scheduling pages and the four customer-panel pages before Phase 11 |
+| The e2e suite and the axe pass | Playwright's pinned Chromium cannot be downloaded here. The specs are written and `--list` resolves; a machine that can fetch the browser should run `npm run e2e` and the axe pass over the three scheduling pages, the four customer-panel pages and the three manager pages before Phase 11 |
 | The cross-tenant suite on PostgreSQL | Needs a PostgreSQL server. `check:rls` covers the policies statically and fails closed — the check exists because the unit suite runs on SQLite, which has no RLS — but the behavioural confirmation has not been observed against a live database |
 
 Two Phase 1 relaxations are still in place and are restored in Phase 11: the
