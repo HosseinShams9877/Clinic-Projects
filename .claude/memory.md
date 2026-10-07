@@ -560,6 +560,41 @@ each will look like over-engineering without that context:
 
 ---
 
+## ۱۴۰۵/۰۷/۱۶ — Phase 9 closed; a barrel on a client chunk must stay Node-free
+
+**The fact.** `npm run build` (36 routes) and `npm run verify` (61 files, 1144
+tests) both exit 0, and Phase 9 is closed in `docs/roadmap/progress.md` and
+`reports/phase-09-report.md`. Four pages at `/account`, four Server Actions in
+`src/app/_account/actions.ts`, and the panel's two module halves in
+`appointments/lib/own-panel.ts` and `customers/lib/own-panel.ts`.
+
+**The one thing a later phase will otherwise rediscover:** a module barrel that a
+client component imports has to keep a Node-free runtime graph. Adding
+`import { readPaymentSettings, refundAmountFor } from '@/modules/payments'` to
+`appointments/lib/own-panel.ts` broke `npm run build` with
+`TurbopackInternalError: the chunking context does not support external modules
+(request: node:async_hooks)`. The chain was
+`appointments → payments → staff → auth → @/core/db/context → @/core/db/scope →
+node:async_hooks`, and the barrel was on a browser-chunk path because
+`booking-wizard.tsx` imports `weekDays` from it.
+
+Turbopack reports this only as a failure to *write* an endpoint — the error names
+`/(public)/booking/page`, not the dependency — so it looks like a routing bug and
+isn't. The fix is to keep Node-bearing composition inside a `'use server'` file; a
+deep import past the barrel is banned by the `BARREL_ONLY` lint rule. After the fix
+the appointments barrel visits 41 modules and hits `node:` zero times, customers 33
+and zero. The same shape will bite any module whose barrel a client component
+reaches — worth checking before adding an import under `lib/`, not after the build.
+
+**Two smaller facts.** `T extends void ? {} : T` trips
+`@typescript-eslint/no-empty-object-type`, and `Record<string, never>` in its place
+makes an intersection with `{ ok: true }` unassignable; the rule's own suggestion,
+`object`, is what satisfies both. And a phase whose test count is fixed will produce
+new production code the suite does not cover — `renewSession` this time — which is
+worth naming in the report instead of absorbing.
+
+---
+
 ## Template for new entries
 
 ```markdown
