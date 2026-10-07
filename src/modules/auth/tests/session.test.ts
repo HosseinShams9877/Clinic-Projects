@@ -18,7 +18,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { getTenantContext, hashToken } from '@/core/db/context'
 
-import { openSession, revokeSession, SESSION_TTL_MS } from '../lib/session'
+import { openSession, revokeSession, SESSION_IDLE_MS } from '../lib/session'
 
 import { createTestDatabase, deleteTestDatabase, type TestDatabase } from '@/core/db/tests/database'
 
@@ -110,7 +110,7 @@ describe('openSession', () => {
     expect(row?.tokenHash).not.toBe(opened.token)
     expect(row?.userId).toBe(USER_ID)
     expect(row?.customerId).toBeNull()
-    expect(row?.expiresAt).toEqual(new Date(NOW.getTime() + SESSION_TTL_MS))
+    expect(row?.expiresAt).toEqual(new Date(NOW.getTime() + SESSION_IDLE_MS))
   })
 
   it('opens a customer session on the same table, with the customer and no user', async () => {

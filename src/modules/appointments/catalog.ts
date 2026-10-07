@@ -35,6 +35,7 @@ export type AppointmentsMessageKey =
   | 'appointment.notFound'
   | 'appointment.blockOverlapsBooking'
   | 'appointment.depositRequired'
+  | 'appointment.customerCancelWindowClosed'
 
 /**
  * The sentence for each key.
@@ -64,6 +65,10 @@ export const MESSAGES: Readonly<Record<AppointmentsMessageKey, string>> = {
   // bookable there until the clinic turns toggle 6 on. The sentence names the clinic,
   // because the person at the site cannot fix this and the desk can.
   'appointment.depositRequired': `این خدمت نیاز به پیش${ZWNJ}پرداخت دارد و از طریق سایت قابل رزرو نیست. لطفاً با کلینیک تماس بگیرید.`,
+
+  // The customer's own cancellation window (Phase 9's `own-panel.ts`). The fix is to
+  // call the clinic, because the desk can still cancel where the customer cannot.
+  'appointment.customerCancelWindowClosed': `لغو نوبت فقط تا ۲۴ ساعت قبل از شروع جلسه امکان${ZWNJ}پذیر است. برای لغو در ساعات پایانی لطفاً با کلینیک تماس بگیرید.`,
 }
 
 /* ── §4.3 The 8 states, as §2.2's table labels them ───────────────────────── */
@@ -113,3 +118,53 @@ export const BOOKING_MODE_LABELS: Readonly<Record<BookingMode, string>> = {
  */
 export const TIME_RANGE_MORNING = 'صبح ۹ تا ۱۲'
 export const TIME_RANGE_EVENING = 'عصر ۱۶ تا ۲۰'
+
+/* ── Phase 9: the customer panel's own appointments surface ───────────────── */
+
+/**
+ * `account/appointments.html` — the customer's own list, as `09-security.md` §7
+ * scopes it.
+ *
+ * The page's copy lives in this module's catalog and not in `src/app/catalog.ts`
+ * because that file is at the length gate, and because the vocabulary is this
+ * module's: the statuses the list badges are `APPOINTMENT_STATUS_LABELS`, and the
+ * two refusals the actions can raise are `MESSAGES` keys above.
+ */
+export const CUSTOMER_APPOINTMENTS_PAGE = Object.freeze({
+  title: 'نوبت‌های من',
+  lead: 'نوبت‌های پیش‌رو و جلسات گذشته خود را اینجا ببینید.',
+  /** The two halves of the list, as the split at the injected clock names them. */
+  upcoming: {
+    title: 'نوبت‌های پیش‌رو',
+    empty: 'نوبت پیش‌رویی ثبت نشده است.',
+  },
+  past: {
+    title: 'جلسات گذشته',
+    empty: 'هنوز جلسه‌ای برگزار نشده است.',
+  },
+  columns: {
+    date: 'تاریخ',
+    time: 'ساعت',
+    service: 'خدمت',
+    doctor: 'پزشک',
+    status: 'وضعیت',
+  },
+  actions: {
+    cancel: 'لغو نوبت',
+    reschedule: 'جابه‌جایی نوبت',
+    cancelConfirm: 'این نوبت لغو شود؟',
+  },
+  /** The one line a successful cancellation renders, naming what the policy returns. */
+  cancelled: 'نوبت شما لغو شد.',
+  /** The sentence the deposit entitlement renders, when the policy returns anything. */
+  refundNote: 'بیعانه شما طبق سیاست بازگشت وجه کلینیک بازگردانده می‌شود.',
+  /** The sentence a reschedule renders. */
+  rescheduled: 'نوبت شما جابه‌جا شد.',
+  /** The form the reschedule dialog renders. */
+  rescheduleForm: {
+    title: 'جابه‌جایی نوبت',
+    dateLabel: 'تاریخ جدید',
+    timeLabel: 'ساعت جدید',
+    submit: 'ثبت نوبت جدید',
+  },
+})

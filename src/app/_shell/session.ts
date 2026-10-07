@@ -62,7 +62,7 @@ import {
   type TenantId,
 } from '@/core/types'
 import type { TenantContext } from '@/core/tenant'
-import { SESSION_COOKIE } from '@/modules/auth'
+import { SESSION_COOKIE, renewSession } from '@/modules/auth'
 
 import type { Panel } from './navigation'
 import { ROLE_PANEL } from './navigation'
@@ -180,13 +180,37 @@ export async function requireCustomerPanel(): Promise<ResolvedCustomerPanel> {
   const token = await sessionToken()
   if (token === null) redirect('/account/login')
 
+  const resolved = await resolveCustomerPanel()
+
+  // §10's idle expiry: a session the person is still using keeps its deadline sliding
+  // forward, up to the absolute lifetime the row was opened with. The renewal is after
+  // the resolution, so a token that did not prove itself never gets a new deadline,
+  // and its result is not read — the person's next request reads the row again.
+  await renewSession({ client: unscopedPrisma(), token, now: realClock() })
+
+  return resolved
+}
+
+/**
+ * The same customer resolution, raising instead of redirecting.
+ *
+ * The Server Action's contract is a result the caller renders, and a `redirect()` from
+ * inside one is a navigation the caller did not ask for — the mirror of
+ * `resolveStaffPanel`'s reason. Actions call this and map the failure to a Persian
+ * sentence; the shell calls `requireCustomerPanel` and lets it navigate.
+ *
+ * @throws `TenantResolutionError` — the session is not usable for the customer panel.
+ */
+export async function resolveCustomerPanel(): Promise<ResolvedCustomerPanel> {
+  const token = await sessionToken()
+  if (token === null) {
+    throw new TenantResolutionError('The request carries no session cookie.', 'session-not-found')
+  }
+
   const resolved = await getTenantContextForCustomer({
     client: unscopedPrisma(),
     token,
     now: realClock(),
-  }).catch((error: unknown) => {
-    if (error instanceof Error) redirect('/account/login')
-    throw error
   })
 
   return Object.freeze({

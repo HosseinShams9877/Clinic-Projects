@@ -43,6 +43,7 @@ export type { CustomersModule } from './types'
 export {
   ACQUISITION_SOURCE_LABELS,
   CUSTOMER_LIFECYCLE_LABELS,
+  CUSTOMER_PANEL,
   LEAD_STATUS_LABELS,
   MESSAGES,
 } from './catalog'
@@ -69,3 +70,11 @@ export {
   updateCustomerNote,
   updateCustomerProfile,
 } from './lib/profile'
+
+export {
+  ownCareInstructions,
+  readOwnProfile,
+  recordOwnConsent,
+  updateOwnProfile,
+} from './lib/own-panel'
+export type { OwnCareInstruction, OwnProfile } from './lib/own-panel'

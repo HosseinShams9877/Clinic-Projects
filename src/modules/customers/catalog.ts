@@ -103,3 +103,89 @@ export const ACQUISITION_SOURCE_LABELS: Readonly<Record<AcquisitionSource, strin
   PHONE: 'تماس',
   REFERRAL: `معرفی دوست`,
 }
+
+/* ── Phase 9: the customer panel's own surface ────────────────────────────── */
+
+/**
+ * `account/dashboard.html`, `account/care.html` and `account/profile.html` — the
+ * three of `09-security.md` §7's pages that are the person's own record, and the one
+ * place their copy lives (`src/app/catalog.ts` is at the length gate).
+ *
+ * The panel's fourth page, `account/appointments.html`, is `appointments`'s own
+ * surface and its copy is in that module's catalog.
+ */
+export const CUSTOMER_PANEL = Object.freeze({
+  /** The sentence an action renders for a failure it cannot name specifically. */
+  failure: 'عملیات انجام نشد. لطفاً دوباره تلاش کنید.',
+  /** «داشبورد من» — the three facts the person opens the panel for. */
+  dashboard: {
+    title: 'داشبورد من',
+    lead: 'خلاصه درمان شما در یک نگاه.',
+    nextAppointment: {
+      title: 'نوبت بعدی',
+      /** Rendered when no future session exists. */
+      empty: 'نوبت پیش‌رویی ندارید.',
+      /** The two facts the row shows beside the service's name. */
+      withDoctor: 'پزشک',
+      at: 'ساعت',
+    },
+    cycle: {
+      title: 'پیشرفت درمان',
+      /** The progress bar's own sentence, as the specification writes it. */
+      progress: (completed: number, total: number) => `جلسه ${completed} از ${total}`,
+      /** What the bar shows when a course has no end the clinic fixed. */
+      unbounded: (completed: number) => `جلسه ${completed}`,
+      /** The label under the bar for the session the course is walking toward. */
+      completed: 'جلسه‌های انجام شده',
+      /** Rendered when the person has no open course. */
+      empty: 'دوره درمانی فعالی ندارید.',
+    },
+    care: {
+      title: 'آخرین دستورالعمل‌های مراقبتی',
+      /** The link the dashboard offers into the full list. */
+      viewAll: 'همه دستورالعمل‌ها',
+      /** Rendered when no service the person has had carries care text. */
+      empty: 'دستورالعملی برای شما ثبت نشده است.',
+    },
+  },
+  /** «دستورالعمل‌های مراقبتی» — the aftercare the clinic wrote for this person. */
+  care: {
+    title: 'دستورالعمل‌های مراقبتی',
+    lead: 'مراقبت‌های قبل و بعد از جلسه‌های شما، از توضیحات خود خدمت.',
+    /** The two halves of one card. */
+    afterCare: 'بعد از جلسه',
+    beforeCare: 'قبل از جلسه',
+    /** Rendered when no service the person has had carries care text. */
+    empty: 'دستورالعملی برای شما ثبت نشده است.',
+  },
+  /** «پروفایل من» — the person's own facts and their consent. */
+  profile: {
+    title: 'پروفایل من',
+    lead: 'اطلاعات خود را ویرایش کنید و اجازه‌های ارسال پیام را مدیریت کنید.',
+    fields: {
+      firstName: 'نام',
+      lastName: 'نام خانوادگی',
+      mobile: 'شماره موبایل',
+      birthDate: 'تاریخ تولد',
+      residenceArea: 'محله سکونت',
+    },
+    /** The mobile's own note: the panel cannot change the person's identity key. */
+    mobileNote: 'تغییر شماره موبایل از طریق کلینیک انجام می‌شود.',
+    submit: 'ذخیره تغییرات',
+    saved: 'تغییرات ذخیره شد.',
+    consent: {
+      title: 'اجازه‌های ارسال پیام',
+      lead: 'شما تصمیم می‌گیرید کلینیک چگونه با شما در ارتباط باشد.',
+      sms: 'پیامک',
+      whatsApp: 'واتساپ',
+      phone: 'تماس تلفنی',
+      /** The before/after flag, which §9's rule 6 gates the images on. */
+      beforeAfter: 'استفاده از تصاویر قبل و بعد',
+      beforeAfterNote: 'در صورت لغو این اجازه، تصاویر شما بلافاصله از سایت حذف می‌شوند.',
+      submit: 'ذخیره اجازه‌ها',
+      saved: 'اجازه‌های شما به‌روز شد.',
+    },
+    /** Rendered when the person's record is gone while their session is still open. */
+    missing: 'پروفایل شما یافت نشد. لطفاً با کلینیک تماس بگیرید.',
+  },
+})

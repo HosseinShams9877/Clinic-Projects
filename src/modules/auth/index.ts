@@ -68,8 +68,10 @@ export { hashPassword } from './lib/password'
 
 export {
   openSession,
+  renewSession,
   revokeSession,
   SESSION_COOKIE,
+  SESSION_IDLE_MS,
   SESSION_TTL_MS,
   type OpenedSession,
 } from './lib/session'

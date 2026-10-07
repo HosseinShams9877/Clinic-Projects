@@ -60,8 +60,37 @@ import type { PrismaClient } from '@/generated/prisma/client'
 /** The name of the cookie the boundary sets (`installation.md` §4 documents it). */
 export const SESSION_COOKIE = 'clinic-session'
 
-/** The absolute lifetime §10 names, applied at login. */
+/**
+ * The absolute lifetime §10 names, applied at login.
+ *
+ * The ceiling a renewal cannot slide past: a session may be refreshed on the request
+ * path for as long as the person keeps using it, but not past the day it was opened.
+ * It is also the cookie's own `maxAge`, so the cookie does not outlive the row.
+ */
 export const SESSION_TTL_MS = 24 * 60 * 60 * 1000
+
+/**
+ * §10's idle expiry — how long a session may sit unused before the next request on it
+ * is refused.
+ *
+ * Shorter than the absolute lifetime on purpose: the two are different rules answering
+ * different risks. The absolute lifetime bounds a token that leaked, and the idle
+ * expiry bounds a session a person walked away from with the panel open — a clinic
+ * workstation left signed in is §17's stated, accepted risk, and the idle window is
+ * the product's half of controlling it. A fresh row carries this as its `expiresAt`,
+ * and `renewSession` slides it forward on use.
+ */
+export const SESSION_IDLE_MS = 30 * 60 * 1000
+
+/**
+ * How much idle life has to be left before a renewal writes the row.
+ *
+ * Renewing on every request would be a write per page view for no gain; renewing only
+ * when the remaining idle life has fallen below half the window keeps a person using
+ * the panel continuously from ever being asked to sign in again, while still touching
+ * the row at most twice per idle window.
+ */
+export const SESSION_RENEW_AT_MS = SESSION_IDLE_MS / 2
 
 /**
  * A session row the boundary can set a cookie for.
@@ -184,8 +213,51 @@ export function newSessionToken(): { readonly token: string; readonly tokenHash:
  * The expiry a session created at `issuedAt` carries.
  *
  * A pure function of the clock so a test sets the lifetime by setting the clock,
- * and so the login and the renewal compute the same value from the same input.
+ * and so the login and the renewal compute the same value from the same input. The
+ * value is the **idle** deadline, which is what makes a row that has not been used
+ * for `SESSION_IDLE_MS` fail the resolution's `expiresAt` check; the absolute
+ * deadline is `createdAt + SESSION_TTL_MS`, which the renewal reads but never writes
+ * past.
  */
 export function sessionExpiresAt(issuedAt: Date): Date {
-  return new Date(issuedAt.getTime() + SESSION_TTL_MS)
+  return new Date(issuedAt.getTime() + SESSION_IDLE_MS)
+}
+
+/**
+ * Slides a session's idle deadline forward on the request path, §10's "absolute
+ * expiry plus idle expiry".
+ *
+ * Called from the panel's resolution after the token has already proved itself, so a
+ * row this returns `false` for is a row whose clock answer the caller already has. It
+ * never rewrites the absolute deadline: a session renewed repeatedly by a person who
+ * keeps using the panel still dies on the day it was opened, which is what keeps a
+ * leaked token from being refreshed into permanence.
+ *
+ * @returns the row's new expiry, or `null` when there was nothing to renew — no row,
+ * a revoked or expired session, or idle life the renewal window has not reached yet.
+ */
+export async function renewSession(args: {
+  readonly client: PrismaClient
+  readonly token: string
+  readonly now: Date
+}): Promise<Date | null> {
+  const { client, token, now } = args
+  const row = await client.session.findUnique({
+    where: { tokenHash: hashToken(token) },
+    select: { id: true, createdAt: true, expiresAt: true, revokedAt: true },
+  })
+  if (row === null) return null
+  // An expired or revoked session is not renewed: the resolution has already refused
+  // it, and sliding its deadline would be the fix a replay was looking for.
+  if (row.revokedAt !== null || now.getTime() >= row.expiresAt.getTime()) return null
+  // And a session with most of its idle life left is left alone, so a page view is
+  // not a write.
+  if (now.getTime() + SESSION_RENEW_AT_MS <= row.expiresAt.getTime()) return null
+
+  const absolute = new Date(row.createdAt.getTime() + SESSION_TTL_MS)
+  const renewed = new Date(Math.min(now.getTime() + SESSION_IDLE_MS, absolute.getTime()))
+  if (renewed.getTime() <= row.expiresAt.getTime()) return null
+
+  await client.session.update({ where: { id: row.id }, data: { expiresAt: renewed } })
+  return renewed
 }

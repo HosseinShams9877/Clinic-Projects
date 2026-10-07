@@ -43,7 +43,7 @@ export interface ConsentFlags {
 }
 
 /** The columns a consent write reads back, to render the row it just wrote. */
-const CONSENT_SELECT = {
+export const CONSENT_SELECT = {
   id: true,
   consentSms: true,
   consentWhatsApp: true,
@@ -91,8 +91,39 @@ export async function recordConsent(args: {
     throw notFound(args.customerId)
   }
 
-  const changes = changedChannels(row, args.flags)
-  const updated = await args.tx.customer.update({
+  return writeConsent(args.tx, {
+    tenantId: args.ctx.tenantId,
+    customerId: args.customerId,
+    before: row,
+    flags: args.flags,
+    source: args.source ?? null,
+    now: args.now,
+  })
+}
+
+/**
+ * The four flags and their evidence rows, written once for both callers.
+ *
+ * The desk's `recordConsent` and the panel's `recordOwnConsent` authorize differently
+ * — a permission for the desk, ownership for the panel — and write identically, which
+ * is what keeps a consent change's evidence rows the same fact whichever surface made
+ * it. The row the caller already read is the `before`, so the two halves of the
+ * decision — what changed, and what it changed to — are one read and not two that a
+ * concurrent write could come between.
+ */
+export async function writeConsent(
+  tx: TransactionClient,
+  args: {
+    readonly tenantId: string
+    readonly customerId: string
+    /** The row the caller's own scope check already produced. */
+    readonly before: ConsentSelectRow
+    readonly flags: ConsentFlags
+    readonly source: string | null
+    readonly now: Date
+  },
+): Promise<ConsentRow> {
+  const updated = await tx.customer.update({
     where: { id: args.customerId },
     data: {
       consentSms: args.flags.sms,
@@ -103,10 +134,11 @@ export async function recordConsent(args: {
     select: CONSENT_SELECT,
   })
 
+  const changes = changedChannels(args.before, args.flags)
   if (changes.length > 0) {
-    await args.tx.consentRecord.createMany({
+    await tx.consentRecord.createMany({
       data: changes.map(({ channel, granted }) => ({
-        tenantId: args.ctx.tenantId,
+        tenantId: args.tenantId,
         customerId: args.customerId,
         channel,
         granted,

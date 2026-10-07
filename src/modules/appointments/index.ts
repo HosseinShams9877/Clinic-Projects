@@ -47,6 +47,7 @@ export type {
 export {
   APPOINTMENT_STATUS_LABELS,
   BOOKING_MODE_LABELS,
+  CUSTOMER_APPOINTMENTS_PAGE,
   MESSAGES,
   TIME_RANGE_EVENING,
   TIME_RANGE_MORNING,
@@ -90,3 +91,15 @@ export {
 } from './lib/job'
 
 export { clinicDay, doctorDay, doctorsOnDay, unrecordedCartable, weekDays } from './lib/queries'
+
+export {
+  CUSTOMER_CANCEL_WINDOW_MS,
+  cancelOwnAppointment,
+  customerAppointments,
+  rescheduleOwnAppointment,
+} from './lib/own-panel'
+export type {
+  CustomerCancellation,
+  OwnAppointmentHistory,
+  OwnAppointmentRow,
+} from './lib/own-panel'
