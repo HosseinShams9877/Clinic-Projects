@@ -162,7 +162,9 @@ export async function publicDoctors(
   tenantId: string,
 ): Promise<readonly PublicDoctor[]> {
   const rows = await tx.serviceDoctor.findMany({
-    where: { tenantId },
+    // A deactivated service is absent from the catalogue and 404s on its own page, so
+    // a card that still named it would advertise something the wizard cannot book.
+    where: { tenantId, service: { isActive: true } },
     select: {
       doctorId: true,
       doctor: { select: { id: true, firstName: true, lastName: true } },
@@ -307,5 +309,5 @@ async function asSlotDay(
 
 function toMinutes(value: string): number {
   const [hours, minutes] = value.split(':').map(Number)
-  return hours * 60 + minutes
+  return (hours ?? 0) * 60 + (minutes ?? 0)
 }

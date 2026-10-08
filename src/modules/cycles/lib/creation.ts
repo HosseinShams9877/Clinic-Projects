@@ -322,13 +322,14 @@ async function recomputeCycle(
     orderBy: { scheduledAt: 'asc' },
   })
 
-  // `noUncheckedIndexedAccess` is off, so the index access is typed as though it cannot
-  // be undefined; the length check is the guard the compiler does not supply, and the
-  // empty case is unreachable in practice — the session that triggered the recompute is
-  // linked before it runs.
+  // The empty case is unreachable in practice — the session that triggered the recompute
+  // is linked before it runs — but the length check is the guard the compiler will not
+  // supply, so the narrowing below is what keeps the restored flag honest.
   if (sessions.length === 0) return
 
-  const lastSessionAt = sessions[sessions.length - 1].scheduledAt
+  const last = sessions[sessions.length - 1]
+  if (last === undefined) return
+  const lastSessionAt = last.scheduledAt
   const finished = cycle.totalSessions > 0 && sessions.length >= cycle.totalSessions
 
   if (finished) {

@@ -595,6 +595,65 @@ worth naming in the report instead of absorbing.
 
 ---
 
+## ۱۴۰۵/۰۷/۱۶ — Phase 11 closed; two gates stay unobserved, and the floor is red on purpose
+
+**The fact.** `npm run verify` is green at **70 files, 1264 tests** and
+`npm run build` at **39 routes**. `1.0.0` is tagged, the changelog's first entry is
+written, and `reports/phase-11-report.md` records the phase. Both Phase 1
+relaxations are closed: `noUncheckedIndexedAccess` is on (41 sites fixed) and the
+coverage floors are back (global 80, `core/localization` 100, `roles-permissions`
+100) and now enforced by `npm run test:coverage` — which **fails**, at 44.18% global.
+
+**The two unobserved gates are environmental, and both stop at three attempts.**
+`npx playwright install chromium` returns `403 AccessDenied
+"this service is not available in your location"` from
+`cdn.playwright.dev` — three identical 403s, so no Playwright suite can run at all,
+not even `--list`-resolved ones. PostgreSQL has no server (5432/5433 closed on
+`127.0.0.1`, `localhost` and `::1`; no `psql`/`postgres`/`pg_ctl`; Docker daemon
+installed but not running, and starting a container was forbidden). Neither was
+worked around; the four spec scenarios and the isolation suite run on SQLite and
+the report names the engine rather than implying the gate passed. **A future
+session on an unrestricted machine should run `npm run e2e` + axe over the 37 pages
+and the cross-tenant suite on PostgreSQL before anything else.**
+
+**`npm audit` needs a flag here, and its finding is unfixable in-tree.** The
+configured registry is `npmmirror.com`, which 404s the audit endpoint; use
+`npm audit --registry=https://registry.npmjs.org`. It reports 4 high advisories —
+`mysql2 <=3.23.0` (×2) and `deepmerge-ts <8.0.0` — all transitive through
+`@prisma/client → prisma@7.10.0`. Neither is a connector the product loads
+(`better-sqlite3` and `pg` are), but `prisma` is a transitive of the runtime client,
+so `--omit=dev` does not drop them, and npm's only remedy is a breaking
+`prisma@6` downgrade. Reported, not overridden.
+
+**`noUncheckedIndexedAccess` earned its keep twice.** The flag's 41 errors were
+mostly mechanical, but two were real. `OptionsForm` read `labels.remove` for a key
+its catalog defines as `removeOverride` — an index signature on
+`{ [key: string]: string }` had been hiding a key that does not exist, so the
+override remove button rendered an empty label. And `desk/page.tsx` indexed three
+parallel arrays (`sections`/`headings`/`links`) that could silently disagree; they
+are now one typed array carrying its own link. **When a prop needs a label map,
+type it `Readonly<Record<keyof C, string>>` over the catalog constant — never an
+index signature, which opts the whole object out of key checking.**
+
+**The one production bug, and the pattern.** `publicDoctors` filtered
+`ServiceDoctor` on `tenantId` alone while `publicServices` filtered
+`isActive: true`, so a doctor's card named a service the catalogue had
+deactivated and its own page 404'd. Fixed by filtering `service: { isActive: true }`
+in the read. Same shape as Phase 8's snapshot gate and Phase 7's argon2 chain:
+**two paths that should answer the same question must filter in the same place.**
+A read that joins past a filtered one silently un-filters it.
+
+**The coverage floor was left red deliberately.** Closing it means tests for
+`staff/lib/leave.ts` (3.57%), `payments/lib/reconcile.ts` (10%),
+`payments/lib/queries.ts` (25%), `settings/lib/overrides.ts` (0%),
+`tenant-management/lib/queries.ts` (0%) and `worker/main.ts` (0%) — lib modules
+whose writes no page exercises directly. Those tests would exist to move a number,
+and the phase's own instruction forbade that. The honest state is recorded instead:
+the floor exists, it blocks, the code is below it, and `verify` remains the green
+gate.
+
+---
+
 ## Template for new entries
 
 ```markdown

@@ -109,11 +109,68 @@ See `../setup/deployment.md` §9 for the full on-premise upgrade procedure.
 
 | Version | Date | Notes |
 |---|---|---|
-| — | — | No release yet. The product is at end of Phase 0: documentation only, no application code. |
+| 1.0.0 | ۱۴۰۵/۰۷/۱۶ | The first release — every panel, the public site, the worker and the ten phases' rules. |
 
-The first entry appears when Phase 11 produces the first release. Until then this
-table is deliberately empty — a changelog entry for code that does not exist
-would be exactly the kind of placeholder this project forbids.
+---
+
+## [1.0.0] — ۱۴۰۵/۰۷/۱۶
+
+The first release. Ten phases of work, and the product a clinic actually runs:
+reception, the manager and doctor panels, the customer's own account, the public
+site with its booking wizard, the background worker, multi-tenancy and licensing.
+
+### Added
+
+- **The eight public pages and the booking wizard** (Phase 8) — a visitor reads
+  the catalogue, picks a service and books a real slot, with no account and no
+  staff involvement. The slots the wizard offers come from the same engine the
+  desk's grid uses, so a time the site sells is a time the clinic can honour.
+- **The customer's own panel** (Phase 9) — upcoming and past sessions, the
+  care instructions for each service, receipts and the balance they leave, and
+  the profile with its consents.
+- **The manager's dashboard, reports and settings** (Phase 10) — the six settings
+  tabs, the tenancy surface and the license key.
+- **Campaigns and the campaign assistant** (Phase 7) — a manager writes a Persian
+  sentence and the assistant reads the audience, the channel and the message out
+  of it. A campaign cannot dispatch without a second person's approval.
+- **Treatment cycles and the contact list** (Phase 4) — a course of sessions is
+  created on the first completed session, and the secretary's contact list holds
+  the customers whose next session is not yet booked.
+- **Debts in four buckets** (Phase 5), reception's working day (Phase 6), and
+  customers, leads and services (Phases 1–3).
+
+### Fixed
+
+- **A deactivated service no longer appears on a doctor's public card.** The
+  catalogue stopped selling it and its page returned a 404, but the doctor's card
+  still named it, so a visitor could reach a booking the wizard then had to
+  refuse. The read now filters the same way the catalogue does (Phase 11).
+
+### Security
+
+- **Tenancy is enforced at two layers.** The application's tenant filter is one;
+  the PostgreSQL row-level-security policies are the other. Every one of the 24
+  tenant-scoped tables carries `ENABLE`, `FORCE`, `USING` and `WITH CHECK`, and
+  the check is run by `npm run check:rls`.
+- **A license that lapses blocks the instance and destroys nothing.** The tenant,
+  its clinics and its audit rows are exactly where a renewed key finds them.
+- **Consent gates the gallery in the read itself**, so no page can render an
+  image the clinic unpublished or the person later withdrew.
+
+### Upgrade notes
+
+This is the first release, so there is no upgrade path — only the install path in
+`setup/installation.md`. For an on-premise single-tenant install, read
+`setup/single-tenant.md` first, then `setup/deployment.md`.
+
+- **PostgreSQL 15 or 16 is required in production.** SQLite is development only
+  and carries no row-level security.
+- **The worker is not optional.** Without it, cycles do not become due,
+  reminders are not sent, campaigns do not dispatch and audience counts do not
+  refresh.
+- **A clean install reaches a Persian, right-to-left login page with no network
+  access**, because the font is self-hosted and committed.
+
 
 ---
 

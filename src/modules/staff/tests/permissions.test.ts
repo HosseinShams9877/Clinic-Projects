@@ -325,7 +325,9 @@ describe('the audit row a permission change writes', () => {
     const audit = await recentAudit({ tx: unscoped as never, ctx: managerContext() })
     expect(audit).toHaveLength(1)
 
-    const [row] = audit
+    const row = audit[0]
+    expect(row).toBeDefined()
+    if (row === undefined) return
     expect(row.action).toBe(AuditAction.MembershipPermissionChanged)
     expect(row.entity).toBe(AuditEntity.Membership)
     expect(row.actorUserId).toBe(MANAGER_ID)

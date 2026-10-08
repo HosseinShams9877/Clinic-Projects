@@ -58,14 +58,14 @@ import {
   runLifecycleSweep,
   unrecordedCartable,
 } from '@/modules/appointments'
-import { CYCLE_STATUS_LABELS, contactList as cycleContacts, readUtcOffsetMinutes } from '@/modules/cycles'
+import {
+  CYCLE_STATUS_LABELS,
+  contactList as cycleContacts,
+  readUtcOffsetMinutes,
+} from '@/modules/cycles'
 import { DEBT_BUCKET_LABELS, contactList as debtContacts } from '@/modules/debts'
 import { listLeads } from '@/modules/customers'
-import {
-  AUTOMATIC_KIND_LABELS,
-  HELD_LABELS,
-  todaysReminders,
-} from '@/modules/notifications'
+import { AUTOMATIC_KIND_LABELS, HELD_LABELS, todaysReminders } from '@/modules/notifications'
 import { SEND_STATUS_LABELS } from '@/modules/messages'
 
 import { DESK_PAGE, PANEL_HOMES } from '@/app/catalog'
@@ -103,9 +103,7 @@ export default async function ReceptionDeskPage() {
     const [day, unrecorded, cycles, debts, leads, reminders] = await Promise.all([
       clinicDay({ tx, ctx, clinicId: ctx.clinicId ?? null, localDate: today }),
       unrecordedCartable({ tx, tenantId: ctx.tenantId }),
-      can(ctx, Permission.ActOnCycles)
-        ? cycleContacts({ tx, ctx, now })
-        : Promise.resolve([]),
+      can(ctx, Permission.ActOnCycles) ? cycleContacts({ tx, ctx, now }) : Promise.resolve([]),
       can(ctx, Permission.ViewDebts) ? debtContacts({ tx, ctx, now }) : Promise.resolve(null),
       can(ctx, Permission.ManageLeads) ? listLeads({ tx, ctx }) : Promise.resolve([]),
       todaysReminders(tx, ctx.tenantId, now),
@@ -120,91 +118,110 @@ export default async function ReceptionDeskPage() {
       : [...desk.debts.overdue, ...desk.debts.overdue7, ...desk.debts.overdue30]
   const newLeads = desk.leads.filter((row) => row.leadStatus === LeadStatus.New)
 
-  const sections: readonly DeskRow[][] = [
-    desk.day.map((row) => ({
-      key: row.id,
-      first: formatTime(asLocalTime(row.localTime)),
-      second: row.customerName ?? '—',
-      third: row.customerMobile === null ? '—' : formatPhone(row.customerMobile),
-      fourth: row.serviceName ?? '—',
-      status: APPOINTMENT_STATUS_LABELS[row.status as keyof typeof APPOINTMENT_STATUS_LABELS] ?? row.status,
-    })),
-    desk.unrecorded.map((row) => ({
-      key: row.id,
-      first: formatTime(asLocalTime(row.localTime)),
-      second: row.customerName ?? '—',
-      third: row.customerMobile === null ? '—' : formatPhone(row.customerMobile),
-      fourth: row.serviceName ?? '—',
-      status: APPOINTMENT_STATUS_LABELS[row.status as keyof typeof APPOINTMENT_STATUS_LABELS] ?? row.status,
-    })),
-    arrivals.map((row) => ({
-      key: row.id,
-      first: formatTime(asLocalTime(row.localTime)),
-      second: row.customerName ?? '—',
-      third: row.customerMobile === null ? '—' : formatPhone(row.customerMobile),
-      fourth: row.doctorName,
-      status: APPOINTMENT_STATUS_LABELS.AWAITING_ARRIVAL,
-    })),
-    desk.cycles.map((row) => ({
-      key: row.id,
-      first:
-        row.dueLocalDate === null
-          ? '—'
-          : toPersianDigits(asLocalDate(row.dueLocalDate)),
-      second: row.customerName,
-      third: formatPhone(row.mobile),
-      fourth: DESK_PAGE.sessionOf(row.serviceName, row.dueSessionNumber),
-      status: CYCLE_STATUS_LABELS[row.status as keyof typeof CYCLE_STATUS_LABELS] ?? row.status,
-    })),
-    overdue.map((row) => ({
-      key: row.appointmentId,
-      first: formatMoney(row.balance, { unit: false }),
-      second: `${row.customerFirstName} ${row.customerLastName ?? ''}`.trim(),
-      third: formatPhone(row.customerMobile),
-      fourth: toPersianDigits(asLocalDate(row.dueLocalDate)),
-      status: DEBT_BUCKET_LABELS[row.bucket] ?? row.bucket,
-    })),
-    newLeads.map((row) => ({
-      key: row.id,
-      first: toPersianDigits(asLocalDate(dateToLocalDate(row.createdAt))),
-      second: `${row.firstName} ${row.lastName ?? ''}`.trim(),
-      third: formatPhone(row.mobile),
-      fourth: row.acquisitionSource ?? '—',
-      status: row.leadStatus ?? '—',
-    })),
-    desk.reminders.map((row) => ({
-      key: row.id,
-      first: row.sentAt === null ? '—' : formatTime(nowLocalTime(row.sentAt)),
-      second: row.customerName,
-      third: formatPhone(row.mobile),
-      fourth: row.kind === null ? row.renderedText : AUTOMATIC_KIND_LABELS[row.kind],
-      status:
-        row.status === 'SUPPRESSED'
-          ? `${HELD_LABELS.suppressed} — ${row.suppressedReason ?? ''}`.trim()
-          : SEND_STATUS_LABELS[row.status as keyof typeof SEND_STATUS_LABELS] ?? row.status,
-    })),
+  type DeskGroup = {
+    readonly heading: string
+    readonly link: { readonly href: string; readonly label: string } | undefined
+    readonly rows: readonly DeskRow[]
+  }
+
+  const groups: readonly DeskGroup[] = [
+    {
+      heading: DESK_PAGE.sections.appointments,
+      link: { href: '/reception/appointments', label: DESK_PAGE.links.allAppointments },
+      rows: desk.day.map((row) => ({
+        key: row.id,
+        first: formatTime(asLocalTime(row.localTime)),
+        second: row.customerName ?? '—',
+        third: row.customerMobile === null ? '—' : formatPhone(row.customerMobile),
+        fourth: row.serviceName ?? '—',
+        status:
+          APPOINTMENT_STATUS_LABELS[row.status as keyof typeof APPOINTMENT_STATUS_LABELS] ??
+          row.status,
+      })),
+    },
+    {
+      heading: DESK_PAGE.sections.unrecorded,
+      link: {
+        href: '/reception/appointments?view=cartable',
+        label: DESK_PAGE.links.allAppointments,
+      },
+      rows: desk.unrecorded.map((row) => ({
+        key: row.id,
+        first: formatTime(asLocalTime(row.localTime)),
+        second: row.customerName ?? '—',
+        third: row.customerMobile === null ? '—' : formatPhone(row.customerMobile),
+        fourth: row.serviceName ?? '—',
+        status:
+          APPOINTMENT_STATUS_LABELS[row.status as keyof typeof APPOINTMENT_STATUS_LABELS] ??
+          row.status,
+      })),
+    },
+    {
+      heading: DESK_PAGE.sections.arrivals,
+      link: undefined,
+      rows: arrivals.map((row) => ({
+        key: row.id,
+        first: formatTime(asLocalTime(row.localTime)),
+        second: row.customerName ?? '—',
+        third: row.customerMobile === null ? '—' : formatPhone(row.customerMobile),
+        fourth: row.doctorName,
+        status: APPOINTMENT_STATUS_LABELS.AWAITING_ARRIVAL,
+      })),
+    },
+    {
+      heading: DESK_PAGE.sections.cycles,
+      link: { href: '/reception/cycles', label: DESK_PAGE.links.allCycles },
+      rows: desk.cycles.map((row) => ({
+        key: row.id,
+        first: row.dueLocalDate === null ? '—' : toPersianDigits(asLocalDate(row.dueLocalDate)),
+        second: row.customerName,
+        third: formatPhone(row.mobile),
+        fourth: DESK_PAGE.sessionOf(row.serviceName, row.dueSessionNumber),
+        status: CYCLE_STATUS_LABELS[row.status as keyof typeof CYCLE_STATUS_LABELS] ?? row.status,
+      })),
+    },
+    {
+      heading: DESK_PAGE.sections.debts,
+      link: { href: '/reception/debts', label: DESK_PAGE.links.allDebts },
+      rows: overdue.map((row) => ({
+        key: row.appointmentId,
+        first: formatMoney(row.balance, { unit: false }),
+        second: `${row.customerFirstName} ${row.customerLastName ?? ''}`.trim(),
+        third: formatPhone(row.customerMobile),
+        fourth: toPersianDigits(asLocalDate(row.dueLocalDate)),
+        status: DEBT_BUCKET_LABELS[row.bucket] ?? row.bucket,
+      })),
+    },
+    {
+      heading: DESK_PAGE.sections.leads,
+      link: { href: '/reception/leads', label: DESK_PAGE.links.allLeads },
+      rows: newLeads.map((row) => ({
+        key: row.id,
+        first: toPersianDigits(asLocalDate(dateToLocalDate(row.createdAt))),
+        second: `${row.firstName} ${row.lastName ?? ''}`.trim(),
+        third: formatPhone(row.mobile),
+        fourth: row.acquisitionSource ?? '—',
+        status: row.leadStatus ?? '—',
+      })),
+    },
+    {
+      heading: DESK_PAGE.sections.reminders,
+      link: undefined,
+      rows: desk.reminders.map((row) => ({
+        key: row.id,
+        first: row.sentAt === null ? '—' : formatTime(nowLocalTime(row.sentAt)),
+        second: row.customerName,
+        third: formatPhone(row.mobile),
+        fourth: row.kind === null ? row.renderedText : AUTOMATIC_KIND_LABELS[row.kind],
+        status:
+          row.status === 'SUPPRESSED'
+            ? `${HELD_LABELS.suppressed} — ${row.suppressedReason ?? ''}`.trim()
+            : (SEND_STATUS_LABELS[row.status as keyof typeof SEND_STATUS_LABELS] ?? row.status),
+      })),
+    },
   ]
 
-  const headings = [
-    DESK_PAGE.sections.appointments,
-    DESK_PAGE.sections.unrecorded,
-    DESK_PAGE.sections.arrivals,
-    DESK_PAGE.sections.cycles,
-    DESK_PAGE.sections.debts,
-    DESK_PAGE.sections.leads,
-    DESK_PAGE.sections.reminders,
-  ]
-  const links = [
-    { href: '/reception/appointments', label: DESK_PAGE.links.allAppointments },
-    { href: '/reception/appointments?view=cartable', label: DESK_PAGE.links.allAppointments },
-    undefined,
-    { href: '/reception/cycles', label: DESK_PAGE.links.allCycles },
-    { href: '/reception/debts', label: DESK_PAGE.links.allDebts },
-    { href: '/reception/leads', label: DESK_PAGE.links.allLeads },
-    undefined,
-  ]
-
-  const empty = sections.every((rows) => rows.length === 0)
+  const empty = groups.every((group) => group.rows.length === 0)
 
   return (
     <div className="flex flex-col gap-8">
@@ -218,13 +235,13 @@ export default async function ReceptionDeskPage() {
           {DESK_PAGE.empty}
         </p>
       ) : (
-        sections.map((rows, index) => (
+        groups.map((group) => (
           <DeskSection
-            key={headings[index]}
-            heading={headings[index]}
-            count={rows.length}
-            link={links[index]}
-            rows={rows}
+            key={group.heading}
+            heading={group.heading}
+            count={group.rows.length}
+            link={group.link}
+            rows={group.rows}
           />
         ))
       )}

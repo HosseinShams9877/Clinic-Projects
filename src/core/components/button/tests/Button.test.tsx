@@ -269,8 +269,9 @@ describe('Button', () => {
         const button = screen.getByRole('button')
         expect(button.children).toHaveLength(2)
 
-        const spinner = button.children[1]
-        expect(spinner.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+        const spinner = button.children.item(1)
+        expect(spinner).not.toBeNull()
+        expect(spinner?.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
       })
 
       it('does not render a spinner when it is not loading', () => {

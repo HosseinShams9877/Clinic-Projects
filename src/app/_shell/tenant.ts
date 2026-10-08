@@ -72,8 +72,8 @@ async function slugFromHost(): Promise<string | undefined> {
   const host = (await headers()).get('host')
   if (host === null) return undefined
 
-  const firstLabel = host.split(':')[0].split('.')[0]
-  if (firstLabel === '') return undefined
+  const firstLabel = host.split(':')[0]?.split('.')[0]
+  if (firstLabel === undefined || firstLabel === '') return undefined
   if (firstLabel === 'localhost') return undefined
   return firstLabel
 }

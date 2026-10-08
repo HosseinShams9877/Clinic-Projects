@@ -1,6 +1,6 @@
 {
   "name": "clinic",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Persian clinic management platform — appointments, treatment cycles, campaigns, debts and reporting for a single clinic or a multi-branch tenant.",
   "engines": {

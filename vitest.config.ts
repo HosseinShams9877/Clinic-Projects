@@ -112,18 +112,16 @@ export default defineConfig({
         // carries a small untested one, and 80% stops describing the product and
         // starts describing the average.
         //
-        // **Phase 1 relaxation — restore in Phase 11.** The global floor and the
-        // localization layer's are lowered for this phase only, so that the
-        // phase's gate measures the modules it finished rather than being held
-        // hostage by the modules Phase 2+ owns (the panels have no unit-testable
-        // surface until their pages exist, and counting them now records a number
-        // that says nothing). `roles-permissions` keeps 100%: the 96-case matrix
+        // **Phase 11 — the Phase 1 relaxation is closed.** The global floor and the
+        // localization layer's are back at §11's numbers, and every module the
+        // earlier phases shipped is now measured against the floor the specification
+        // named from the start. `roles-permissions` never left 100: the 96-case matrix
         // is the specification, and it is green.
         'src/core/localization/**': {
-          lines: 80,
-          branches: 80,
-          functions: 80,
-          statements: 80,
+          lines: 100,
+          branches: 100,
+          functions: 100,
+          statements: 100,
         },
         'src/modules/roles-permissions/**': {
           lines: 100,
@@ -141,10 +139,10 @@ export default defineConfig({
         // `include` above and enforced by nothing here — deliberately, because a
         // blocking number on code whose coverage is dominated by the pages it
         // renders is a number that a Playwright suite earns, not a unit suite.
-        lines: 60,
-        branches: 60,
-        functions: 60,
-        statements: 60,
+        lines: 80,
+        branches: 80,
+        functions: 80,
+        statements: 80,
       },
     },
   },

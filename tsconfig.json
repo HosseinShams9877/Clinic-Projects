@@ -12,6 +12,7 @@
     "allowJs": false,
     "checkJs": false,
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,

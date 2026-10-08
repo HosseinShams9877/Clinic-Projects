@@ -25,9 +25,10 @@
 | 8 | Public site | **Complete** | ۱۴۰۵/۰۷/۱۵ | ۱۴۰۵/۰۷/۱۵ |
 | 9 | Customer panel | **Complete** | ۱۴۰۵/۰۷/۱۶ | ۱۴۰۵/۰۷/۱۶ |
 | 10 | Reports, settings, tenancy, licensing | **Complete** | ۱۴۰۵/۰۷/۱۶ | ۱۴۰۵/۰۷/۱۶ |
-| 11 | Hardening and full verification | Not started | — | — |
+| 11 | Hardening and full verification | **Complete** | ۱۴۰۵/۰۷/۱۶ | ۱۴۰۵/۰۷/۱۶ |
 
-**Current phase:** Phase 10 is **complete**. Phase 11 has not started.
+**Current phase:** Phase 11 is **complete** — the first release, `1.0.0`, is cut and
+tagged. Phase 12 has not started.
 
 **Legend.** Not started · In progress · Blocked · Complete.
 
@@ -40,8 +41,8 @@
 | Knowledge layer (`docs/knowledge/`, 11 files) | Complete |
 | Roadmap (`docs/roadmap/`, 3 files) | Complete |
 | Setup guides (`docs/setup/`, 5 files) | Complete |
-| Changelog convention (`docs/changelog/`) | Complete |
-| Phase reports (`reports/`) | Complete for Phases 0–10 |
+| Changelog convention (`docs/changelog/`) | Complete — the first entry, `1.0.0`, is written |
+| Phase reports (`reports/`) | Complete for Phases 0–11 |
 | Root files (README, .gitignore, .env.example, LICENSE) | Complete |
 | `.claude/` (settings, agents, commands, context, memory) | Complete |
 | Package manifest | Complete — all dependencies pinned, no styled component library |
@@ -49,9 +50,9 @@
 | Prisma schema | Complete — one portable schema, 29 models, 1000 lines (ADR-0007’s ceiling, met and not passed), validating as SQLite and PostgreSQL |
 | Migrations | Complete — the SQLite migration list (ten migrations, Phase 10’s `settings_appointment_timings` the latest) and the PostgreSQL RLS policies |
 | Vazirmatn | Complete — five weights self-hosted in `src/app/fonts/` with the OFL 1.1 licence and authors file |
-| Test suite | 64 files, 1179 tests — complete for Phases 1–5; Phase 6 added the exactly-three tests its instruction fixed (the seven triggers, the consent suppression, the 90-day window and the priority order), Phase 7 added its own three (the eight audience groups, the approval gate, the assistant's closed sets), Phase 8 added the three its DoD names (the holiday gate, the deposit gate, the consent-filtered gallery), Phase 9 added the three its DoD names (the four-page isolation with the 404 on a horizontal reach, the type-level absence of a `customerId` parameter, and the cancellation policy with the deposit policy it composes), and Phase 10 added the three its instruction fixed (the seven reports computed from seeded rows, the barrel's enumerated financial-free surface, and the eight toggles enforced server-side in one parametrised suite) |
-| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1179 tests. The coverage thresholds are red by instruction; see `../reports/phase-10-report.md` §5 |
-| End-to-end suite | Written but **not executed** — Playwright's pinned Chromium cannot be downloaded on the build machine. See `../reports/phase-02-report.md` §4 |
+| Test suite | 70 files, 1264 tests — Phases 1–10 as recorded below, plus Phase 11's six files: the four debt buckets at their exact boundaries, the six settings tabs written and read back, the license key that lapses and restores, tenant provisioning with the last-manager invariant, the public site's reads, and the four specification scenarios chained end to end |
+| Verification gate | **`npm run verify` passes end to end** — generate, typecheck, lint, 5 checks, 1264 tests. The Phase 1 coverage floors are restored and now **enforced** by `npm run test:coverage`, which fails on them; see `../reports/phase-11-report.md` §4 |
+| End-to-end suite | Still **not executed** — Playwright's pinned Chromium cannot be downloaded on the build machine (403 ×3). See `../reports/phase-11-report.md` §5 |
 
 Phase 0 produced the specification for the codebase. Phase 1 produced the
 codebase. Phase 2 produced the appointment lifecycle, the slot engine and the three
@@ -488,6 +489,48 @@ four comments trimmed to pay for the four the column cost.
 
 ---
 
+## Phase 11 — what was delivered
+
+**Complete**, started and completed ۱۴۰۵/۰۷/۱۶. The closing report is
+`../reports/phase-11-report.md`; §5 names the two gates that stayed unobserved and
+§4 the two that are red.
+
+- [x] **The four specification scenarios, chained end to end** — Instagram to a
+      first session, a secretary's working day, a six-session course, and a
+      birthday campaign; 10 tests from a clean database with no manual step, in
+      `src/scenarios/tests/scenarios.test.ts`
+- [x] **`noUncheckedIndexedAccess` restored** — 41 errors found and fixed, one of
+      them a latent bug: `OptionsForm` read `labels.remove` for a key the catalog
+      names `removeOverride`, so the override remove button rendered an empty label
+- [x] **The §11 coverage floors restored** — global 80, `core/localization` 100,
+      `roles-permissions` 100. The gate runs and fails; the modules below it are
+      named in the report's §4 rather than filled with number-moving tests
+- [x] **The permission matrix re-run** — the 96 cases across 16 permissions and 3
+      roles, both directions, plus escalation, the eight toggles and the
+      last-manager invariant
+- [x] **The install path performed** — migrations, the seed (2 tenants, 10 users,
+      16 customers, the shared-mobile isolation fixture), the worker's health on
+      :3100, and a Persian RTL `/login` with zero external fetches
+- [x] **The release** — `1.0.0` in `package.json`, the tag, and the changelog's
+      first entry
+- [ ] The axe and responsive pass over all 37 pages — same Chromium blocker as every
+      phase before it, tenth phase running
+- [ ] The cross-tenant suite on PostgreSQL — no server here, and the instruction
+      forbade starting a container
+
+**One real bug found, by a test written before the fix.** `publicDoctors` read
+`ServiceDoctor` on `tenantId` alone, so a doctor's public card kept naming a service
+the catalogue had deactivated — a visitor following it reached a booking the wizard
+then had to refuse. The read now filters `service: { isActive: true }`, the same way
+the catalogue does.
+
+**Both Phase 1 relaxations are closed.** `noUncheckedIndexedAccess` is on and its 41
+sites are fixed; the coverage floors are back and enforced. The two framework
+workarounds Phase 1 recorded — `experimental.turbopackMinify: false` and the removed
+`eslint` key — are unchanged, and neither is a relaxation.
+
+---
+
 ## Nothing is blocked
 
 The session that opened this phase had no working package manager, so nothing had
@@ -495,10 +538,12 @@ ever been executed. That is no longer true, and nothing has been blocked since.
 Node 24.19.0, npm 11.17.0 and git 2.50.1 all run, and the whole gate passes:
 
 ```
-npm run build    →  37 routes, exit 0
+npm run build    →  39 routes, exit 0
 npm run verify   →  db:generate · typecheck · lint · check:files · check:i18n
                    check:overrides · check:schema · check:rls · test
-                   64 files, 1179 tests, exit 0
+                   70 files, 1264 tests, exit 0
+npm run test:coverage  →  exit 1 — the restored floors are enforced and the
+                   code is below them (report §4)
 ```
 
 One consequence worth recording: `src/generated/` is ignored, and `verify`
@@ -509,19 +554,19 @@ files already treated the directory that way — `.prettierignore`, the lint
 ignores and `check-file-length.mjs`.
 
 Two things could not run on this machine, neither of which is a code gap. Both
-are in the phase report's §4:
+are in `../reports/phase-11-report.md` §5:
 
 | Not run | Why |
 |---|---|
-| The e2e suite and the axe pass | Playwright's pinned Chromium cannot be downloaded here. The specs are written and `--list` resolves; a machine that can fetch the browser should run `npm run e2e` and the axe pass over the three scheduling pages, the four customer-panel pages and the three manager pages before Phase 11 |
-| The cross-tenant suite on PostgreSQL | Needs a PostgreSQL server. `check:rls` covers the policies statically and fails closed — the check exists because the unit suite runs on SQLite, which has no RLS — but the behavioural confirmation has not been observed against a live database |
+| The e2e suite and the axe pass | Playwright's pinned Chromium cannot be downloaded here — `npx playwright install chromium` returns `403 AccessDenied` on three attempts. The specs are written and the login pages' HTML is asserted in `e2e/login.spec.ts`; a machine that can fetch the browser should run `npm run e2e` and the axe pass over all 37 pages |
+| The cross-tenant suite on PostgreSQL | No PostgreSQL here — ports closed, no binaries, Docker daemon not running and the instruction forbade starting a container. `check:rls` covers the 24 tables' policies statically; the behavioural confirmation against a live engine is the assertion that is missing |
 
-Two Phase 1 relaxations are still in place and are restored in Phase 11: the
-coverage thresholds (global 80 → 60, `core/localization` 100 → 80;
-`roles-permissions` held at 100) and `noUncheckedIndexedAccess` in `tsconfig.json`.
-Two framework workarounds are also still in place: `experimental.turbopackMinify: false`
-and the removal of the deprecated `eslint` key. All four are recorded with their
-restore condition in the phase report's §3 and §4.
+The two Phase 1 relaxations are **closed in Phase 11**: `noUncheckedIndexedAccess`
+is on with its 41 sites fixed, and the coverage floors are restored to global 80 /
+`core/localization` 100 / `roles-permissions` 100 — enforced by
+`npm run test:coverage`, which fails on them. Two framework workarounds remain in
+place: `experimental.turbopackMinify: false` and the removal of the deprecated
+`eslint` key. Neither is a relaxation.
 
 Nothing here changes the plan, so there is no `decisions.md` entry. The three open
 questions from Phase 0 stand, and the first half of one of them is now closed:

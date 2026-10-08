@@ -22,8 +22,8 @@ export async function clientIp(): Promise<string> {
   const headerList = await headers()
   const forwarded = headerList.get('x-forwarded-for')
   if (forwarded !== null) {
-    const first = forwarded.split(',')[0].trim()
-    if (first !== '') return first
+    const trimmed = forwarded.split(',')[0]?.trim()
+    if (trimmed !== undefined && trimmed !== '') return trimmed
   }
   return headerList.get('x-real-ip') ?? ''
 }

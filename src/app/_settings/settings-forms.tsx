@@ -40,6 +40,22 @@ import {
   saveTogglesAction,
   type ActionResult,
 } from './actions'
+import type {
+  BOOKING_FIELDS,
+  CYCLE_FIELDS,
+  IDENTITY_FIELDS,
+  MESSAGES_FIELDS,
+  OPTIONS_FIELDS,
+  WORKING_HOURS_FIELDS,
+} from '@/modules/settings'
+import type { Toggle } from '@/modules/roles-permissions'
+
+/**
+ * A tab's labels, keyed by the catalog's own keys. The catalog constants are the
+ * source of truth, so the prop is typed over one of them and a label the catalog
+ * lacks is a compile error rather than a blank field.
+ */
+type FieldLabels<C> = Readonly<Record<keyof C, string>>
 
 /** The tabs' shared field classes, so a field is the same field in every tab. */
 const FIELD_CLASS = 'rounded-md border border-line bg-page px-3 py-1.5 text-ink'
@@ -78,12 +94,7 @@ function Field({
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span className={LABEL_CLASS}>{label}</span>
-      <input
-        name={name}
-        type={type}
-        defaultValue={defaultValue}
-        className={FIELD_CLASS}
-      />
+      <input name={name} type={type} defaultValue={defaultValue} className={FIELD_CLASS} />
     </label>
   )
 }
@@ -100,7 +111,7 @@ export function IdentityForm({
   readonly clinicName: string
   readonly phone: string
   readonly address: string
-  readonly labels: { readonly save: string; readonly [key: string]: string }
+  readonly labels: FieldLabels<typeof IDENTITY_FIELDS>
 }) {
   const [result, action] = useActionState(saveIdentityAction, { ok: true, message: null })
 
@@ -136,7 +147,7 @@ export function BookingForm({
   readonly bookingHoldMinutes: number
   readonly secretaryDiscountCap: string
   readonly depositRefundPolicy: string
-  readonly labels: { readonly save: string; readonly [key: string]: string }
+  readonly labels: FieldLabels<typeof BOOKING_FIELDS>
   readonly modeLabels: Readonly<Record<string, string>>
   readonly refundLabels: Readonly<Record<string, string>>
 }) {
@@ -180,7 +191,11 @@ export function BookingForm({
         />
         <label className="flex flex-col gap-1 text-sm">
           <span className={LABEL_CLASS}>{labels.depositRefundPolicy}</span>
-          <select name="depositRefundPolicy" defaultValue={depositRefundPolicy} className={FIELD_CLASS}>
+          <select
+            name="depositRefundPolicy"
+            defaultValue={depositRefundPolicy}
+            className={FIELD_CLASS}
+          >
             <option value="">{labels.none}</option>
             {Object.entries(refundLabels).map(([value, label]) => (
               <option key={value} value={value}>
@@ -215,7 +230,7 @@ export function WorkingHoursForm({
     readonly title: string
     readonly isOfficial: boolean
   }>
-  readonly labels: { readonly save: string; readonly [key: string]: string }
+  readonly labels: FieldLabels<typeof WORKING_HOURS_FIELDS>
   readonly weekdayLabels: readonly string[]
 }) {
   const [shiftResult, shiftAction] = useActionState(addShiftAction, { ok: true, message: null })
@@ -252,7 +267,11 @@ export function WorkingHoursForm({
                     <td className="px-3 py-2 tabular-nums">{shift.startTime}</td>
                     <td className="px-3 py-2 tabular-nums">{shift.endTime}</td>
                     <td className="px-3 py-2">
-                      <RemoveButton action={removeShiftAction} id={shift.id} label={labels.remove} />
+                      <RemoveButton
+                        action={removeShiftAction}
+                        id={shift.id}
+                        label={labels.remove}
+                      />
                     </td>
                   </tr>
                 ))
@@ -342,11 +361,7 @@ function RemoveButton({
   readonly label: string
 }) {
   return (
-    <button
-      type="button"
-      onClick={() => action(id)}
-      className="text-sm font-medium text-danger"
-    >
+    <button type="button" onClick={() => action(id)} className="text-sm font-medium text-danger">
       {label}
     </button>
   )
@@ -360,7 +375,7 @@ export function CycleForm({
 }: {
   readonly noShowAddsToContactList: boolean
   readonly rescheduleShiftsDueDates: boolean
-  readonly labels: { readonly save: string; readonly [key: string]: string }
+  readonly labels: FieldLabels<typeof CYCLE_FIELDS>
 }) {
   const [result, action] = useActionState(saveCycleTabAction, { ok: true, message: null })
 
@@ -422,7 +437,7 @@ export function MessagesForm({
   readonly sendWindowEnd: string
   readonly dailyMessageCap: number
   readonly duplicateWindowDays: number
-  readonly labels: { readonly save: string; readonly [key: string]: string }
+  readonly labels: FieldLabels<typeof MESSAGES_FIELDS>
   readonly kindLabels: Readonly<Record<string, string>>
   readonly channelLabels: Readonly<Record<string, string>>
 }) {
@@ -459,8 +474,13 @@ export function MessagesForm({
 
       <div className="flex flex-col gap-3">
         {templates.map((template) => (
-          <label key={`${template.kind}-${template.channel}`} className="flex flex-col gap-1 text-sm">
-            <span className={LABEL_CLASS}>{`${kindLabels[template.kind] ?? template.kind} — ${channelLabels[template.channel] ?? template.channel}`}</span>
+          <label
+            key={`${template.kind}-${template.channel}`}
+            className="flex flex-col gap-1 text-sm"
+          >
+            <span
+              className={LABEL_CLASS}
+            >{`${kindLabels[template.kind] ?? template.kind} — ${channelLabels[template.channel] ?? template.channel}`}</span>
             <textarea
               name={`template:${template.kind}:${template.channel}`}
               defaultValue={template.text}
@@ -486,12 +506,17 @@ export function OptionsForm({
   modules,
 }: {
   readonly toggles: Readonly<Record<string, boolean>>
-  readonly toggleLabels: Readonly<Record<string, { readonly label: string; readonly description: string }>>
+  readonly toggleLabels: Readonly<
+    Record<Toggle, { readonly label: string; readonly description: string }>
+  >
   readonly overrides: ReadonlyArray<{ readonly module: string; readonly implementation: string }>
-  readonly labels: { readonly save: string; readonly [key: string]: string }
+  readonly labels: FieldLabels<typeof OPTIONS_FIELDS>
   readonly modules: readonly string[]
 }) {
-  const [toggleResult, toggleAction] = useActionState(saveTogglesAction, { ok: true, message: null })
+  const [toggleResult, toggleAction] = useActionState(saveTogglesAction, {
+    ok: true,
+    message: null,
+  })
   const [overrideResult, overrideAction] = useActionState(addOverrideAction, {
     ok: true,
     message: null,
@@ -501,7 +526,7 @@ export function OptionsForm({
     <div className="flex flex-col gap-6">
       <form action={toggleAction} className="flex flex-col gap-4">
         <div className="flex flex-col gap-3">
-          {(Object.keys(toggleLabels) as readonly string[]).map((toggle) => (
+          {(Object.keys(toggleLabels) as readonly Toggle[]).map((toggle) => (
             <label
               key={toggle}
               className="flex items-start gap-3 rounded-md border border-line bg-page px-3 py-2"
@@ -538,7 +563,7 @@ export function OptionsForm({
                 <RemoveButton
                   action={removeOverrideAction}
                   id={override.module}
-                  label={labels.remove}
+                  label={labels.removeOverride}
                 />
               </li>
             ))}
