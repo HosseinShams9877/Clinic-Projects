@@ -1,53 +1,39 @@
 /**
  * The staff login page, at `/login` — `02-architecture.md` §9's `login.html`.
  *
- * §9 puts the two logins on one page for the staff audience: the people who work at
- * the clinic log in with a password, and the people it treats log in with a
- * one-time code, and both doors are on this page because a person who has reached
- * `/login` has already said "I work here", and the customer door beside it is how
- * someone who said the wrong thing gets to the right one. `STAFF_LOGIN_PAGE.lead` is
- * the sentence that says both, which is what makes the page's copy and its two forms
- * unable to disagree about what the page holds.
+ * §9 has two doors on two pages: this page is the staff door only, and
+ * `/account/login` is the customer door. A person who reaches `/login` has said
+ * "I work here", so this page carries one form and one small link to the other
+ * door for someone who said the wrong thing.
  *
  * ## Why the page is a server component
  *
- * The two forms are client components — they hold a form's pending state and, on the
- * customer side, a challenge and a countdown — and the page around them is not,
- * because the page's job is to hand the labels and two server-read facts down. The
- * labels come from `auth`'s catalog (`05-conventions.md` §14: a Persian literal in a
- * component is a finding, and the labels are the module's vocabulary), the code
- * length from the barrel that owns it, and `nowEpochMs` from the clock the request
- * is served at. Passing them as props keeps the client bundle to the two forms.
+ * The form is a client component — it holds a form's pending state — and the page
+ * around it is not, because the page's job is to hand the labels down. The labels
+ * come from `auth`'s catalog (`05-conventions.md` §14: a Persian literal in a
+ * component is a finding, and the labels are the module's vocabulary). Passing them
+ * as props keeps the client bundle to the one form.
  *
  * ## What the page does not do
  *
  * It does not resolve a tenant. A staff member's tenant is the membership's, which
  * the action resolves from the session it just wrote — see `actions.ts` — and a page
  * that resolved one earlier would be a page that picked a tenant before it knew who
- * was logging in. The customer half resolves the host's tenant in its own action,
- * because a customer's tenant *is* the host's (`09-security.md` §7).
+ * was logging in.
  *
  * ## The classes
  *
  * `08-ui-design-system.md` has no `login.html` section, so the page composes the
  * same tokens the entry page does: the same centred column, the same card surface,
- * the same heading scale. The one difference is the card's contents, which are a
- * form and not a link, so the two cards here align their tops with `items-stretch`
- * and let each be as tall as its own fields need. The `[&>*]` pair is the boundary
- * the two forms own their own geometry inside.
+ * the same heading scale.
  */
 
 import type { Metadata } from 'next'
+import Link from 'next/link'
 
-import { realClock } from '@/core/lib/clock'
-import {
-  LOGIN_LABELS,
-  LOGIN_PLACEHOLDERS,
-  oneTimeCodeLength,
-} from '@/modules/auth'
+import { LOGIN_LABELS, LOGIN_PLACEHOLDERS } from '@/modules/auth'
 
-import { STAFF_LOGIN_PAGE } from '@/app/catalog'
-import { CustomerLoginForm } from '@/app/_login/customer-login'
+import { STAFF_LOGIN_PAGE, CUSTOMER_LOGIN_PAGE } from '@/app/catalog'
 import { StaffLoginForm } from '@/app/_login/staff-login'
 
 export const metadata: Metadata = { title: STAFF_LOGIN_PAGE.title }
@@ -55,20 +41,22 @@ export const metadata: Metadata = { title: STAFF_LOGIN_PAGE.title }
 export default function StaffLoginPage() {
   return (
     <main className="min-h-dvh flex flex-col items-center justify-center p-8 px-[var(--content-pad)] panel:p-7 panel:px-[var(--content-pad-sm)]">
-      <div className="flex w-full max-w-[880px] flex-col items-center gap-6">
+      <div className="flex w-full max-w-[420px] flex-col items-center gap-6">
         <h1 className="text-center text-3xl font-extrabold tracking-[var(--ls-heading)] text-ink">
           {STAFF_LOGIN_PAGE.title}
         </h1>
         <p className="text-center text-lg text-ink-2">{STAFF_LOGIN_PAGE.lead}</p>
-        <div className="flex w-full flex-wrap items-stretch justify-center gap-6 [&>*]:min-w-0 [&>*]:flex-[1_1_340px]">
+        <div className="flex w-full flex-col [&>*]:min-w-0">
           <StaffLoginForm labels={LOGIN_LABELS} placeholders={LOGIN_PLACEHOLDERS} />
-          <CustomerLoginForm
-            nowEpochMs={realClock().getTime()}
-            codeLength={oneTimeCodeLength}
-            labels={LOGIN_LABELS}
-            placeholders={LOGIN_PLACEHOLDERS}
-          />
         </div>
+        <p className="text-center text-sm text-ink-3">
+          <Link
+            href="/account/login"
+            className="font-semibold text-brand-700 underline-offset-4 hover:underline"
+          >
+            {CUSTOMER_LOGIN_PAGE.title}
+          </Link>
+        </p>
       </div>
     </main>
   )

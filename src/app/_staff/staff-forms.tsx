@@ -37,6 +37,9 @@
  * the two complete lists and the module reconciles, so the grid is state. The invite
  * form's fields are read off the submitted form instead, because a form's own value is
  * already the source of truth and a second one in state would be the one that drifts.
+ * The role control is the one exception — it is a `Combobox`, whose value is the
+ * option's id and not a form field, so the invite form holds its state beside the
+ * other fields it reads off the form.
  */
 
 'use client'
@@ -81,11 +84,16 @@ const ROLE_OPTIONS = Object.values(Role).map((value) => ({
  * A mobile the list already holds comes back onto the form as the module's own
  * sentence, which points the manager at the existing row: the person is already on the
  * staff list, and the ordinary outcome of an invite is not a mistake.
+ *
+ * The role is controlled state and not a form field, because the control that picks it
+ * is a `Combobox` — its value is an option's id, and the form reads the other four
+ * fields off the submitted form. The two halves are one record at submit time.
  */
 export function NewStaffDialog() {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
+  const [role, setRole] = useState<string>('')
   const titleId = useId()
 
   if (!open) {
@@ -98,12 +106,16 @@ export function NewStaffDialog() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (role === '') {
+      setAnswer({ ok: false, message: STAFF_PAGE.invite.role })
+      return
+    }
     const input: InviteInput = {
       mobile: asFormString(event.currentTarget, 'mobile'),
       firstName: asFormString(event.currentTarget, 'firstName'),
       lastName: asFormString(event.currentTarget, 'lastName'),
       password: asFormString(event.currentTarget, 'password'),
-      role: asFormString(event.currentTarget, 'role'),
+      role,
     }
     startTransition(async () => {
       const outcome: ActionResult = await inviteStaffAction(input)
@@ -158,9 +170,8 @@ export function NewStaffDialog() {
 
           <Field label={STAFF_PAGE.invite.role} required>
             <Combobox
-              name="role"
-              value={null}
-              onChange={() => {}}
+              value={role === '' ? null : role}
+              onChange={setRole}
               options={ROLE_OPTIONS}
               placeholder={STAFF_PAGE.invite.role}
               emptyMessage={STAFF_PAGE.invite.role}
