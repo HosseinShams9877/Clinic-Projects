@@ -10,6 +10,7 @@
     "dev": "next dev",
     "build": "next build --debug-prerender",
     "start": "next start",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build",
     "worker": "tsx src/worker/main.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
