@@ -8,21 +8,20 @@
  *
  * 1. **Request.** A mobile number. The action resolves the tenant from the host and
  *    calls `issueOtp` through the `auth` barrel, and the response is the challenge's
- *    id and its expiry — never the code, which the boundary delivers by text and
- *    this component never holds.
+ *    id and its expiry, and — in development only — the code itself.
  * 2. **Verify.** The code, plus the sentence that names the mobile it was sent to.
  *    `CODE_SENT_TO` is the one disclosure §10 permits: showing the number confirms
  *    which mobile to check without revealing whether any other number has an
  *    account. The action calls `loginWithOtp`, sets the cookie and sends the person
  *    to `/account`.
  *
- * ## Why the challenge id is the only thing step 2 carries forward
+ * ## Why the challenge id is the only thing step 2 carries forward in production
  *
  * The code is a secret and the mobile is a fact; the row's id is the handle. A
- * component that kept the code would be a component holding a credential, and there
- * is no reason to: the server compares what the person types against the row's hash.
- * Keeping the *mobile* forward is what lets the second step name it, and keeping the
- * *expiry* is what lets the countdown run.
+ * production boot never carries the code forward — the server compares what the
+ * person types against the row's hash. A development boot carries it forward so the
+ * form can display it, which is the one thing Phase 1 adds on top of the
+ * specification and the one thing `deliver-code.ts` gates on `NODE_ENV`.
  *
  * ## Why the countdown measures elapsed time
  *
@@ -41,6 +40,9 @@
  * an unknown one — and a code that never arrives produces the same sentence a wrong
  * code does, from `loginWithOtp`. This form renders that answer and adds nothing to
  * it: there is no "no such number" branch here, because the module raises none.
+ *
+ * The development-code panel is the one exception, and it is gated on the server:
+ * `devCode` is `null` in production, so the panel does not render there.
  */
 
 'use client'
@@ -68,6 +70,7 @@ import {
   CODE_COUNTDOWN_LABEL,
   CODE_SENT_TO,
   CUSTOMER_LOGIN_PAGE,
+  DEV_CODE_LABEL,
   FIELD_INVALID,
   FIELD_REQUIRED,
   REQUEST_NEW_CODE,
@@ -78,10 +81,10 @@ import { requestOtpAction, verifyOtpAction } from '@/app/account/login/actions'
 /**
  * The challenge step 2 holds.
  *
- * The code is deliberately absent, and the mobile is deliberately present — see the
- * header for why each. `expired` is set when the module's own answer says the code
- * is spent, which is the form's one signal that a new one is needed rather than a
- * retry of the old.
+ * The mobile is present so step 2 can name it, the expiry so the countdown can run,
+ * and the id so `loginWithOtp` has a handle. `devCode` is the code itself in
+ * development and `null` in production — the form renders the panel below it only
+ * when it is non-null.
  */
 interface Challenge {
   /** The row's id, which `loginWithOtp` reads. */
@@ -92,6 +95,8 @@ interface Challenge {
   readonly expiresAtEpochMs: number
   /** Set when the module's answer means a new code is the only fix. */
   readonly expired?: boolean
+  /** The code, in development only. `null` in production. */
+  readonly devCode: string | null
 }
 
 export interface CustomerLoginFormProps {
@@ -128,7 +133,12 @@ export function CustomerLoginForm({ nowEpochMs, codeLength, labels, placeholders
         requestForm.setError('mobile', { message: result.message })
         return
       }
-      setChallenge({ id: result.challengeId, mobile, expiresAtEpochMs: result.expiresAtEpochMs })
+      setChallenge({
+        id: result.challengeId,
+        mobile,
+        expiresAtEpochMs: result.expiresAtEpochMs,
+        devCode: result.devCode,
+      })
       verifyForm.setFocus('code')
     },
     [requestForm, verifyForm],
@@ -206,6 +216,15 @@ export function CustomerLoginForm({ nowEpochMs, codeLength, labels, placeholders
       <p className="rounded-md bg-brand-50 p-3 px-4 text-md text-ink-2">
         {renderMessage(CODE_SENT_TO, { mobile: formatPhone(challenge.mobile) })}
       </p>
+      {challenge.devCode === null ? null : (
+        <p
+          className="rounded-md bg-warn-bg p-3 px-4 text-center text-md font-semibold text-warn"
+          role="status"
+        >
+          {DEV_CODE_LABEL}{' '}
+          <span className="tabular-nums">{toPersianDigits(challenge.devCode)}</span>
+        </p>
+      )}
       <div className="flex flex-col gap-4">
         <Field label={labels.code} required error={verifyForm.formState.errors.code?.message}>
           <TextInput

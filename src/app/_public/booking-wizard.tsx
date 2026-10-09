@@ -9,7 +9,10 @@
  * same guards the desk's booking has.
  *
  * The island holds no Persian literal and no module barrel: the labels are props the
- * page built from the catalog, and the slots are what the action returned.
+ * page built from the catalog, and the slots are what the action returned. The two
+ * formatted lines a service card carries and the two the outcome renders arrive as
+ * template strings and are filled here with `renderMessage`, because a function cannot
+ * cross the server-client boundary.
  */
 
 'use client'
@@ -27,6 +30,7 @@ import {
   formatMoney,
   isValidMobile,
   normalizeMobile,
+  renderMessage,
   toPersianDigits,
   weekdayName,
   type LocalDate,
@@ -74,14 +78,14 @@ interface WizardProps {
     readonly submitting: string
   }
   readonly formats: {
-    readonly duration: (minutes: number) => string
-    readonly deposit: (amount: string) => string
+    readonly duration: string
+    readonly deposit: string
     readonly slotsFailure: string
   }
   readonly result: {
     readonly successTitle: string
-    readonly success: (day: string, time: string) => string
-    readonly cycleHint: (current: number, total: number, days: number) => string
+    readonly success: string
+    readonly cycleHint: string
     readonly failure: string
     readonly another: string
   }
@@ -336,9 +340,11 @@ function ServiceStep({
             <span className="flex flex-col gap-1">
               <span className="font-semibold text-ink">{service.name}</span>
               <span className="text-[11.5px] text-ink-2">
-                {formats.duration(service.durationMinutes)}
+                {renderMessage(formats.duration, {
+                  minutes: toPersianDigits(service.durationMinutes),
+                })}
                 {service.showPriceOnSite && service.depositAmount > 0n
-                  ? formats.deposit(formatMoney(service.depositAmount))
+                  ? renderMessage(formats.deposit, { amount: formatMoney(service.depositAmount) })
                   : ''}
               </span>
             </span>
@@ -547,11 +553,18 @@ function Outcome({
       </span>
       <h2 className="text-lg font-bold text-ink">{result.successTitle}</h2>
       <p className="text-sm text-ink-2">
-        {result.success(formatDate(asLocalDate(outcome.localDate), 'long'), toPersianDigits(outcome.localTime))}
+        {renderMessage(result.success, {
+          day: formatDate(asLocalDate(outcome.localDate), 'long'),
+          time: toPersianDigits(outcome.localTime),
+        })}
       </p>
       {outcome.cycle === null ? null : (
         <p className="mx-auto w-fit rounded-full bg-bg px-3.5 py-1.5 text-[11.5px] font-medium text-ink-2">
-          {result.cycleHint(outcome.cycle.currentSession, outcome.cycle.totalSessions, outcome.cycle.intervalDays)}
+          {renderMessage(result.cycleHint, {
+            current: toPersianDigits(outcome.cycle.currentSession),
+            total: toPersianDigits(outcome.cycle.totalSessions),
+            days: toPersianDigits(outcome.cycle.intervalDays),
+          })}
         </p>
       )}
       <Button type="button" variant="ghost" onClick={onReset}>

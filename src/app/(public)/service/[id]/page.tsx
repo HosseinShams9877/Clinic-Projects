@@ -14,7 +14,7 @@ import { prisma, runInTenantScope } from '@/core/db'
 import { resolveTenantId } from '@/app/_shell/tenant'
 import type { TenantId } from '@/core/types'
 import { Icon } from '@/core/components/icons'
-import { formatMoney } from '@/core/localization'
+import { formatMoney, renderMessage, toPersianDigits } from '@/core/localization'
 
 import {
   PUBLIC_SERVICE_DETAIL,
@@ -55,7 +55,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
             <div className="flex flex-wrap items-center gap-3">
               <span className="flex items-center gap-1.5 rounded-full bg-bg px-3 py-1.5 text-xs text-ink-2">
                 <Icon name="clock" size="compact" />
-                {copy.duration(service.durationMinutes)}
+                {renderMessage(copy.duration, { minutes: toPersianDigits(service.durationMinutes) })}
               </span>
               <span className="text-[13px] font-bold text-brand-700">
                 {service.showPriceOnSite
@@ -73,7 +73,9 @@ export default async function ServiceDetailPage({ params }: PageProps) {
               {copy.book}
             </Link>
             {service.depositAmount > 0n ? (
-              <p className="text-[11.5px] text-ink-2">{copy.depositNote(formatMoney(service.depositAmount))}</p>
+              <p className="text-[11.5px] text-ink-2">
+                {renderMessage(copy.depositNote, { amount: formatMoney(service.depositAmount) })}
+              </p>
             ) : null}
           </div>
           <div className="aspect-[4/3] overflow-hidden rounded-[24px] bg-brand-100">

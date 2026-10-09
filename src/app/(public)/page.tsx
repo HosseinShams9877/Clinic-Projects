@@ -12,7 +12,12 @@ import Link from 'next/link'
 import { prisma, runInTenantScope } from '@/core/db'
 import { resolveTenantId } from '@/app/_shell/tenant'
 import { Icon } from '@/core/components/icons'
-import { formatMoney, PERSIAN_LIST_SEPARATOR } from '@/core/localization'
+import {
+  formatMoney,
+  PERSIAN_LIST_SEPARATOR,
+  renderMessage,
+  toPersianDigits,
+} from '@/core/localization'
 
 import {
   PUBLIC_HOME,
@@ -157,7 +162,7 @@ function ServiceCard({
         <div className="mt-1 flex items-center gap-2 text-[11.5px] text-ink-2">
           <span className="flex items-center gap-1">
             <Icon name="clock" size="compact" />
-            {copy.duration(service.durationMinutes)}
+            {renderMessage(copy.duration, { minutes: toPersianDigits(service.durationMinutes) })}
           </span>
         </div>
         <p className="mt-1 text-[13px] font-bold text-brand-700">

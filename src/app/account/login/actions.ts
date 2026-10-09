@@ -23,10 +23,12 @@
  * called from the worker or a test. When the host names no tenant the action answers
  * with the one sentence that says so, and no code is issued.
  *
- * ## What the actions never return
+ * ## What the first action returns, and what it does not
  *
- * The code. `deliverCode` is the only thing that receives it, and it never reaches
- * the browser — see that file for why, and for what Phase 1 does instead of texting.
+ * The challenge's id and its expiry, and — **in development only** — the code
+ * itself, so the form can display it. In production `devCode` is `null` and the
+ * code never reaches the browser; `deliver-code.ts` is where that branch lives and
+ * why.
  */
 
 'use server'
@@ -54,9 +56,20 @@ import {
 import { clientIp, userAgent } from '@/app/_login/request'
 import { resolveTenantId } from '@/app/_shell/tenant'
 
-/** The first step's answer: the challenge's id and its expiry, or a sentence. */
+/**
+ * The first step's answer: the challenge's id and its expiry, or a sentence.
+ *
+ * `devCode` is the code itself in development and `null` in production — see
+ * `deliver-code.ts` for why the two are not the same.
+ */
 export type OtpRequestResult =
-  | { readonly ok: true; readonly challengeId: string; readonly expiresAtEpochMs: number }
+  | {
+      readonly ok: true
+      readonly challengeId: string
+      readonly expiresAtEpochMs: number
+      /** The code, in development only. `null` in production. */
+      readonly devCode: string | null
+    }
   | { readonly ok: false; readonly message: string }
 
 /** The second step's answer: a session, or a sentence and whether the code is spent. */
@@ -89,10 +102,16 @@ export async function requestOtpAction(args: { readonly mobile: string }): Promi
       now,
       ip: await clientIp(),
     })
-    // The delivery is the boundary's job, and in Phase 1 that is a development
-    // channel — see `deliver-code.ts`. The code is not in the return value.
-    deliverCode({ mobile: args.mobile, code })
-    return { ok: true, challengeId: challenge.id, expiresAtEpochMs: challenge.expiresAt.getTime() }
+    // The delivery is the boundary's job. In development it returns the code so the
+    // form can display it; in production it returns null and the code stays on the
+    // server — see `deliver-code.ts`.
+    const devCode = deliverCode({ mobile: args.mobile, code })
+    return {
+      ok: true,
+      challengeId: challenge.id,
+      expiresAtEpochMs: challenge.expiresAt.getTime(),
+      devCode,
+    }
   } catch (error) {
     return { ok: false, message: loginFailureMessage(error) }
   }

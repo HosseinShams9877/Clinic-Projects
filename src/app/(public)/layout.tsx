@@ -6,6 +6,13 @@
  * because a visitor holds no session and the eight pages are the clinic's own. The
  * header's links and the footer's facts are built on the server from the catalog and
  * the tenant's row, and the one client island is the mobile drawer, which is state.
+ *
+ * ## Why the shell is a `<div>` and not a `<body>`
+ *
+ * `src/app/layout.tsx` is the document root: it renders the one `<html>` and `<body>`
+ * every route shares. A second `<body>` here would nest inside the first, which is
+ * invalid HTML and the shape a build catches late. The chrome is therefore a
+ * `<div>`; the root layout owns the document element.
  */
 
 import type { Metadata } from 'next'
@@ -36,7 +43,7 @@ export default async function PublicLayout({ children }: { readonly children: Re
   const clinic = await clinicFacts(tenantId)
 
   return (
-    <body className="flex min-h-dvh flex-col bg-bg text-ink">
+    <div className="flex min-h-dvh flex-col bg-bg text-ink">
       <PublicHeader
         brandName={clinic?.name ?? PUBLIC_LAYOUT.brandFallback}
         nav={NAV_LINKS}
@@ -45,7 +52,7 @@ export default async function PublicLayout({ children }: { readonly children: Re
       />
       <main className="flex-1">{children}</main>
       <PublicFooter facts={PUBLIC_LAYOUT.footer} clinic={clinic} nav={NAV_LINKS} year={realClock().getFullYear()} />
-    </body>
+    </div>
   )
 }
 

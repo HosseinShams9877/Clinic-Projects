@@ -4,11 +4,18 @@
  * The clinic's own facts reach this as props the layout read, and a clinic the host
  * does not name renders the catalog's copy without a phone or an address rather than
  * invented ones.
+ *
+ * ## Why the copyright is a template, not a function
+ *
+ * The footer is a server component, but the layout above it hands the same object to
+ * the client drawer — and a function cannot cross that boundary. `renderMessage`
+ * fills `{year}` here, on the server, which is enough.
  */
 
 import Link from 'next/link'
 
 import { Icon } from '@/core/components/icons'
+import { renderMessage, toPersianDigits } from '@/core/localization'
 import type { PublicNavLink } from '@/modules/public-site'
 
 interface FooterProps {
@@ -20,7 +27,7 @@ interface FooterProps {
     readonly contactTitle: string
     readonly hoursTitle: string
     readonly hours: string
-    readonly copyright: (year: number) => string
+    readonly copyright: string
   }
   /** The clinic's row, or `null` when the host names no active clinic. */
   readonly clinic: {
@@ -78,7 +85,7 @@ export function PublicFooter({ facts, clinic, nav, year }: FooterProps) {
 
       <div className="border-t border-line">
         <p className="mx-auto w-full max-w-[1200px] px-[var(--content-pad)] py-5 text-center text-xs text-ink-2 panel:px-[var(--content-pad-sm)]">
-          {facts.copyright(year)}
+          {renderMessage(facts.copyright, { year: toPersianDigits(year) })}
         </p>
       </div>
     </footer>

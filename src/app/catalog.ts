@@ -170,6 +170,7 @@ export const CODE_COUNTDOWN_LABEL = 'اعتبار کد'
 
 /** What the countdown shows when the code's time is up. */
 export const CODE_COUNTDOWN_DONE = 'اعتبار کد به پایان رسید'
+export const DEV_CODE_LABEL = 'کد توسعه:'
 
 /** The resend button, which asks for a new code on the same mobile. */
 export const REQUEST_NEW_CODE = 'دریافت کد جدید'

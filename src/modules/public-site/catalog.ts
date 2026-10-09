@@ -6,6 +6,12 @@
  * `eslint.config.mjs`'s `RENDER_IGNORES` allows a Persian literal. Every string the
  * eight pages render is here; a component that grows its own literal is a
  * localization finding.
+ *
+ * ## Why the formatted lines are templates and not functions
+ *
+ * A function cannot cross the server-client boundary — Next.js refuses it. Every line
+ * the pages format (`{minutes} دقیقه`, `© {year} ...`) is therefore a **template
+ * string** with `{placeholder}`s, and `renderMessage` fills them where they render.
  */
 
 import { toPersianDigits } from '@/core/localization'
@@ -54,7 +60,7 @@ export const PUBLIC_LAYOUT = {
     contactTitle: 'تماس با ما',
     hoursTitle: 'ساعات کاری',
     hours: 'شنبه تا پنجشنبه، ۹:۰۰ تا ۱۸:۰۰',
-    copyright: (year: number) => `© ${toPersianDigits(year)} کلینیک زیبایی. تمامی حقوق محفوظ است.`,
+    copyright: '© {year} کلینیک زیبایی. تمامی حقوق محفوظ است.',
   },
 } as const
 
@@ -83,7 +89,7 @@ export const PUBLIC_HOME = {
     lead: 'مجموعه‌ای کامل از خدمات تخصصی پوست و زیبایی',
     viewAll: 'مشاهده همه خدمات',
     priceFrom: 'از',
-    duration: (minutes: number) => `${toPersianDigits(minutes)} دقیقه`,
+    duration: '{minutes} دقیقه',
     empty: 'به‌زودی خدمات کلینیک در اینجا نمایش داده می‌شوند.',
   },
   doctors: {
@@ -108,18 +114,18 @@ export const PUBLIC_SERVICES = {
   searchPlaceholder: 'جستجوی خدمت…',
   priceFrom: 'از',
   free: 'رایگان',
-  duration: (minutes: number) => `${toPersianDigits(minutes)} دقیقه`,
-  sessions: (count: number) => `${toPersianDigits(count)} جلسه`,
+  duration: '{minutes} دقیقه',
+  sessions: '{count} جلسه',
   book: 'رزرو این خدمت',
   empty: 'هیچ خدمتی برای نمایش وجود ندارد.',
 } as const
 
 export const PUBLIC_SERVICE_DETAIL = {
   book: 'رزرو این خدمت',
-  duration: (minutes: number) => `${toPersianDigits(minutes)} دقیقه`,
+  duration: '{minutes} دقیقه',
   priceFrom: 'از',
   free: 'رایگان',
-  depositNote: (amount: string) => `این خدمت نیاز به پیش‌پرداخت ${amount} دارد.`,
+  depositNote: 'این خدمت نیاز به پیش‌پرداخت {amount} دارد.',
   sections: {
     description: 'توضیحات خدمت',
     beforeCare: 'توصیه‌های قبل از درمان',
@@ -164,17 +170,15 @@ export const PUBLIC_BOOKING = {
     confirm: 'تأیید و رزرو نوبت',
     submitting: 'در حال رزرو…',
   },
-  /** The two formatted lines a service card carries, and the one failure the island raises. */
   formats: {
-    duration: (minutes: number) => `${toPersianDigits(minutes)} دقیقه`,
-    deposit: (amount: string) => ` · پیش‌پرداخت ${amount}`,
+    duration: '{minutes} دقیقه',
+    deposit: ' · پیش‌پرداخت {amount}',
     slotsFailure: 'خطا در دریافت زمان‌ها',
   },
   result: {
     successTitle: 'نوبت تو رزرو شد!',
-    success: (day: string, time: string) => `روز ${day} ساعت ${time}`,
-    cycleHint: (current: number, total: number, days: number) =>
-      `جلسه ${toPersianDigits(current)} از ${toPersianDigits(total)}، موعد بعدی ${toPersianDigits(days)} روز بعد`,
+    success: 'روز {day} ساعت {time}',
+    cycleHint: 'جلسه {current} از {total}، موعد بعدی {days} روز بعد',
     failure: 'رزرو نوبت انجام نشد. دوباره تلاش کن یا با کلینیک تماس بگیر.',
     another: 'رزرو نوبت دیگر',
   },

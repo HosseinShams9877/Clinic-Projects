@@ -12,7 +12,7 @@ import { prisma, runInTenantScope } from '@/core/db'
 import { resolveTenantId } from '@/app/_shell/tenant'
 import type { TenantId } from '@/core/types'
 import { Icon } from '@/core/components/icons'
-import { formatMoney } from '@/core/localization'
+import { formatMoney, renderMessage, toPersianDigits } from '@/core/localization'
 
 import { PUBLIC_SERVICES, publicServices, type PublicService } from '@/modules/public-site'
 
@@ -71,10 +71,12 @@ function ServiceCard({
         <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-ink-2">
           <span className="flex items-center gap-1 rounded-full bg-bg px-2.5 py-1">
             <Icon name="clock" size="compact" />
-            {copy.duration(service.durationMinutes)}
+            {renderMessage(copy.duration, { minutes: toPersianDigits(service.durationMinutes) })}
           </span>
           {service.defaultSessions > 1 ? (
-            <span className="rounded-full bg-bg px-2.5 py-1">{copy.sessions(service.defaultSessions)}</span>
+            <span className="rounded-full bg-bg px-2.5 py-1">
+              {renderMessage(copy.sessions, { count: toPersianDigits(service.defaultSessions) })}
+            </span>
           ) : null}
         </div>
         <div className="mt-1 flex items-center justify-between gap-3 border-t border-line pt-3">
