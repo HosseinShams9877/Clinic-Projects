@@ -43,6 +43,7 @@ export type {
   Slot,
   SlotDay,
 } from './types'
+export type { DoctorDayWindow } from './lib/queries'
 
 export {
   APPOINTMENT_STATUS_LABELS,
@@ -90,7 +91,7 @@ export {
   LIFECYCLE_TICK_INTERVAL_MS,
 } from './lib/job'
 
-export { clinicDay, doctorDay, doctorsOnDay, unrecordedCartable, weekDays } from './lib/queries'
+export { clinicDay, doctorDay, doctorsOnDay, doctorWindowsOnDay, unrecordedCartable, weekDays } from './lib/queries'
 
 export {
   CUSTOMER_CANCEL_WINDOW_MS,

@@ -78,6 +78,12 @@ export interface NavItem {
    * the navigation the same way it widens or narrows the page.
    */
   readonly permission?: Permission
+  /**
+   * A real count to show as a badge on the entry, or `undefined` for none. Only ever
+   * set from a count query the shell was given — never a placeholder — so an entry
+   * with no backing count carries no badge rather than a fabricated one.
+   */
+  readonly badge?: number
 }
 
 /**

@@ -1,5 +1,3 @@
-
-
 import { toPersianDigits, ZWNJ } from '@/core/localization'
 
 /** The product's name. It is the tab title, the bookmark, and the install name. */
@@ -15,16 +13,11 @@ export const APP_NAME = 'سامانه مدیریت کلینیک'
 export const APP_TITLE_TEMPLATE = `%s | ${APP_NAME}`
 
 /**
- * The description a search engine and a link preview show.
- *
- * «کلینیکهای» carries a ZWNJ (U+200C) between the noun and its plural suffix,
- * spelled through the constant rather than as the literal character for the reason
- * `catalog/common.ts` gives: the character is invisible, so a lost one is a lost
- * one nobody sees in a diff.
+ * The description a search engine and a link preview show. «کلینیکهای» carries a ZWNJ
+ * (U+200C) spelled through the constant, because the character is invisible and a lost
+ * one is a lost one nobody sees in a diff (`catalog/common.ts`).
  */
 export const APP_DESCRIPTION = `سامانه مدیریت نوبت، پرونده مشتریان و پیگیری درمان کلینیک${ZWNJ}های زیبایی`
-
-
 
 /** The two ways in, as `panels.html` presents them (`02-architecture.md` §9). */
 export const PANELS_PAGE = {
@@ -265,6 +258,19 @@ export const APPOINTMENTS_PAGE = {
   timeColumn: 'ساعت',
   /** The weekday headers' label when a day has no doctor working it. */
   noDoctors: 'پزشکی در این روز کاری ندارد',
+  gridTitle: 'جدول روز',
+  offSchedule: 'خارج از برنامه',
+  firstFreeSlot: 'اولین زمان آزاد',
+  windowTo: 'تا',
+  countAppointments: 'نوبت',
+  countDoctors: 'پزشک',
+  countConnector: 'در',
+  alertUnrecorded:
+    'نتیجهٔ یک نوبت امروز ثبت نشده است. تا ثبت نشود، نه پرونده کامل می‌شود و نه موعد جلسهٔ بعد ساخته می‌شود.',
+  remindersTitle: 'یادآوری‌های امروز',
+  remindersEmpty: 'یادآوری‌ای برای امروز نیست.',
+  remindersFooter:
+    'مناسبت‌ها و موعدهای چرخهٔ درمان خودکار ساخته می‌شوند — نیازی به ورود دستی نیست.',
 } as const satisfies Record<string, unknown>
 
 /**

@@ -46,8 +46,8 @@ export function PanelChrome({ panel, panelName, nav, roleLabel, children }: Pane
       <aside
         id="panel-sidebar"
         className={cx(
-          'fixed top-0 bottom-0 z-[var(--z-overlay)] flex h-dvh w-[var(--sidebar-w)] shrink-0 flex-col overflow-y-auto bg-surface shadow-3',
-          '[border-inline-end:1px_solid_var(--line)]',
+          'fixed top-0 bottom-0 z-[var(--z-overlay)] flex h-dvh w-[var(--sidebar-w)] shrink-0 flex-col overflow-y-auto bg-sidebar-dark text-ink-inverse shadow-3',
+          '[border-inline-end:1px_solid_var(--sidebar-dark-2)]',
           drawerOpen
             ? 'visible [inset-inline-start:0] [transition:inset-inline-start_var(--transition-control)]'
             : 'invisible [inset-inline-start:calc(var(--sidebar-w)*-1)] [transition:inset-inline-start_var(--transition-control),visibility_0s_linear_var(--transition-control)]',
@@ -59,10 +59,10 @@ export function PanelChrome({ panel, panelName, nav, roleLabel, children }: Pane
           <span className="grid size-[38px] shrink-0 place-items-center rounded-md bg-brand-50 text-brand">
             <Icon name="doctor" size="card" />
           </span>
-          <span className="text-lg font-bold tracking-[var(--ls-heading)] text-ink">{panelName}</span>
+          <span className="text-lg font-bold tracking-[var(--ls-heading)] text-ink-inverse">{panelName}</span>
         </div>
         <nav
-          className="flex flex-col gap-1 px-3 pt-2 pb-5"
+          className="flex flex-1 flex-col gap-1 px-3 pt-2 pb-5"
           aria-label={SHELL_ARIA.navigation}
         >
           {nav.map((item) => (
@@ -70,18 +70,38 @@ export function PanelChrome({ panel, panelName, nav, roleLabel, children }: Pane
               key={item.href}
               href={item.href}
               className={cx(
-                'flex items-center gap-3 rounded-sm px-3 py-[10px] text-sm font-semibold text-ink-2 no-underline',
+                'flex items-center gap-3 rounded-sm px-3 py-[10px] text-sm font-semibold no-underline',
+                '[color:color-mix(in_srgb,var(--ink-inverse),transparent_28%)]',
                 '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
-                'hover:bg-surface-sunken hover:text-ink',
-                isActive(pathname, item, home) && 'bg-brand-50 text-brand-700',
+                'hover:bg-sidebar-dark-2 hover:text-ink-inverse',
+                isActive(pathname, item, home) && 'bg-brand text-ink-inverse!',
               )}
               aria-current={isActive(pathname, item, home) ? 'page' : undefined}
             >
               <Icon name={item.icon} size="nav" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.badge === undefined ? null : (
+                <span className="grid min-w-5 place-items-center rounded-pill bg-danger px-[6px] py-[1px] text-xs font-bold text-ink-inverse tabular-nums">
+                  {item.badge}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
+        <form action={signOut} className="mt-auto px-3 pb-5">
+          <button
+            type="submit"
+            className={cx(
+              'flex w-full items-center gap-3 rounded-sm px-3 py-[10px] text-sm font-semibold no-underline',
+              '[color:color-mix(in_srgb,var(--ink-inverse),transparent_28%)]',
+              '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
+              'border-none bg-transparent hover:bg-sidebar-dark-2 hover:text-ink-inverse',
+            )}
+          >
+            <Icon name="logout" size="nav" />
+            <span className="flex-1 text-start">{NAV_LABELS.logout}</span>
+          </button>
+        </form>
       </aside>
 
       {drawerOpen ? (
@@ -123,19 +143,6 @@ export function PanelChrome({ panel, panelName, nav, roleLabel, children }: Pane
                 </span>
               </span>
             )}
-            <form action={signOut}>
-              <button
-                type="submit"
-                className={cx(
-                  'grid size-[38px] shrink-0 place-items-center rounded-sm border-none bg-transparent text-ink-2',
-                  '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
-                  'hover:bg-surface-sunken hover:text-ink',
-                )}
-                aria-label={NAV_LABELS.logout}
-              >
-                <Icon name="logout" size="nav" />
-              </button>
-            </form>
           </div>
         </header>
         <main className="flex-[1_1_auto] p-[var(--content-pad)] max-panel:p-[var(--content-pad-sm)]">

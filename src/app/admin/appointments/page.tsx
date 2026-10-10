@@ -94,6 +94,7 @@ export default async function AdminAppointmentsPage({
         <DayGrid
           localDate={localDate}
           doctors={data.doctors}
+          windows={data.windows}
           rows={rows}
           services={data.services}
           customers={data.customers}

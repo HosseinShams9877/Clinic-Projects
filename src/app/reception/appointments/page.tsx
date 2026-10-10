@@ -41,6 +41,7 @@ import {
   asLocalDate,
   asLocalTime,
   formatDate,
+  formatNumber,
   formatTime,
   isValidLocalDate,
   todayLocalDate,
@@ -49,13 +50,17 @@ import {
 import { realClock } from '@/core/lib/clock'
 import { readBookingSettings, runLifecycleSweep } from '@/modules/appointments'
 
+import { Button } from '@/core/components/button'
 import { APPOINTMENTS_PAGE } from '@/app/catalog'
+import { BookingDialog } from '@/app/_appointments/booking-dialog'
+import { DayAlert } from '@/app/_appointments/day-alert'
 import { DayGrid, DayNav } from '@/app/_appointments/day-grid'
 import {
   loadAppointmentsPage,
   type AppointmentsPageData,
   type AppointmentsView,
 } from '@/app/_appointments/page-data'
+import { RemindersPanel } from '@/app/_appointments/reminders-panel'
 import { RowActions } from '@/app/_appointments/row-actions'
 import { ViewTabs } from '@/app/_appointments/view-tabs'
 import { WeekGrid } from '@/app/_appointments/week-grid'
@@ -100,21 +105,49 @@ export default async function ReceptionAppointmentsPage({
       ctx: session.permissions,
       clinicId: session.permissions.clinicId,
       localDate,
+      now: realClock(),
+      utcOffsetMinutes: settings.utcOffsetMinutes,
     })
   })
 
+  const hasUnrecorded = data.cartable.some((row) => row.status === 'RESULT_NOT_RECORDED')
+  const headerDoctor = data.day.doctors[0] ?? null
+  const subtitle = `${formatDate(asLocalDate(localDate), 'long')} — ${formatNumber(data.day.rows.length)} ${APPOINTMENTS_PAGE.countAppointments} ${APPOINTMENTS_PAGE.countConnector} ${formatNumber(data.day.doctors.length)} ${APPOINTMENTS_PAGE.countDoctors}`
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <h1 className="text-2xl font-bold text-ink">{APPOINTMENTS_PAGE.reception.title}</h1>
-        <p className="text-sm text-ink-2">{APPOINTMENTS_PAGE.reception.lead}</p>
-        <ViewTabs
-          view={view}
-          cartableCount={data.cartable.length}
-          basePath={BASE_PATH}
-          search={rest}
-        />
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl font-bold text-ink">{APPOINTMENTS_PAGE.reception.title}</h1>
+          <p className="text-sm text-ink-2">{subtitle}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" leadingIcon="search">
+            {APPOINTMENTS_PAGE.firstFreeSlot}
+          </Button>
+          {headerDoctor === null ? null : (
+            <BookingDialog
+              variant="book"
+              panel="reception"
+              triggerLabel={APPOINTMENTS_PAGE.controls.newAppointment}
+              doctorId={headerDoctor.id}
+              doctorName={headerDoctor.name}
+              localDate={localDate}
+              services={data.day.services}
+              customers={data.day.customers}
+            />
+          )}
+        </div>
       </div>
+
+      <DayAlert show={hasUnrecorded} />
+
+      <ViewTabs
+        view={view}
+        cartableCount={data.cartable.length}
+        basePath={BASE_PATH}
+        search={rest}
+      />
 
       {view === 'cartable' ? (
         <Cartable rows={data.cartable} />
@@ -130,17 +163,26 @@ export default async function ReceptionAppointmentsPage({
           />
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
-          <DayNav localDate={localDate} basePath={BASE_PATH} />
-          <DayGrid
-            localDate={localDate}
-            doctors={data.day.doctors}
-            rows={data.day.rows}
-            services={data.day.services}
-            customers={data.day.customers}
-            panel="reception"
-            writable
-          />
+        <div className="grid grid-cols-1 gap-6 panel:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="flex flex-col rounded-md border border-line bg-surface">
+            <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
+              <DayNav localDate={localDate} basePath={BASE_PATH} />
+              <h2 className="font-bold text-ink">{APPOINTMENTS_PAGE.gridTitle}</h2>
+            </header>
+            <div className="p-4">
+              <DayGrid
+                localDate={localDate}
+                doctors={data.day.doctors}
+                windows={data.day.windows}
+                rows={data.day.rows}
+                services={data.day.services}
+                customers={data.day.customers}
+                panel="reception"
+                writable
+              />
+            </div>
+          </section>
+          <RemindersPanel reminders={data.reminders} />
         </div>
       )}
     </div>

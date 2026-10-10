@@ -18,16 +18,19 @@
  * states.
  */
 
-import { jalaliWeekday, type LocalDate } from '@/core/localization'
+import { fromUtcInstant, formatTime, jalaliWeekday, type LocalDate } from '@/core/localization'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 
 import {
   clinicDay,
   doctorsOnDay,
+  doctorWindowsOnDay,
   unrecordedCartable,
   weekDays,
+  type DoctorDayWindow,
 } from '@/modules/appointments'
+import { todaysReminders, AUTOMATIC_KIND_LABELS } from '@/modules/notifications'
 
 import type { CustomerOption, ServiceOption } from './booking-dialog'
 import { loadPopupOptions } from './options'
@@ -44,12 +47,33 @@ export type DayRows = Awaited<ReturnType<typeof clinicDay>>
 /** The columns a day grid renders, as the module's own query answers them. */
 export type DayDoctors = Awaited<ReturnType<typeof doctorsOnDay>>
 
-/** One day's complete grid: its columns, its rows, and the popup's options. */
+/** One day's complete grid: its columns, its rows, the doctors' windows, and the popup's options. */
 export interface DayGridData {
   readonly doctors: DayDoctors
   readonly rows: DayRows
+  /** Each working doctor's hour window, for the grid's off-schedule vs free-slot axis. */
+  readonly windows: readonly DoctorDayWindow[]
   readonly services: readonly ServiceOption[]
   readonly customers: readonly CustomerOption[]
+}
+
+/**
+ * One reminder card the side panel renders, flattened from the ledger row.
+ *
+ * The panel is a pure view, so the instant → clinic-local time conversion happens here
+ * where the tenant's offset is in hand, and the automatic-message label is resolved
+ * here against the `notifications` catalog rather than in the component.
+ */
+export interface ReminderCard {
+  readonly id: string
+  /** The clinic-local time the message was produced, Persian-digit formatted. */
+  readonly time: string
+  /** The rendered message text, as the ledger stored it. */
+  readonly text: string
+  /** The person the message was about. */
+  readonly customerName: string
+  /** The automatic-message kind's label, or `null` for a hand-sent message. */
+  readonly kindLabel: string | null
 }
 
 /**
@@ -70,6 +94,8 @@ export interface AppointmentsPageData {
   readonly day: DayGridData
   readonly week: readonly WeekDayData[]
   readonly cartable: DayGridData['rows']
+  /** The desk's «یادآوری‌های امروز» feed, flattened for the side panel. */
+  readonly reminders: readonly ReminderCard[]
 }
 
 /**
@@ -86,13 +112,15 @@ export async function loadDayGrid(args: {
   readonly clinicId: string | null
   readonly localDate: LocalDate
 }): Promise<DayGridData> {
-  const [doctors, rows, options] = await Promise.all([
-    doctorsOnDay({ tx: args.tx, tenantId: args.ctx.tenantId, weekday: jalaliWeekday(args.localDate) }),
+  const weekday = jalaliWeekday(args.localDate)
+  const [doctors, windows, rows, options] = await Promise.all([
+    doctorsOnDay({ tx: args.tx, tenantId: args.ctx.tenantId, weekday }),
+    doctorWindowsOnDay({ tx: args.tx, tenantId: args.ctx.tenantId, clinicId: args.clinicId, weekday }),
     clinicDay({ tx: args.tx, ctx: args.ctx, clinicId: args.clinicId, localDate: args.localDate }),
     loadPopupOptions({ tx: args.tx, ctx: args.ctx }),
   ])
 
-  return { doctors, rows, services: options.services, customers: options.customers }
+  return { doctors, windows, rows, services: options.services, customers: options.customers }
 }
 
 /**
@@ -135,12 +163,25 @@ export async function loadAppointmentsPage(args: {
   readonly ctx: TenantContext
   readonly clinicId: string | null
   readonly localDate: LocalDate
+  /** The clock the reminder feed's day boundary is read against. */
+  readonly now: Date
+  /** The tenant's UTC offset, for converting a send's instant to a clinic-local time. */
+  readonly utcOffsetMinutes: number
 }): Promise<AppointmentsPageData> {
-  const [day, week, cartable] = await Promise.all([
+  const [day, week, cartable, reminderRows] = await Promise.all([
     loadDayGrid(args),
     loadWeek(args),
     unrecordedCartable({ tx: args.tx, tenantId: args.ctx.tenantId }),
+    todaysReminders(args.tx, args.ctx.tenantId, args.now),
   ])
 
-  return { day, week, cartable }
+  const reminders: readonly ReminderCard[] = reminderRows.map((row) => ({
+    id: row.id,
+    time: formatTime(fromUtcInstant(row.createdAt, args.utcOffsetMinutes).localTime),
+    text: row.renderedText,
+    customerName: row.customerName,
+    kindLabel: row.kind === null ? null : AUTOMATIC_KIND_LABELS[row.kind],
+  }))
+
+  return { day, week, cartable, reminders }
 }

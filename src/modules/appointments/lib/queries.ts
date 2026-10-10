@@ -36,6 +36,7 @@ import { jalaliWeek, type LocalDate } from '@/core/localization'
 
 import { AppointmentStatus } from '@/core/constants'
 import { CARTABLE_STATUSES } from './status'
+import { workingRange } from './slots'
 
 /**
  * The cartable's filter, as Prisma's `in:` clause needs it: a mutable `string[]` of
@@ -253,6 +254,88 @@ export async function doctorsOnDay(args: {
   return rows.map((row) => ({
     id: row.doctor.id,
     name: personName(row.doctor.firstName, row.doctor.lastName),
+  }))
+}
+
+/**
+ * One doctor's working window on a weekday, as the grid's hour axis reads it.
+ *
+ * The window is the intersection of the clinic's shift and the doctor's hours — the
+ * same intersection `workingRange` computes for the slot generator and the booking
+ * path — expressed in minutes since midnight. The grid uses it to decide, for a given
+ * time cell, whether the doctor is on the schedule (an empty «+» the desk can book) or
+ * off it (a struck «خارج از برنامه» cell), which is the one fact `DoctorColumn` does
+ * not carry.
+ */
+export interface DoctorDayWindow {
+  readonly id: string
+  readonly name: string
+  /** Minutes since midnight the doctor's working window opens. */
+  readonly startMinute: number
+  /** Minutes since midnight the window closes (half-open: a slot must end by it). */
+  readonly endMinute: number
+}
+
+/**
+ * The working window of each doctor who works a weekday, for the grid's hour axis.
+ *
+ * Reads the clinic's shift and the doctors' hours exactly as the booking path's own
+ * `loadSlotDay` does, and reuses `workingRange` so the window the grid draws is the
+ * window a booking is checked against. A doctor whose hours do not overlap the shift
+ * is dropped — they are not a column, which is also what `doctorsOnDay` guarantees.
+ * Split shifts (two rows for one doctor on one day) are merged into the spanning
+ * window, because the axis is a single range per column.
+ */
+export async function doctorWindowsOnDay(args: {
+  readonly tx: TransactionClient
+  readonly tenantId: string
+  readonly clinicId: string | null
+  readonly weekday: number
+}): Promise<readonly DoctorDayWindow[]> {
+  const [shifts, hours] = await Promise.all([
+    args.tx.clinicShift.findMany({
+      where: { tenantId: args.tenantId, clinicId: args.clinicId ?? undefined, weekday: args.weekday },
+      select: { startTime: true, endTime: true },
+    }),
+    args.tx.doctorWorkingHours.findMany({
+      where: {
+        tenantId: args.tenantId,
+        weekday: args.weekday,
+        doctor: { memberships: { some: { tenantId: args.tenantId, isActive: true } } },
+      },
+      select: {
+        startTime: true,
+        endTime: true,
+        doctor: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+  ])
+
+  const shift = shifts[0] ?? null
+  if (shift === null) return []
+
+  const byDoctor = new Map<string, { name: string; start: number; end: number }>()
+  for (const row of hours) {
+    const range = workingRange({ shift, hours: { startTime: row.startTime, endTime: row.endTime } })
+    if (range === null) continue
+    const existing = byDoctor.get(row.doctor.id)
+    if (existing === undefined) {
+      byDoctor.set(row.doctor.id, {
+        name: personName(row.doctor.firstName, row.doctor.lastName),
+        start: range.start,
+        end: range.end,
+      })
+    } else {
+      existing.start = Math.min(existing.start, range.start)
+      existing.end = Math.max(existing.end, range.end)
+    }
+  }
+
+  return [...byDoctor.entries()].map(([id, w]) => ({
+    id,
+    name: w.name,
+    startMinute: w.start,
+    endMinute: w.end,
   }))
 }
 
