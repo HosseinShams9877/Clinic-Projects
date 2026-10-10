@@ -27,10 +27,13 @@ import {
   doctorsOnDay,
   doctorWindowsOnDay,
   unrecordedCartable,
+  unrecordedOnDay,
   weekDays,
   type DoctorDayWindow,
 } from '@/modules/appointments'
-import { todaysReminders, AUTOMATIC_KIND_LABELS } from '@/modules/notifications'
+import { todaysReminders } from '@/modules/notifications'
+
+import { RECEPTION_APPOINTMENTS } from '@/app/catalog'
 
 import type { CustomerOption, ServiceOption } from './booking-dialog'
 import { loadPopupOptions } from './options'
@@ -72,8 +75,42 @@ export interface ReminderCard {
   readonly text: string
   /** The person the message was about. */
   readonly customerName: string
-  /** The automatic-message kind's label, or `null` for a hand-sent message. */
-  readonly kindLabel: string | null
+  /** The category badge's label, or `null` for a hand-sent message. */
+  readonly badge: string | null
+  /** The badge's colour tone. */
+  readonly badgeTone: 'brand' | 'warn' | 'info' | 'neutral'
+  /** The reception page the reminder's follow-up lives on, keyed by kind. */
+  readonly actionHref: string | null
+  /** The label of that follow-up link. */
+  readonly actionLabel: string | null
+}
+
+/**
+ * The badge, tone and follow-up a reminder shows, by the message's kind.
+ *
+ * The three queues the desk acts on — the treatment cycle, the balance, the lead
+ * follow-up — get their own badge and page; everything else points at the customer's
+ * own list, and a hand-sent message (no kind) gets no badge or action rather than a
+ * guessed one. Labels come from the reception catalog and `NAV_LABELS`, never a literal.
+ */
+function reminderMeta(kind: string | null): {
+  readonly badge: string
+  readonly tone: ReminderCard['badgeTone']
+  readonly href: string
+  readonly label: string
+} | null {
+  switch (kind) {
+    case 'NEXT_SESSION_REMINDER':
+      return { badge: RECEPTION_APPOINTMENTS.reminder.cycle.badge, tone: 'brand', href: '/reception/cycles', label: RECEPTION_APPOINTMENTS.reminder.cycle.action }
+    case 'BALANCE_REMINDER':
+      return { badge: RECEPTION_APPOINTMENTS.reminder.balance.badge, tone: 'warn', href: '/reception/debts', label: RECEPTION_APPOINTMENTS.reminder.balance.action }
+    case 'NO_SHOW_FOLLOW_UP':
+      return { badge: RECEPTION_APPOINTMENTS.reminder.followUp.badge, tone: 'info', href: '/reception/leads', label: RECEPTION_APPOINTMENTS.reminder.followUp.action }
+    case null:
+      return null
+    default:
+      return { badge: RECEPTION_APPOINTMENTS.reminder.general.badge, tone: 'neutral', href: '/reception/customers', label: RECEPTION_APPOINTMENTS.reminder.general.action }
+  }
 }
 
 /**
@@ -113,14 +150,24 @@ export async function loadDayGrid(args: {
   readonly localDate: LocalDate
 }): Promise<DayGridData> {
   const weekday = jalaliWeekday(args.localDate)
-  const [doctors, windows, rows, options] = await Promise.all([
+  const [doctors, windows, rows, unrecorded, options] = await Promise.all([
     doctorsOnDay({ tx: args.tx, tenantId: args.ctx.tenantId, weekday }),
     doctorWindowsOnDay({ tx: args.tx, tenantId: args.ctx.tenantId, clinicId: args.clinicId, weekday }),
     clinicDay({ tx: args.tx, ctx: args.ctx, clinicId: args.clinicId, localDate: args.localDate }),
+    unrecordedOnDay({ tx: args.tx, ctx: args.ctx, clinicId: args.clinicId, localDate: args.localDate }),
     loadPopupOptions({ tx: args.tx, ctx: args.ctx }),
   ])
 
-  return { doctors, windows, rows, services: options.services, customers: options.customers }
+  // The alarm state is excluded from `clinicDay` by construction; merged here so the
+  // day's own grid shows the outstanding row inline (the demo's dang cell) rather than
+  // only in the cartable tab.
+  return {
+    doctors,
+    windows,
+    rows: [...rows, ...unrecorded],
+    services: options.services,
+    customers: options.customers,
+  }
 }
 
 /**
@@ -175,13 +222,19 @@ export async function loadAppointmentsPage(args: {
     todaysReminders(args.tx, args.ctx.tenantId, args.now),
   ])
 
-  const reminders: readonly ReminderCard[] = reminderRows.map((row) => ({
-    id: row.id,
-    time: formatTime(fromUtcInstant(row.createdAt, args.utcOffsetMinutes).localTime),
-    text: row.renderedText,
-    customerName: row.customerName,
-    kindLabel: row.kind === null ? null : AUTOMATIC_KIND_LABELS[row.kind],
-  }))
+  const reminders: readonly ReminderCard[] = reminderRows.map((row) => {
+    const meta = reminderMeta(row.kind)
+    return {
+      id: row.id,
+      time: formatTime(fromUtcInstant(row.createdAt, args.utcOffsetMinutes).localTime),
+      text: row.renderedText,
+      customerName: row.customerName,
+      badge: meta?.badge ?? null,
+      badgeTone: meta?.tone ?? 'neutral',
+      actionHref: meta?.href ?? null,
+      actionLabel: meta?.label ?? null,
+    }
+  })
 
   return { day, week, cartable, reminders }
 }

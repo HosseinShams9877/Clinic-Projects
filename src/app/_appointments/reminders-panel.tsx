@@ -8,11 +8,22 @@
  * it beside the grid because a reminder is about the same people the grid is about.
  */
 
+import Link from 'next/link'
+
 import { Icon } from '@/core/components/icons'
+import { cx } from '@/core/lib'
 import { formatNumber } from '@/core/localization'
 
 import { APPOINTMENTS_PAGE } from '@/app/catalog'
 import type { ReminderCard } from './page-data'
+
+/** The badge's colour per tone, over the status token palette. */
+const TONE_CLASSES: Readonly<Record<ReminderCard['badgeTone'], string>> = {
+  brand: 'bg-brand-50 text-brand-700',
+  warn: 'bg-warn-bg text-warn',
+  info: 'bg-info-bg text-info',
+  neutral: 'bg-surface-sunken text-ink-2',
+}
 
 export interface RemindersPanelProps {
   readonly reminders: readonly ReminderCard[]
@@ -42,11 +53,21 @@ export function RemindersPanel({ reminders }: RemindersPanelProps) {
                 <span className="text-xs text-ink-3 tabular-nums">{reminder.time}</span>
               </div>
               <p className="text-sm text-ink-2">{reminder.text}</p>
-              {reminder.kindLabel === null ? null : (
-                <span className="mt-1 inline-flex w-fit rounded-pill bg-surface-sunken px-2 py-[2px] text-xs font-semibold text-ink-2">
-                  {reminder.kindLabel}
-                </span>
-              )}
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {reminder.badge === null ? null : (
+                  <span className={cx('inline-flex rounded-pill px-2 py-[2px] text-xs font-semibold', TONE_CLASSES[reminder.badgeTone])}>
+                    {reminder.badge}
+                  </span>
+                )}
+                {reminder.actionHref === null || reminder.actionLabel === null ? null : (
+                  <Link
+                    href={reminder.actionHref}
+                    className="inline-flex rounded-pill border border-brand-300 px-2 py-[2px] text-xs font-semibold text-brand-700 no-underline hover:bg-brand-50"
+                  >
+                    {reminder.actionLabel}
+                  </Link>
+                )}
+              </div>
             </li>
           ))}
         </ul>

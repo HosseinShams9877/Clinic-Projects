@@ -80,6 +80,8 @@ interface AppointmentWithRelations {
   readonly priceAtBooking: bigint
   readonly depositAmount: bigint
   readonly cancelReason: string | null
+  /** How the appointment was booked (`AppointmentSource`), or `null` for legacy rows. */
+  readonly source: string | null
 }
 
 /**
@@ -115,6 +117,8 @@ export interface AppointmentRow {
   readonly priceAtBooking: bigint
   readonly depositAmount: bigint
   readonly cancelReason: string | null
+  /** How the appointment was booked (`AppointmentSource`), or `null` for legacy rows. */
+  readonly source: string | null
 }
 
 /**
@@ -149,6 +153,7 @@ function asRow(raw: AppointmentWithRelations): AppointmentRow {
     priceAtBooking: raw.priceAtBooking,
     depositAmount: raw.depositAmount,
     cancelReason: raw.cancelReason,
+    source: raw.source,
   }
 }
 
@@ -270,10 +275,17 @@ export async function doctorsOnDay(args: {
 export interface DoctorDayWindow {
   readonly id: string
   readonly name: string
-  /** Minutes since midnight the doctor's working window opens. */
+  /** Minutes since midnight the doctor's working window opens (spanning min across shifts). */
   readonly startMinute: number
-  /** Minutes since midnight the window closes (half-open: a slot must end by it). */
+  /** Minutes since midnight the window closes (spanning max; half-open). */
   readonly endMinute: number
+  /**
+   * The individual working ranges, one per shift the doctor holds that weekday. A doctor
+   * with a split day (morning + evening) has two, and the gap between them is a break the
+   * grid draws rather than bookable time. `startMinute`/`endMinute` remain the spanning
+   * envelope so existing readers that want one window keep working.
+   */
+  readonly ranges: readonly { readonly startMinute: number; readonly endMinute: number }[]
 }
 
 /**
@@ -314,29 +326,62 @@ export async function doctorWindowsOnDay(args: {
   const shift = shifts[0] ?? null
   if (shift === null) return []
 
-  const byDoctor = new Map<string, { name: string; start: number; end: number }>()
+  const byDoctor = new Map<string, { name: string; ranges: { startMinute: number; endMinute: number }[] }>()
   for (const row of hours) {
     const range = workingRange({ shift, hours: { startTime: row.startTime, endTime: row.endTime } })
     if (range === null) continue
     const existing = byDoctor.get(row.doctor.id)
+    const next = { startMinute: range.start, endMinute: range.end }
     if (existing === undefined) {
       byDoctor.set(row.doctor.id, {
         name: personName(row.doctor.firstName, row.doctor.lastName),
-        start: range.start,
-        end: range.end,
+        ranges: [next],
       })
     } else {
-      existing.start = Math.min(existing.start, range.start)
-      existing.end = Math.max(existing.end, range.end)
+      existing.ranges.push(next)
     }
   }
 
-  return [...byDoctor.entries()].map(([id, w]) => ({
-    id,
-    name: w.name,
-    startMinute: w.start,
-    endMinute: w.end,
-  }))
+  return [...byDoctor.entries()].map(([id, w]) => {
+    const ordered = [...w.ranges].sort((a, b) => a.startMinute - b.startMinute)
+    return {
+      id,
+      name: w.name,
+      startMinute: Math.min(...ordered.map((r) => r.startMinute)),
+      endMinute: Math.max(...ordered.map((r) => r.endMinute)),
+      ranges: ordered,
+    }
+  })
+}
+
+/**
+ * The day's `RESULT_NOT_RECORDED` rows for one clinic — the alarm, scoped to a day.
+ *
+ * `clinicDay` excludes the alarm state by construction (it is not in `GRID_STATUSES`),
+ * so a desk that wants to render the outstanding row *in the day's own grid* reads it
+ * here and merges it. This is the only other function besides `unrecordedCartable` that
+ * selects the state, and it is scoped to one `localDate` where the cartable spans every
+ * open day — the grid wants today's, the cartable wants all of them.
+ */
+export async function unrecordedOnDay(args: {
+  readonly tx: TransactionClient
+  readonly ctx: TenantContext
+  readonly clinicId: string | null
+  readonly localDate: LocalDate
+}): Promise<readonly AppointmentRow[]> {
+  const rows = await args.tx.appointment.findMany({
+    where: {
+      tenantId: args.ctx.tenantId,
+      clinicId: args.clinicId ?? undefined,
+      localDate: args.localDate,
+      isSlotBlock: false,
+      status: AppointmentStatus.ResultNotRecorded,
+    },
+    orderBy: [{ doctor: { firstName: 'asc' } }, { localTime: 'asc' }],
+    include: APPOINTMENT_INCLUDE,
+  })
+
+  return rows.map((row) => asRow(row))
 }
 
 /**

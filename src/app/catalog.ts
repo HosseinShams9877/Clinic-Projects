@@ -1,5 +1,7 @@
 import { toPersianDigits, ZWNJ } from '@/core/localization'
 
+export { RECEPTION_APPOINTMENTS, RECEPTION_DESK } from './reception/catalog'
+
 /** The product's name. It is the tab title, the bookmark, and the install name. */
 export const APP_NAME = 'سامانه مدیریت کلینیک'
 
@@ -238,11 +240,11 @@ export const APPOINTMENTS_PAGE = {
   },
   /** The column header of the grid's time axis. */
   timeColumn: 'ساعت',
-  /** The weekday headers' label when a day has no doctor working it. */
   noDoctors: 'پزشکی در این روز کاری ندارد',
   gridTitle: 'جدول روز',
   offSchedule: 'خارج از برنامه',
   firstFreeSlot: 'اولین زمان آزاد',
+  registerAppointment: 'ثبت نوبت',
   windowTo: 'تا',
   countAppointments: 'نوبت',
   countDoctors: 'پزشک',

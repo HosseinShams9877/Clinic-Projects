@@ -295,6 +295,7 @@ export const RENDER_IGNORES = [
   'src/core/constants/**',
   /** Where the literals are allowed to be. */
   'src/app/catalog.ts',
+  'src/app/*/catalog.ts',
   'src/modules/*/catalog.ts',
   'src/modules/*/catalog/**',
   /** A test may assert against a literal, and a fixture is not a surface. */

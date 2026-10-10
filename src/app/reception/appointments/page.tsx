@@ -44,17 +44,23 @@ import {
   formatNumber,
   formatTime,
   isValidLocalDate,
+  jalaliWeekday,
+  minutesToTime,
+  timeToMinutes,
   todayLocalDate,
+  weekdayName,
   type LocalDate,
 } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
-import { readBookingSettings, runLifecycleSweep } from '@/modules/appointments'
+import { readBookingSettings, runLifecycleSweep, type AppointmentRow, type DoctorDayWindow } from '@/modules/appointments'
 
 import { Button } from '@/core/components/button'
-import { APPOINTMENTS_PAGE } from '@/app/catalog'
+import { Icon } from '@/core/components/icons'
+import { APPOINTMENTS_PAGE, RECEPTION_APPOINTMENTS } from '@/app/catalog'
 import { BookingDialog } from '@/app/_appointments/booking-dialog'
 import { DayAlert } from '@/app/_appointments/day-alert'
 import { DayGrid, DayNav } from '@/app/_appointments/day-grid'
+import { DayPicker } from '@/app/_appointments/day-picker'
 import {
   loadAppointmentsPage,
   type AppointmentsPageData,
@@ -112,7 +118,15 @@ export default async function ReceptionAppointmentsPage({
 
   const hasUnrecorded = data.cartable.some((row) => row.status === 'RESULT_NOT_RECORDED')
   const headerDoctor = data.day.doctors[0] ?? null
-  const subtitle = `${formatDate(asLocalDate(localDate), 'long')} — ${formatNumber(data.day.rows.length)} ${APPOINTMENTS_PAGE.countAppointments} ${APPOINTMENTS_PAGE.countConnector} ${formatNumber(data.day.doctors.length)} ${APPOINTMENTS_PAGE.countDoctors}`
+  const liveRows = data.day.rows.filter(
+    (row) => !row.isSlotBlock && row.status !== 'CANCELLED' && row.status !== 'RESCHEDULED',
+  )
+  const doctorCount = new Set<string>([
+    ...data.day.windows.map((w) => w.id),
+    ...liveRows.map((row) => row.doctorId),
+  ]).size
+  const subtitle = `${weekdayName(jalaliWeekday(localDate))} ${formatDate(asLocalDate(localDate), 'long')} — ${formatNumber(liveRows.length)} ${APPOINTMENTS_PAGE.countAppointments} ${APPOINTMENTS_PAGE.countConnector} ${formatNumber(doctorCount)} ${APPOINTMENTS_PAGE.countDoctors}`
+  const firstFree = firstFreeSlot(data.day.windows, data.day.rows)
 
   return (
     <div className="flex flex-col gap-6">
@@ -121,15 +135,35 @@ export default async function ReceptionAppointmentsPage({
           <h1 className="text-2xl font-bold text-ink">{APPOINTMENTS_PAGE.reception.title}</h1>
           <p className="text-sm text-ink-2">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" leadingIcon="search">
-            {APPOINTMENTS_PAGE.firstFreeSlot}
-          </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          {firstFree === null ? (
+            <Button variant="outline" leadingIcon="clock" disabled>
+              {APPOINTMENTS_PAGE.firstFreeSlot}
+            </Button>
+          ) : (
+            <BookingDialog
+              variant="book"
+              panel="reception"
+              triggerLabel={APPOINTMENTS_PAGE.firstFreeSlot}
+              triggerVariant="outline"
+              triggerSize="default"
+              triggerIcon="clock"
+              doctorId={firstFree.doctorId}
+              doctorName={firstFree.doctorName}
+              localDate={localDate}
+              defaultTime={firstFree.time}
+              services={data.day.services}
+              customers={data.day.customers}
+            />
+          )}
           {headerDoctor === null ? null : (
             <BookingDialog
               variant="book"
               panel="reception"
-              triggerLabel={APPOINTMENTS_PAGE.controls.newAppointment}
+              triggerLabel={APPOINTMENTS_PAGE.registerAppointment}
+              triggerVariant="primary"
+              triggerSize="default"
+              triggerIcon="add"
               doctorId={headerDoctor.id}
               doctorName={headerDoctor.name}
               localDate={localDate}
@@ -164,12 +198,15 @@ export default async function ReceptionAppointmentsPage({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 panel:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="flex flex-col rounded-md border border-line bg-surface">
-            <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
-              <DayNav localDate={localDate} basePath={BASE_PATH} />
+          <section className="flex min-w-0 flex-col rounded-md border border-line bg-surface">
+            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <DayNav localDate={localDate} basePath={BASE_PATH} />
+                <DayPicker localDate={localDate} basePath={BASE_PATH} />
+              </div>
               <h2 className="font-bold text-ink">{APPOINTMENTS_PAGE.gridTitle}</h2>
             </header>
-            <div className="p-4">
+            <div className="overflow-x-auto p-4">
               <DayGrid
                 localDate={localDate}
                 doctors={data.day.doctors}
@@ -181,12 +218,52 @@ export default async function ReceptionAppointmentsPage({
                 writable
               />
             </div>
+            <div className="flex flex-wrap items-center gap-5 border-t border-line px-4 py-3 text-xs text-ink-3">
+              <span className="flex items-center gap-1">
+                <Icon name="treatment" size="compact" />
+                {RECEPTION_APPOINTMENTS.legend.platform}
+              </span>
+              <span className="flex items-center gap-1">
+                <Icon name="phone" size="compact" />
+                {RECEPTION_APPOINTMENTS.legend.secretary}
+              </span>
+            </div>
           </section>
           <RemindersPanel reminders={data.reminders} />
         </div>
       )}
     </div>
   )
+}
+
+/**
+ * The earliest free slot of the day: the lowest 30-minute step inside a doctor's window
+ * that no booked row sits on, with the first-ordered doctor winning a tie.
+ *
+ * This is what «اولین زمان آزاد» opens the booking popup on — a real slot computed from
+ * the day's own windows and rows, not a guess. `null` when every window is full (or there
+ * is no window), and the control is then shown disabled rather than opening on nothing.
+ */
+function firstFreeSlot(
+  windows: readonly DoctorDayWindow[],
+  rows: readonly AppointmentRow[],
+): { readonly doctorId: string; readonly doctorName: string; readonly time: string } | null {
+  const AXIS_STEP = 30
+  let best: { readonly doctorId: string; readonly doctorName: string; readonly minute: number } | null = null
+  for (const w of windows) {
+    for (let minute = w.startMinute; minute < w.endMinute; minute += AXIS_STEP) {
+      const taken = rows.some(
+        (row) => row.doctorId === w.id && timeToMinutes(asLocalTime(row.localTime)) === minute,
+      )
+      if (taken) continue
+      if (best === null || minute < best.minute) {
+        best = { doctorId: w.id, doctorName: w.name, minute }
+      }
+      break
+    }
+  }
+  if (best === null) return null
+  return { doctorId: best.doctorId, doctorName: best.doctorName, time: minutesToTime(best.minute) }
 }
 
 /**

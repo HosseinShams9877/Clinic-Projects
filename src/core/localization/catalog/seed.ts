@@ -24,10 +24,11 @@
  *
  * ## Why the staff are listed in role order
  *
- * One manager, two doctors, two secretaries — `installation.md` §5's shape, and the
- * order `ROLES` gives them. The seed assigns the role by position, from the canonical
- * list, so a role never appears as a re-typed string in the seed and the two files
- * cannot disagree about which person holds which role.
+ * One manager, three doctors, two secretaries — `installation.md` §5's shape with
+ * a third doctor so the reception grid shows three columns like the demo. The seed
+ * assigns the role by position, from the canonical list, so a role never appears as
+ * a re-typed string in the seed and the two files cannot disagree about which person
+ * holds which role.
  *
  * ## The ZWNJ
  *
@@ -69,9 +70,9 @@ export interface SeedName {
 /**
  * The Persian text of one tenant's development dataset.
  *
- * `staff` is in role order: manager, doctor, doctor, secretary, secretary. The seed
- * asserts the length, so a sixth person added here is a seed failure rather than a
- * person seeded with another person's role.
+ * `staff` is in role order: manager, doctor, doctor, doctor, secretary, secretary.
+ * The seed asserts the length, so a seventh person added here is a seed failure
+ * rather than a person seeded with another person's role.
  */
 export interface SeedTenantText {
   readonly key: string
@@ -82,6 +83,25 @@ export interface SeedTenantText {
   readonly staff: readonly SeedName[]
   readonly customers: readonly SeedName[]
 }
+
+/** One service name of the development grid dataset, joined to its facts by `key`. */
+export interface SeedServiceName {
+  readonly key: string
+  readonly name: string
+}
+
+/**
+ * The four services the reception grid dataset books against (`aria` tenant only).
+ *
+ * Only the Persian names live here; the price, deposit, duration and cycle facts are
+ * non-text and stay in `prisma/seed.ts`, joined to these by `key`.
+ */
+export const SEED_SERVICES: readonly SeedServiceName[] = [
+  { key: 'facial', name: 'فیشیال تخصصی' },
+  { key: 'meso', name: 'مزوتراپی' },
+  { key: 'laser', name: 'لیزر موهای زائد' },
+  { key: 'filler', name: 'تزریق ژل و بوتاکس' },
+]
 
 /**
  * The two tenants of the development dataset.
@@ -104,6 +124,7 @@ export const SEED_TENANTS: readonly SeedTenantText[] = [
       // and the same mobile, which is the pairing §13's isolation probe is built from.
       { key: 'arash-kiani', firstName: 'آرش', lastName: 'کیانی' },
       { key: 'sara-naderi', firstName: 'سارا', lastName: 'نادری' },
+      { key: 'reza-shirazi', firstName: 'رضا', lastName: 'شیرازی' },
       { key: 'maryam-salehi', firstName: 'مریم', lastName: 'صالحی' },
       { key: 'sahar-rahimi', firstName: 'سحر', lastName: 'رحیمی' },
     ],
@@ -127,6 +148,7 @@ export const SEED_TENANTS: readonly SeedTenantText[] = [
       { key: 'pouya-asadi', firstName: 'پویا', lastName: 'اسدی' },
       { key: 'arash-kiani', firstName: 'آرش', lastName: 'کیانی' },
       { key: 'leila-mousavi', firstName: 'لیلا', lastName: 'موسوی' },
+      { key: 'hossein-tehrani', firstName: 'حسین', lastName: 'تهرانی' },
       { key: 'elham-rezaei', firstName: 'الهام', lastName: 'رضایی' },
       { key: 'negar-abdi', firstName: 'نگار', lastName: 'عبدی' },
     ],

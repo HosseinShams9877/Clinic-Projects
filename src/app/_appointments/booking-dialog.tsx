@@ -42,9 +42,11 @@ import { useId, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 
 import { Button } from '@/core/components/button'
+import type { ButtonProps, ButtonSize } from '@/core/components/button'
 import { Field, TextInput } from '@/core/components/form'
 import { CONTROL_CLASSES } from '@/core/components/form/control-classes'
 import { Icon } from '@/core/components/icons'
+import type { IconName } from '@/core/components/icons'
 import { cx } from '@/core/lib'
 import {
   formatDate,
@@ -100,6 +102,24 @@ export interface BookingDialogProps {
   readonly variant: 'book' | 'quickBook'
   /** The panel the action resolves, which is the caller's own. */
   readonly panel: 'reception' | 'doctor' | 'admin'
+  /**
+   * A service preselected on open, so a caller that already knows it (a slot the grid
+   * offered for one service) skips step one's pick. Optional; omitted leaves step one
+   * empty as before.
+   */
+  readonly defaultServiceId?: string
+  /**
+   * A time preselected on open, as a stored `HH:mm`, so a caller that opened from a
+   * known slot (a grid «+» or «اولین زمان آزاد») lands on that time rather than an empty
+   * field. Optional; omitted leaves the time empty as before.
+   */
+  readonly defaultTime?: string
+  /** The trigger button's variant; defaults to the desk's soft chip. */
+  readonly triggerVariant?: ButtonProps['variant']
+  /** The trigger button's size; defaults to small. */
+  readonly triggerSize?: Exclude<ButtonSize, 'icon'>
+  /** The trigger's leading icon, or `null` for none; defaults to `appointment`. */
+  readonly triggerIcon?: IconName | null
 }
 
 /** The three steps, as the progress strip numbers them. */
@@ -131,9 +151,9 @@ export function BookingDialog(props: BookingDialogProps) {
   if (!open) {
     return (
       <Button
-        variant="soft"
-        size="small"
-        leadingIcon="appointment"
+        variant={props.triggerVariant ?? 'soft'}
+        size={props.triggerSize ?? 'small'}
+        leadingIcon={props.triggerIcon === null ? undefined : (props.triggerIcon ?? 'appointment')}
         onClick={() => {
           setStep(1)
           setResult(null)
@@ -359,9 +379,9 @@ function titleForStep(step: Step): 'service' | 'time' | 'customer' {
 /** The empty state a fresh popup and a reopened one both start from. */
 function emptyValues(props: BookingDialogProps): BookingValues {
   return {
-    serviceId: '',
+    serviceId: props.defaultServiceId ?? '',
     localDate: props.localDate,
-    localTime: '',
+    localTime: props.defaultTime ?? '',
     customerId: '',
     mobile: '',
     firstName: '',

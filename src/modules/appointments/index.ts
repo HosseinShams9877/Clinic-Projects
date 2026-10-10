@@ -91,7 +91,7 @@ export {
   LIFECYCLE_TICK_INTERVAL_MS,
 } from './lib/job'
 
-export { clinicDay, doctorDay, doctorsOnDay, doctorWindowsOnDay, unrecordedCartable, weekDays } from './lib/queries'
+export { clinicDay, doctorDay, doctorsOnDay, doctorWindowsOnDay, unrecordedCartable, unrecordedOnDay, weekDays } from './lib/queries'
 
 export {
   CUSTOMER_CANCEL_WINDOW_MS,

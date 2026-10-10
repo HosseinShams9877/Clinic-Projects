@@ -45,8 +45,9 @@ import {
   type DoctorDayWindow,
 } from '@/modules/appointments'
 
-import { APPOINTMENTS_PAGE } from '@/app/catalog'
+import { APPOINTMENTS_PAGE, RECEPTION_APPOINTMENTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
+import type { IconName } from '@/core/components/icons'
 import type { BookingDialogProps } from './booking-dialog'
 import { BookingDialog, type CustomerOption, type ServiceOption } from './booking-dialog'
 import { RowActions } from './row-actions'
@@ -79,33 +80,39 @@ const AXIS_STEP = 30
 
 /** The day grid, as the two breakpoints each render it. */
 export function DayGrid(props: DayGridProps) {
-  if (props.doctors.length === 0) {
+  const windows = props.windows ?? []
+  // Columns and hours are driven by `windows` so the grid is a full hour×doctor table
+  // on a day with no appointments at all. A surface that loads no windows (the doctor's
+  // own single-column day) falls back to its `doctors` prop and the rows' own times.
+  const columns: readonly DoctorColumn[] =
+    windows.length > 0 ? windows.map((w) => ({ id: w.id, name: w.name })) : props.doctors
+
+  if (columns.length === 0) {
     return <p className="text-sm text-ink-3">{APPOINTMENTS_PAGE.empty.day}</p>
   }
 
-  const windows = props.windows ?? []
   const times = axisMinutes(windows, props.rows)
   const windowOf = new Map(windows.map((w) => [w.id, w]))
 
   return (
     <>
-      <div className="hidden overflow-x-auto panel:block">
+      <div className="hidden max-h-[70vh] overflow-auto panel:block">
         <table className="inline-size-full border-collapse text-sm">
           <thead>
             <tr>
               <th
                 scope="col"
-                className="border-b border-line bg-surface px-3 py-2 text-start text-xs font-semibold text-ink-3"
+                className="sticky inset-inline-start-0 top-0 z-20 border-b border-line bg-surface px-3 py-2 text-start text-xs font-semibold text-ink-3"
               >
                 {APPOINTMENTS_PAGE.timeColumn}
               </th>
-              {props.doctors.map((doctor) => {
+              {columns.map((doctor) => {
                 const window = windowOf.get(doctor.id) ?? null
                 return (
                   <th
                     key={doctor.id}
                     scope="col"
-                    className="border-b border-l border-line bg-surface px-3 py-2 text-start align-bottom"
+                    className="sticky top-0 z-10 min-w-[140px] border-b border-l border-line bg-surface px-3 py-2 text-start align-bottom"
                   >
                     <span className="block font-semibold text-ink">{doctor.name}</span>
                     {window === null ? null : (
@@ -121,40 +128,54 @@ export function DayGrid(props: DayGridProps) {
             </tr>
           </thead>
           <tbody>
-            {times.map((minute) => (
-              <tr key={minute}>
-                <th
-                  scope="row"
-                  className="border-b border-line px-3 py-2 text-start font-semibold text-ink-2 tabular-nums"
-                >
-                  {formatTime(minutesToTime(minute))}
-                </th>
-                {props.doctors.map((doctor) => {
-                  const row = rowAtMinute(props.rows, doctor.id, minute)
-                  const window = windowOf.get(doctor.id) ?? null
-                  const offSchedule =
-                    window !== null && (minute < window.startMinute || minute >= window.endMinute)
-                  return (
-                    <td key={doctor.id} className="border-b border-l border-line p-2 align-top">
-                      {row !== null ? (
-                        <BookedCell row={row} writable={props.writable} panel={props.panel} />
-                      ) : offSchedule ? (
-                        <OffScheduleCell />
-                      ) : (
-                        <FreeCell
-                          doctor={doctor}
-                          localDate={props.localDate}
-                          services={props.services}
-                          customers={props.customers}
-                          panel={props.panel}
-                          writable={props.writable}
-                        />
-                      )}
+            {times.map((minute) => {
+              if (isBreakRow(columns, windowOf, props.rows, minute)) {
+                return (
+                  <tr key={minute} className="brk">
+                    <td
+                      colSpan={columns.length + 1}
+                      className="border-b border-line bg-surface-sunken px-3 py-2 text-center text-xs text-ink-3"
+                    >
+                      {RECEPTION_APPOINTMENTS.breakRow}
                     </td>
-                  )
-                })}
-              </tr>
-            ))}
+                  </tr>
+                )
+              }
+              return (
+                <tr key={minute}>
+                  <th
+                    scope="row"
+                    className="sticky inset-inline-start-0 z-10 border-b border-line bg-surface px-3 py-2 text-start font-semibold text-ink-2 tabular-nums"
+                  >
+                    {formatTime(minutesToTime(minute))}
+                  </th>
+                  {columns.map((doctor) => {
+                    const row = rowAtMinute(props.rows, doctor.id, minute)
+                    const window = windowOf.get(doctor.id) ?? null
+                    const offSchedule = window !== null && !inAnyRange(window, minute)
+                    return (
+                      <td key={doctor.id} className="min-w-[140px] border-b border-l border-line p-2 align-top">
+                        {row !== null ? (
+                          <BookedCell row={row} writable={props.writable} panel={props.panel} />
+                        ) : offSchedule ? (
+                          <OffScheduleCell />
+                        ) : (
+                          <FreeCell
+                            doctor={doctor}
+                            localDate={props.localDate}
+                            time={minutesToTime(minute)}
+                            services={props.services}
+                            customers={props.customers}
+                            panel={props.panel}
+                            writable={props.writable}
+                          />
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -215,6 +236,7 @@ function BookedCell({
 function FreeCell({
   doctor,
   localDate,
+  time,
   services,
   customers,
   panel,
@@ -222,6 +244,7 @@ function FreeCell({
 }: {
   readonly doctor: DoctorColumn
   readonly localDate: LocalDate
+  readonly time: string
   readonly services: readonly ServiceOption[]
   readonly customers: readonly CustomerOption[]
   readonly panel: BookingDialogProps['panel']
@@ -240,9 +263,12 @@ function FreeCell({
         variant="book"
         panel={panel}
         triggerLabel="+"
+        triggerVariant="outline"
+        triggerIcon={null}
         doctorId={doctor.id}
         doctorName={doctor.name}
         localDate={localDate}
+        defaultTime={time}
         services={services}
         customers={customers}
       />
@@ -271,10 +297,14 @@ function Cell({
   readonly writable: boolean
   readonly panel: BookingDialogProps['panel']
 }) {
+  const srcIcon = sourceIcon(row.source)
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="font-semibold text-ink">{rowDescription(row)}</span>
+        <span className="flex items-center gap-1 font-semibold text-ink">
+          {srcIcon === null ? null : <Icon name={srcIcon} size="compact" className="text-ink-3" />}
+          {rowDescription(row)}
+        </span>
         <StatusChip status={row.status} />
       </div>
       {row.serviceName === null ? null : (
@@ -286,6 +316,49 @@ function Cell({
       {writable ? <RowActions appointmentId={row.id} status={row.status} panel={panel} /> : null}
     </div>
   )
+}
+
+/**
+ * The icon that says who booked a slot: a platform booking (website, Instagram, a
+ * campaign) vs the desk's own (reception, phone). `null` for a legacy row with no
+ * recorded source — no icon rather than a guessed one.
+ */
+function sourceIcon(source: string | null): IconName | null {
+  switch (source) {
+    case 'WEBSITE':
+    case 'INSTAGRAM':
+    case 'CAMPAIGN':
+      return 'treatment'
+    case 'RECEPTION':
+    case 'PHONE':
+      return 'phone'
+    default:
+      return null
+  }
+}
+
+/** Whether a minute falls inside any of a doctor's working ranges. */
+function inAnyRange(window: DoctorDayWindow, minute: number): boolean {
+  return window.ranges.some((r) => minute >= r.startMinute && minute < r.endMinute)
+}
+
+/**
+ * Whether an axis minute is a shared between-shift break — every working doctor is off
+ * (in a gap between their ranges) and none is booked. Such a minute is one full-width
+ * «استراحت میان دو شیفت» row rather than a line of identical off-schedule cells.
+ */
+function isBreakRow(
+  doctors: readonly DoctorColumn[],
+  windowOf: ReadonlyMap<string, DoctorDayWindow>,
+  rows: readonly AppointmentRow[],
+  minute: number,
+): boolean {
+  if (doctors.length === 0) return false
+  return doctors.every((doctor) => {
+    if (rowAtMinute(rows, doctor.id, minute) !== null) return false
+    const window = windowOf.get(doctor.id)
+    return window !== undefined && !inAnyRange(window, minute)
+  })
 }
 
 /**

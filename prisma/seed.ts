@@ -129,17 +129,27 @@ import { unscopedPrisma } from '@/core/db'
 import { realClock } from '@/core/lib'
 import {
   AcquisitionSource,
+  AppointmentSource,
+  AppointmentStatus,
   CustomerLifecycle,
   ROLES,
   Role,
+  ServiceCategory,
   isMember,
 } from '@/core/constants'
 import {
+  SEED_SERVICES,
   SEED_TENANTS,
+  addLocalDays,
   asLocalDate,
+  asLocalTime,
   jalaliParts,
+  minutesToTime,
   normalizeForSearch,
   normalizeMobile,
+  timeToMinutes,
+  todayLocalDate,
+  toUtcInstant,
   type SeedName,
   type SeedTenantText,
 } from '@/core/localization'
@@ -172,8 +182,8 @@ const SHARED_STAFF_MOBILE = '09121111111'
 const SHARED_CUSTOMER_MOBILE = '09123330001'
 
 /**
- * `installation.md` §5's shape — one manager, two doctors, two secretaries — spelled
- * from `ROLES` and never as a re-typed string.
+ * `installation.md` §5's shape — one manager, three doctors, two secretaries —
+ * spelled from `ROLES` and never as a re-typed string.
  *
  * The catalog lists a tenant's staff in this order, so the position a person is at
  * *is* their role. `assertShape` below ties the two files together, and the seed's
@@ -181,6 +191,7 @@ const SHARED_CUSTOMER_MOBILE = '09123330001'
  */
 const STAFF_ROLES_PER_TENANT: readonly Role[] = [
   ROLES[0],
+  ROLES[1],
   ROLES[1],
   ROLES[1],
   ROLES[2],
@@ -216,8 +227,8 @@ interface CustomerFacts {
   }
   readonly consentSms?: boolean
   readonly consentWhatsApp?: boolean
-  /** Which of the tenant's two doctors is the customer's primary doctor. */
-  readonly primaryDoctor?: 0 | 1
+  /** Which of the tenant's three doctors is the customer's primary doctor. */
+  readonly primaryDoctor?: 0 | 1 | 2
   /**
    * Days from `now` the lead is next to be contacted. Negative is a lead that is
    * already overdue, which is the state the lead cartable's alert is built from.
@@ -243,7 +254,14 @@ const TENANT_FACTS: readonly TenantFacts[] = [
   {
     key: 'aria',
     slug: 'aria',
-    staff: ['09120000000', SHARED_STAFF_MOBILE, '09120000002', '09120000003', '09120000004'],
+    staff: [
+      '09120000000',
+      SHARED_STAFF_MOBILE,
+      '09120000002',
+      '09120000005',
+      '09120000003',
+      '09120000004',
+    ],
     customers: [
       {
         mobile: SHARED_CUSTOMER_MOBILE,
@@ -267,7 +285,7 @@ const TENANT_FACTS: readonly TenantFacts[] = [
         visits: { firstAgoDays: 800, lastAgoDays: 200, sessions: 12 },
         consentSms: true,
         consentWhatsApp: true,
-        primaryDoctor: 0,
+        primaryDoctor: 2,
       },
       {
         mobile: '09123330004',
@@ -282,7 +300,7 @@ const TENANT_FACTS: readonly TenantFacts[] = [
         birthDate: '1378-07-20',
         visits: { firstAgoDays: 95, lastAgoDays: 30, sessions: 2 },
         consentSms: true,
-        primaryDoctor: 0,
+        primaryDoctor: 2,
       },
       {
         mobile: '09123330006',
@@ -308,7 +326,14 @@ const TENANT_FACTS: readonly TenantFacts[] = [
   {
     key: 'parsian',
     slug: 'parsian',
-    staff: ['09120000010', SHARED_STAFF_MOBILE, '09120000012', '09120000013', '09120000014'],
+    staff: [
+      '09120000010',
+      SHARED_STAFF_MOBILE,
+      '09120000012',
+      '09120000015',
+      '09120000013',
+      '09120000014',
+    ],
     customers: [
       {
         mobile: SHARED_CUSTOMER_MOBILE,
@@ -331,7 +356,7 @@ const TENANT_FACTS: readonly TenantFacts[] = [
         birthDate: '1368-02-30',
         visits: { firstAgoDays: 1000, lastAgoDays: 400, sessions: 15 },
         consentWhatsApp: true,
-        primaryDoctor: 0,
+        primaryDoctor: 2,
       },
       {
         mobile: '09123340004',
@@ -346,7 +371,7 @@ const TENANT_FACTS: readonly TenantFacts[] = [
         birthDate: '1375-09-14',
         visits: { firstAgoDays: 700, lastAgoDays: 95, sessions: 5 },
         consentSms: true,
-        primaryDoctor: 0,
+        primaryDoctor: 2,
       },
       {
         mobile: '09123340006',
@@ -539,7 +564,7 @@ interface TenantSummary {
 }
 
 /**
- * Seeds one tenant: its row, its settings, its branch, its five staff with their
+ * Seeds one tenant: its row, its settings, its branch, its six staff with their
  * memberships, and its customers.
  *
  * Every write is an upsert on the row's natural key, so this function is the whole
@@ -655,12 +680,228 @@ async function seedTenant(
   })
   assertTenantKeepsRecoveryManager(committed.map(membershipSnapshot))
 
+  // The reception grid's development dataset — two months of booked slots so the
+  // client can open any day and see a full grid. `aria` only; `parsian` stays minimal.
+  if (tenant.facts.key === 'aria') {
+    await seedGridDataset(client, tenantId, clinicId, doctorIds, now)
+  }
+
   return {
     slug: tenant.facts.slug,
     name: tenant.text.name,
     roles: tenant.staff.map((member) => member.role),
     customers: tenant.customers.length,
   }
+}
+
+/** The non-text facts of the four grid services, joined to `SEED_SERVICES` by key. */
+const GRID_SERVICE_FACTS: Readonly<
+  Record<string, { category: string; price: bigint; depositAmount: bigint; durationMinutes: number; defaultSessions: number; defaultIntervalDays: number }>
+> = {
+  facial: { category: ServiceCategory.Skin, price: 3_500_000n, depositAmount: 500_000n, durationMinutes: 60, defaultSessions: 1, defaultIntervalDays: 0 },
+  meso: { category: ServiceCategory.Injection, price: 4_800_000n, depositAmount: 800_000n, durationMinutes: 45, defaultSessions: 4, defaultIntervalDays: 21 },
+  laser: { category: ServiceCategory.Laser, price: 2_500_000n, depositAmount: 400_000n, durationMinutes: 30, defaultSessions: 6, defaultIntervalDays: 30 },
+  filler: { category: ServiceCategory.Injection, price: 8_000_000n, depositAmount: 1_500_000n, durationMinutes: 45, defaultSessions: 1, defaultIntervalDays: 0 },
+}
+
+/** The clinic-local timezone offset the grid dataset is written against (Tehran, +03:30). */
+const GRID_UTC_OFFSET = 210
+/** How far ahead the dataset reaches, in clinic-local days. */
+const GRID_HORIZON_DAYS = 60
+
+/** A doctor's working window for the grid, by their index among the tenant's doctors. */
+function gridDoctorHours(index: number): { start: string; end: string } {
+  if (index === 0) return { start: '08:00', end: '14:00' }
+  if (index === 1) return { start: '10:00', end: '18:00' }
+  return { start: '12:00', end: '20:00' }
+}
+
+/**
+ * The reception grid's development dataset for `aria`: the clinic shift, each doctor's
+ * weekday hours, the four services, and two months of booked appointments.
+ *
+ * Appointments are written in **one `findMany` + one `createMany`**: every intended row
+ * is built deterministically (service and customer by index, so a re-run is identical),
+ * the existing `(doctorId, slotKey)` pairs are read once, and only the missing rows are
+ * inserted — SQLite's `createMany` has no `skipDuplicates`, so the pre-filter is the
+ * idempotency. Shift, hours and services use the same `findFirst`/`upsert` idempotency
+ * the rest of the seed uses.
+ */
+async function seedGridDataset(
+  client: PrismaClient,
+  tenantId: string,
+  clinicId: string,
+  doctorIds: readonly string[],
+  now: Date,
+): Promise<void> {
+  // 1. Clinic shift — 08:00–20:00 every weekday. No @@unique, so findFirst then write.
+  for (let weekday = 0; weekday < 7; weekday += 1) {
+    const existing = await client.clinicShift.findFirst({ where: { tenantId, clinicId, weekday } })
+    const data = { tenantId, clinicId, weekday, startTime: '08:00', endTime: '20:00' }
+    if (existing === null) await client.clinicShift.create({ data })
+    else await client.clinicShift.update({ where: { id: existing.id }, data })
+  }
+
+  // 2. Doctor working hours — one window per doctor per weekday.
+  for (const [index, doctorId] of doctorIds.entries()) {
+    const { start, end } = gridDoctorHours(index)
+    for (let weekday = 0; weekday < 7; weekday += 1) {
+      const existing = await client.doctorWorkingHours.findFirst({ where: { tenantId, doctorId, weekday } })
+      const data = { tenantId, doctorId, weekday, startTime: start, endTime: end }
+      if (existing === null) await client.doctorWorkingHours.create({ data })
+      else await client.doctorWorkingHours.update({ where: { id: existing.id }, data })
+    }
+  }
+
+  // 3. Services — idempotent on (tenantId, name).
+  const services: { id: string; price: bigint; depositAmount: bigint; durationMinutes: number }[] = []
+  for (const svc of SEED_SERVICES) {
+    const facts = GRID_SERVICE_FACTS[svc.key]
+    if (facts === undefined) continue
+    const data = {
+      tenantId,
+      clinicId,
+      name: svc.name,
+      searchName: normalizeForSearch(svc.name),
+      category: facts.category,
+      price: facts.price,
+      depositAmount: facts.depositAmount,
+      durationMinutes: facts.durationMinutes,
+      defaultSessions: facts.defaultSessions,
+      defaultIntervalDays: facts.defaultIntervalDays,
+      isActive: true,
+    }
+    const row = await client.service.upsert({
+      where: { tenantId_name: { tenantId, name: svc.name } },
+      create: data,
+      update: data,
+    })
+    services.push({ id: row.id, price: row.price, depositAmount: row.depositAmount, durationMinutes: row.durationMinutes })
+  }
+
+  // 4. Appointments — two months of booked slots, built deterministically.
+  if (services.length === 0 || doctorIds.length === 0) return
+
+  const customers = await client.customer.findMany({
+    where: { tenantId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (customers.length === 0) return
+
+  const today = todayLocalDate(now)
+  const horizon = addLocalDays(today, GRID_HORIZON_DAYS)
+  const holidays = new Set(
+    (
+      await client.holiday.findMany({
+        where: { tenantId, localDate: { gte: today, lte: horizon } },
+        select: { localDate: true },
+      })
+    ).map((row) => row.localDate),
+  )
+
+  type Row = {
+    tenantId: string
+    clinicId: string
+    doctorId: string
+    customerId: string
+    serviceId: string
+    scheduledAt: Date
+    localDate: string
+    localTime: string
+    durationMinutes: number
+    status: string
+    source: string
+    isSlotBlock: boolean
+    slotKey: string
+    priceAtBooking: bigint
+    depositAmount: bigint
+    cancelledAt?: Date
+  }
+
+  const rows: Row[] = []
+  let counter = 0
+  let cancelledPlaced = false
+  let unrecordedPlaced = false
+
+  for (let day = 0; day <= GRID_HORIZON_DAYS; day += 1) {
+    const localDate = addLocalDays(today, day)
+    if (holidays.has(localDate)) continue
+
+    for (const [index, doctorId] of doctorIds.entries()) {
+      const hours = gridDoctorHours(index)
+      const start = timeToMinutes(asLocalTime(hours.start))
+      const end = timeToMinutes(asLocalTime(hours.end))
+      const count = 4 + ((day + index) % 3) // 4–6 per doctor per day
+
+      for (let slot = 0; slot < count; slot += 1) {
+        const minute = start + slot * 60
+        if (minute + 30 > end) break
+
+        const service = services[counter % services.length]
+        const customer = customers[counter % customers.length]
+        if (service === undefined || customer === undefined) continue
+        const localTime = String(minutesToTime(minute))
+        const scheduledAt = toUtcInstant(asLocalDate(localDate), asLocalTime(localTime), GRID_UTC_OFFSET)
+        const slotKey = scheduledAt.toISOString()
+
+        // Status mix: today's past → done/arrived, today's near future → booked, future
+        // days → booked. One CANCELLED today, one RESULT_NOT_RECORDED in the last 3 days.
+        let status: string = AppointmentStatus.Booked
+        let cancelledAt: Date | undefined
+        if (day === 0 && !cancelledPlaced && slot === 1) {
+          status = AppointmentStatus.Cancelled
+          cancelledAt = now
+          cancelledPlaced = true
+        } else if (day >= GRID_HORIZON_DAYS - 2 && !unrecordedPlaced && index === 0 && slot === 0) {
+          status = AppointmentStatus.ResultNotRecorded
+          unrecordedPlaced = true
+        } else if (day === 0) {
+          status =
+            scheduledAt.getTime() < now.getTime()
+              ? counter % 2 === 0
+                ? AppointmentStatus.Completed
+                : AppointmentStatus.Arrived
+              : AppointmentStatus.Booked
+        }
+
+        rows.push({
+          tenantId,
+          clinicId,
+          doctorId,
+          customerId: customer.id,
+          serviceId: service.id,
+          scheduledAt,
+          localDate,
+          localTime,
+          durationMinutes: service.durationMinutes,
+          status,
+          source: AppointmentSource.Reception,
+          isSlotBlock: false,
+          slotKey,
+          priceAtBooking: service.price,
+          depositAmount: service.depositAmount,
+          ...(cancelledAt === undefined ? {} : { cancelledAt }),
+        })
+        counter += 1
+      }
+    }
+  }
+
+  // One findMany for every intended key, then one createMany of the missing rows.
+  // SQLite's createMany has no skipDuplicates, so the pre-filter is the idempotency.
+  const slotKeys = [...new Set(rows.map((row) => row.slotKey))]
+  const existing = await client.appointment.findMany({
+    where: { tenantId, slotKey: { in: slotKeys } },
+    select: { doctorId: true, slotKey: true },
+  })
+  const seen = new Set(existing.map((row) => `${row.doctorId}|${row.slotKey}`))
+  const fresh = rows.filter((row) => !seen.has(`${row.doctorId}|${row.slotKey}`))
+
+  if (fresh.length > 0) {
+    await client.appointment.createMany({ data: fresh })
+  }
+  console.log(`Seeded ${fresh.length} appointments across ${GRID_HORIZON_DAYS + 1} days (aria grid dataset).`)
 }
 
 /**

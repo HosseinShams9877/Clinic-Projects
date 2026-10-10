@@ -45,22 +45,26 @@ import {
   formatMoney,
   formatNumber,
   formatTime,
+  jalaliWeekday,
+  minutesToTime,
+  timeToMinutes,
   todayLocalDate,
 } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 
 import { requireStaffPanel } from '@/app/_shell/session'
 
-import { clinicDay, unrecordedCartable } from '@/modules/appointments'
+import { clinicDay, doctorWindowsOnDay, unrecordedCartable } from '@/modules/appointments'
 import { contactList as debtContactList } from '@/modules/debts'
 import { todaysReminders } from '@/modules/notifications'
 
+import { PANEL_HOMES, RECEPTION_DESK } from '@/app/catalog'
 import { FreeSlotsCard, type FreeSlot } from './_components/free-slots-card'
 import { KpiRow } from './_components/kpi-row'
 import { PageHeader } from './_components/page-header'
 import { TaskCartable, type TaskRow } from './_components/task-cartable'
 
-export const metadata: Metadata = { title: 'میز کار امروز' }
+export const metadata: Metadata = { title: PANEL_HOMES.reception }
 
 export default async function DeskPage() {
   const session = await requireStaffPanel('reception')
@@ -71,11 +75,12 @@ export default async function DeskPage() {
     tenantContextOf({ tenantId: session.tenantId }),
     prisma(),
     async (tx) => {
-      const [dayAppointments, unrecorded, reminders, debtBuckets] = await Promise.all([
+      const [dayAppointments, unrecorded, reminders, debtBuckets, windows] = await Promise.all([
         clinicDay({ tx, ctx: session.permissions, clinicId: null, localDate: today }),
         unrecordedCartable({ tx, tenantId: session.tenantId }),
         todaysReminders(tx, session.tenantId, now),
         debtContactList({ tx, ctx: session.permissions, now }),
+        doctorWindowsOnDay({ tx, tenantId: session.tenantId, clinicId: null, weekday: jalaliWeekday(today) }),
       ])
 
       // ── The four KPI numbers ────────────────────────────────────────────
@@ -113,7 +118,7 @@ export default async function DeskPage() {
           id: `unrecorded-${appointment.id}`,
           priority: 'urgent',
           kind: 'overdue',
-          description: `نتیجه نوبت ${formatTime(asLocalTime(appointment.localTime))} ثبت نشده`,
+          description: `${RECEPTION_DESK.taskResultPendingPre}${formatTime(asLocalTime(appointment.localTime))}${RECEPTION_DESK.taskResultPendingPost}`,
           names:
             appointment.customerName === null
               ? []
@@ -123,8 +128,8 @@ export default async function DeskPage() {
                     : `${appointment.customerName} · ${appointment.serviceName}`,
                 ],
           action: {
-            label: 'ثبت نتیجه',
-            href: `/reception/appointments/${appointment.id}/result`,
+            label: RECEPTION_DESK.actionRecordResult,
+            href: '/reception/appointments?view=cartable',
           },
         })
       }
@@ -135,9 +140,9 @@ export default async function DeskPage() {
           id: 'debts-past-due',
           priority: 'today',
           kind: 'debt',
-          description: `${formatNumber(overdueDebts.length)} بدهی سررسیدشان گذشته`,
+          description: `${formatNumber(overdueDebts.length)} ${RECEPTION_DESK.taskDebtsOverdue}`,
           names: [
-            `مجموع ${formatMoney(debtTotalRial)}`,
+            `${RECEPTION_DESK.taskDebtTotalPre}${formatMoney(debtTotalRial)}`,
             ...overdueDebts
               .slice(0, 3)
               .map((row) =>
@@ -146,7 +151,7 @@ export default async function DeskPage() {
                   : `${row.customerFirstName} ${row.customerLastName}`,
               ),
           ],
-          action: { label: 'پیگیری بدهی', href: '/reception/debts' },
+          action: { label: RECEPTION_DESK.actionFollowDebt, href: '/reception/debts' },
         })
       }
 
@@ -159,16 +164,40 @@ export default async function DeskPage() {
           description: `${reminder.customerName} — ${reminder.renderedText.slice(0, 50)}`,
           names: [],
           action: {
-            label: 'ارسال پیام',
-            href: `/reception/customers/${reminder.customerId}`,
+            label: RECEPTION_DESK.actionSendMessage,
+            href: '/reception/customers',
           },
         })
       }
 
       // ── The free slots ──────────────────────────────────────────────────
-      // The grid's own slot generation lands in a follow-up phase; until then
-      // the card renders an empty state rather than a fabricated slot.
+      // The first free time of each working doctor today, computed from the
+      // doctors' windows and the day's booked rows. Empty when every doctor is full.
       const freeSlots: FreeSlot[] = []
+      for (const window of windows) {
+        const taken = new Set(
+          dayAppointments
+            .filter((row) => row.doctorId === window.id)
+            .map((row) => timeToMinutes(asLocalTime(row.localTime))),
+        )
+        let found: number | null = null
+        for (const range of window.ranges) {
+          for (let minute = range.startMinute; minute < range.endMinute; minute += 30) {
+            if (!taken.has(minute)) {
+              found = minute
+              break
+            }
+          }
+          if (found !== null) break
+        }
+        if (found !== null) {
+          freeSlots.push({
+            time: minutesToTime(found),
+            doctorName: window.name,
+            href: '/reception/appointments',
+          })
+        }
+      }
 
       const dateLabel = formatDate(today, 'long')
 
@@ -176,9 +205,9 @@ export default async function DeskPage() {
         <div className="flex flex-col gap-4">
           <PageHeader
             dateLabel={dateLabel}
-            countLabel={`${formatNumber(tasks.length)} کار برای امروز`}
+            countLabel={`${formatNumber(tasks.length)} ${RECEPTION_DESK.countTasksSuffix}`}
             firstFreeHref="/reception/appointments"
-            bookHref="/reception/appointments/new"
+            bookHref="/reception/appointments"
           />
 
           <KpiRow

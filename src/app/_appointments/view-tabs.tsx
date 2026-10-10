@@ -51,7 +51,10 @@ export interface ViewTabsProps {
  */
 export function ViewTabs({ view, cartableCount, basePath, search }: ViewTabsProps) {
   return (
-    <nav className="flex flex-wrap items-center gap-2" aria-label={APPOINTMENTS_PAGE.timeColumn}>
+    <nav
+      className="flex items-center gap-2 max-panel:flex-nowrap max-panel:overflow-x-auto panel:flex-wrap"
+      aria-label={APPOINTMENTS_PAGE.timeColumn}
+    >
       {tabs().map((tab) => {
         const active = tab.view === view
         return (
@@ -60,7 +63,7 @@ export function ViewTabs({ view, cartableCount, basePath, search }: ViewTabsProp
             href={`${basePath}?view=${tab.view}${search}`}
             aria-current={active ? 'page' : undefined}
             className={cx(
-              'rounded-sm border px-3 py-2 text-sm font-semibold no-underline',
+              'shrink-0 rounded-sm border px-3 py-2 text-sm font-semibold no-underline',
               active
                 ? 'border-brand bg-brand-50 text-brand-700'
                 : 'border-line-2 bg-surface text-ink-2 hover:bg-surface-2',
