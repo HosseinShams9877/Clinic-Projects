@@ -3,20 +3,10 @@ import { toPersianDigits, ZWNJ } from '@/core/localization'
 /** The product's name. It is the tab title, the bookmark, and the install name. */
 export const APP_NAME = 'سامانه مدیریت کلینیک'
 
-/**
- * The tab title of any page other than the dashboard: `<page> | <app>`.
- *
- * Built from `APP_NAME` rather than written out, because `06-constants.md` §7 rule
- * 1 defines a value once and a second copy of the product's name is a second place
- * to change it.
- */
+
 export const APP_TITLE_TEMPLATE = `%s | ${APP_NAME}`
 
-/**
- * The description a search engine and a link preview show. «کلینیکهای» carries a ZWNJ
- * (U+200C) spelled through the constant, because the character is invisible and a lost
- * one is a lost one nobody sees in a diff (`catalog/common.ts`).
- */
+
 export const APP_DESCRIPTION = `سامانه مدیریت نوبت، پرونده مشتریان و پیگیری درمان کلینیک${ZWNJ}های زیبایی`
 
 /** The two ways in, as `panels.html` presents them (`02-architecture.md` §9). */
@@ -78,15 +68,7 @@ export const PANEL_SCOPE = {
   account: 'نوبت‌های خود، دوره‌های درمان، پرداخت‌ها و پرونده خودتان.',
 } as const satisfies Record<string, string>
 
-/**
- * The navigation labels of the four panels' pages.
- *
- * Keyed by the page rather than by the route, because two panels carry the same
- * page under different routes — `admin/customers` and `reception/customers` — and
- * one label per page keeps the pair from drifting apart. The two that are phrased
- * from the customer's side are the customer panel's own: «نوبت‌های من» against the
- * staff's «نوبت‌ها».
- */
+
 export const NAV_LABELS = {
   /** The reception panel's desk — the day's work list, named for the page itself. */
   desk: 'میز کار امروز',
@@ -857,48 +839,62 @@ export const PAYMENTS_PAGE = {
 
 export const DESK_PAGE = {
   title: 'میز کار امروز',
-  lead: 'کارهای امروز: نوبت‌ها، نتایج ثبت‌نشده، تماس دوره‌ها، مانده‌حساب، لیدهای جدید و پیام‌های امروز.',
-  /** The six sections, as the page orders them — the day's own order of work. */
-  sections: {
-    appointments: 'نوبت‌های امروز',
-    unrecorded: 'نتایج ثبت‌نشده',
-    arrivals: 'منتظر ورود',
-    cycles: 'تماس دوره‌های درمان',
-    debts: 'مانده‌حساب سررسید شده',
-    leads: 'لیدهای جدید',
-    reminders: 'پیام‌های امروز',
+
+  /** The header's two buttons and the working count's suffix. */
+  header: {
+    firstFree: 'اولین زمان آزاد',
+    book: 'ثبت نوبت',
+    /** The suffix of the header's working count, «N کار برای امروز». */
+    countSuffix: 'کار برای امروز',
   },
-  /** The one-line summary the section's header carries beside its name. */
-  counts: {
-    one: 'یک مورد',
-    /** Persian plural, for the counts above one. */
-    many: (n: number) => `${toPersianDigits(n)} مورد`,
-    none: 'موردی نیست',
+
+  /** The four KPI cards. */
+  kpi: {
+    urgent: 'فوری',
+    calls: 'تماس امروز',
+    appointments: 'نوبت امروز',
+    debt: 'مانده حساب باز',
+    /** The debt card's subtitle suffix, «N مشتری». */
+    debtorsSuffix: 'مشتری',
   },
-  columns: {
-    time: 'ساعت',
-    name: 'نام و نام خانوادگی',
-    mobile: 'موبایل',
-    service: 'خدمت',
-    doctor: 'پزشک',
-    status: 'وضعیت',
-    kind: 'نوع پیام',
-    text: 'متن پیام',
+
+  /** The task cartable. */
+  cartable: {
+    title: 'کارهای امروز',
+    empty: 'کاری برای امروز ثبت نشده است.',
+    footer: 'هر کاری که پیگیری می‌خواهد اینجا جمع می‌شود — لازم نیست چند صفحه را بگردید.',
+    priority: {
+      urgent: 'فوری',
+      today: 'امروز',
+    },
+    filters: {
+      all: 'همه',
+      overdue: 'عقب‌افتاده',
+      debt: 'بدحی',
+      lead: 'لید',
+      cycle: 'چرخه درمان',
+      call: 'تماس',
+      birthday: 'تولد',
+    },
+    actions: {
+      recordResult: 'ثبت نتیجه',
+      followDebt: 'پیگیری بدهی',
+      sendMessage: 'ارسال پیام',
+    },
+    descriptions: {
+      unrecordedResult: 'نتیجه نوبت {time} ثبت نشده',
+      overdueDebts: '{count} بدهی سررسیدشان گذشته',
+      debtTotal: 'مجموع {amount}',
+    },
   },
-  /** The cycle row's service and the session the desk owes a call about, one line. */
-  sessionOf: (serviceName: string, sessionNumber: number) =>
-    `${serviceName} — جلسه ${toPersianDigits(sessionNumber)}`,
-  /** The row's link into the page that owns the work. */
-  links: {
-    allAppointments: 'همه نوبت‌ها',
-    allCycles: 'همه دوره‌ها',
-    allDebts: 'همه مانده‌حساب',
-    allLeads: 'همه لیدها',
-    allCustomers: 'همه مشتریان',
+
+  /** The free-slots card. */
+  freeSlots: {
+    title: 'ساعت‌های خالی امروز',
+    empty: 'امروز ساعت خالی نیست.',
+    gridAction: 'جدول کامل',
   },
-  /** The page's whole point, shown when every section is empty. */
-  empty: 'کار امروز تمام است.',
-} as const satisfies Record<string, unknown>
+} as const
 
 
 export const CAMPAIGNS_PAGE = {
