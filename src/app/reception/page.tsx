@@ -1,21 +1,18 @@
 /**
- * The reception panel's home — `02-architecture.md` §7's «میز کار امروز」 and §9's
- * `reception/desk.html`.
+ * The reception panel's entry — `02-architecture.md` §7's «میز کار امروز».
  *
- * The reception desk's home is today's work rather than a clinic-wide overview, which
- * is why §7 names it for the desk and not the dashboard. The `dashboard` module that
- * renders it is Phase 2; Phase 1 shows the home's name and scope and the five links
- * the secretary's default holds. See `_shell/PanelShell.tsx` for the argument about
- * what a Phase 1 home is.
+ * The desk's own home is `reception/desk`, which is where the panel's work
+ * actually is. This route exists so that `/reception` — the path a signed-in
+ * person lands on after login, and the path the panel's own home link used to
+ * carry — sends them to the desk rather than showing a second, empty home.
+ *
+ * A `redirect()` on the server, not a client-side navigation, so the entry is
+ * one request and one render: the person never sees an empty home flash before
+ * the desk appears.
  */
 
-import type { Metadata } from 'next'
-
-import { PanelHome } from '@/app/_shell/PanelShell'
-import { PANEL_HOMES } from '@/app/catalog'
-
-export const metadata: Metadata = { title: PANEL_HOMES.reception }
+import { redirect } from 'next/navigation'
 
 export default function ReceptionHomePage() {
-  return <PanelHome panel="reception" />
+  redirect('/reception/desk')
 }

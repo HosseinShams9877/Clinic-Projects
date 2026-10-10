@@ -192,7 +192,6 @@ const PANEL_PAGES: Readonly<Record<Panel, readonly NavItem[]>> = {
       href: '/reception/desk',
       icon: 'home',
     },
-    { label: PANEL_HOMES.reception, href: '/reception', icon: 'appointment' },
     {
       label: NAV_LABELS.appointments,
       href: '/reception/appointments',
