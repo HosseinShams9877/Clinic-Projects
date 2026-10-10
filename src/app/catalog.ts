@@ -1,6 +1,6 @@
 import { toPersianDigits, ZWNJ } from '@/core/localization'
 
-export { RECEPTION_APPOINTMENTS, RECEPTION_DESK } from './reception/catalog'
+export { RECEPTION_APPOINTMENTS, RECEPTION_CYCLES, RECEPTION_DEBTS, RECEPTION_DESK } from './reception/catalog'
 
 /** The product's name. It is the tab title, the bookmark, and the install name. */
 export const APP_NAME = 'سامانه مدیریت کلینیک'

@@ -27,11 +27,13 @@ export interface DayPickerProps {
 export function DayPicker({ localDate, basePath }: DayPickerProps) {
   const router = useRouter()
   return (
-    <Field label={APPOINTMENTS_PAGE.admin.filters.date}>
-      <JalaliDatePicker
-        value={localDate}
-        onChange={(value) => router.push(`${basePath}?view=day&day=${value}`)}
-      />
-    </Field>
+    <div className="[&_label]:sr-only [&_button]:inline-size-auto! [&_button]:w-auto [&_button]:gap-2 [&_button]:px-3! [&_button]:py-[6px]! [&_button]:text-xs! [&_button]:text-ink-2 [&_button]:rounded-xs!">
+      <Field label={APPOINTMENTS_PAGE.admin.filters.date}>
+        <JalaliDatePicker
+          value={localDate}
+          onChange={(value) => router.push(`${basePath}?view=day&day=${value}`)}
+        />
+      </Field>
+    </div>
   )
 }

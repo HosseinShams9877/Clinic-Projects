@@ -111,7 +111,7 @@ function BucketTable({
       <table className="w-full border-collapse text-sm">
         <caption className="sr-only">{DEBTS_PAGE.reception.title}</caption>
         <thead>
-          <tr className="border-b border-line bg-surface-2 text-ink-3">
+          <tr className="border-b border-line-2 bg-surface-2 text-ink-3">
             <Th>{DEBTS_PAGE.columns.customer}</Th>
             <Th>{DEBTS_PAGE.columns.mobile}</Th>
             <Th className="text-end">{DEBTS_PAGE.columns.charged}</Th>

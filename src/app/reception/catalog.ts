@@ -43,3 +43,30 @@ export const RECEPTION_DESK = {
   actionSendMessage: 'ارسال پیام',
 } as const
 
+/** The cycles page's reception-specific copy — the KPI tiles and the chip filter. */
+export const RECEPTION_CYCLES = {
+  /** The four KPI tiles above the contact-list table. */
+  kpi: {
+    overdue: 'عقب‌افتاده',
+    notContacted: 'تماس نگرفته',
+    scheduled: 'پیگیری دارد',
+    total: 'کل دوره‌ها',
+  },
+  /** The chip filter above the table. */
+  filter: {
+    all: 'همه',
+    overdue: 'عقب‌افتاده',
+    notContacted: 'تماس نگرفته',
+  },
+} as const
+
+/** The debts page's reception-specific copy — the four KPI tiles above the buckets. */
+export const RECEPTION_DEBTS = {
+  kpi: {
+    total: 'مجموع بدهی',
+    overdue: 'عقب‌افتاده',
+    dueSoon: 'سررسید نزدیک',
+    debtors: 'تعداد بدهکار',
+  },
+} as const
+

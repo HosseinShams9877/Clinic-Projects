@@ -130,12 +130,12 @@ export default async function ReceptionAppointmentsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold text-ink">{APPOINTMENTS_PAGE.reception.title}</h1>
           <p className="text-sm text-ink-2">{subtitle}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {firstFree === null ? (
             <Button variant="outline" leadingIcon="clock" disabled>
               {APPOINTMENTS_PAGE.firstFreeSlot}

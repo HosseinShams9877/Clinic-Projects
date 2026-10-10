@@ -30,9 +30,7 @@ import Link from 'next/link'
 import { cx } from '@/core/lib'
 import {
   addLocalDays,
-  asLocalDate,
   asLocalTime,
-  formatDate,
   formatTime,
   minutesToTime,
   timeToMinutes,
@@ -217,13 +215,30 @@ function BookedCell({
   return (
     <div
       className={cx(
-        'flex flex-col gap-2 rounded-sm bg-brand-50 p-2 [border-inline-start:3px_solid]',
+        'flex flex-col gap-2 rounded-sm p-2 [border-inline-start:3px_solid]',
+        CELL_BG[row.status] ?? CELL_BG.default,
         BORDER_CLASSES[row.status] ?? BORDER_CLASSES.default,
       )}
     >
       <Cell row={row} writable={writable} panel={panel} />
     </div>
   )
+}
+
+/**
+ * A booked cell's background by status, matching the demo's `.cel` states over the
+ * project's own tokens: completed is green (`ok`), arrived amber (`warn`), the day's
+ * upcoming is the brand tint (`busy`), the unrecorded alarm is danger, a no-show is
+ * neutral. The inline-start strip's colour is `BORDER_CLASSES`.
+ */
+const CELL_BG: Readonly<Record<string, string>> = {
+  default: 'bg-brand-50',
+  BOOKED: 'bg-brand-50',
+  AWAITING_ARRIVAL: 'bg-brand-50',
+  ARRIVED: 'bg-warn-bg',
+  COMPLETED: 'bg-ok-bg',
+  NO_SHOW: 'bg-neutral-bg',
+  RESULT_NOT_RECORDED: 'bg-danger-bg',
 }
 
 /**
@@ -425,7 +440,7 @@ const BORDER_CLASSES: Readonly<Record<string, string>> = {
   AWAITING_ARRIVAL: '[border-inline-start-color:var(--warn)]',
   ARRIVED: '[border-inline-start-color:var(--info)]',
   COMPLETED: '[border-inline-start-color:var(--ok)]',
-  NO_SHOW: '[border-inline-start-color:var(--ink-3)]',
+  NO_SHOW: '[border-inline-start-color:var(--line-2)]',
   CANCELLED: '[border-inline-start-color:var(--danger)]',
   RESCHEDULED: '[border-inline-start-color:var(--ink-3)]',
   RESULT_NOT_RECORDED: '[border-inline-start-color:var(--danger)]',
@@ -474,26 +489,18 @@ function rowAtMinute(
 export function DayNav({ localDate, basePath }: { readonly localDate: LocalDate; readonly basePath: string }) {
   const previous = shiftDay(localDate, -1)
   const next = shiftDay(localDate, 1)
+  const chip =
+    'rounded-xs border border-line-2 bg-surface px-3 py-[6px] text-xs text-ink-2 no-underline hover:bg-surface-2'
 
   return (
     <nav className="flex items-center gap-2" aria-label={APPOINTMENTS_PAGE.timeColumn}>
-      <Link
-        href={`${basePath}?day=${previous}`}
-        className="rounded-sm border border-line-2 bg-surface px-3 py-2 text-sm text-ink-2 hover:bg-surface-2"
-      >
+      <Link href={`${basePath}?day=${previous}`} className={chip}>
         {APPOINTMENTS_PAGE.controls.previousDay}
       </Link>
-      <span className="font-semibold text-ink tabular-nums">{formatDate(asLocalDate(localDate), 'long')}</span>
-      <Link
-        href={`${basePath}?day=${next}`}
-        className="rounded-sm border border-line-2 bg-surface px-3 py-2 text-sm text-ink-2 hover:bg-surface-2"
-      >
+      <Link href={`${basePath}?day=${next}`} className={chip}>
         {APPOINTMENTS_PAGE.controls.nextDay}
       </Link>
-      <Link
-        href={basePath}
-        className="rounded-sm border border-line-2 bg-surface px-3 py-2 text-sm text-ink-2 hover:bg-surface-2"
-      >
+      <Link href={basePath} className={chip}>
         {APPOINTMENTS_PAGE.controls.today}
       </Link>
     </nav>

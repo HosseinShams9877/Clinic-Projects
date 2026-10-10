@@ -200,9 +200,9 @@ export function BookingDialog(props: BookingDialogProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-2xl"
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[680px]"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
+        <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
           <h2 id={titleId} className="text-lg font-bold text-ink">
             {BOOKING_POPUP.titles[titleForStep(step)]}
           </h2>
@@ -215,25 +215,35 @@ export function BookingDialog(props: BookingDialogProps) {
           />
         </header>
 
-        <ol className="flex gap-2 p-6 pb-0" aria-hidden="true">
+        <ol className="flex flex-wrap items-center gap-2 p-5 pb-0" aria-hidden="true">
           {stepNames().map((name, index) => {
             const number = (index + 1) as Step
             const reached = step >= number
+            const done = step > number
             return (
-              <li
-                key={name}
-                className={cx(
-                  'flex-1 rounded-xs px-3 py-2 text-center text-xs',
-                  reached ? 'bg-brand-50 font-semibold text-brand-700' : 'bg-surface-sunken text-ink-3',
-                )}
-              >
-                {name}
+              <li key={name} className="flex items-center gap-2">
+                {index === 0 ? null : <span className="h-[2px] w-[26px] rounded-[2px] bg-line-2" />}
+                <span className={cx('flex items-center gap-2 text-sm', reached ? 'font-bold text-ink' : 'text-ink-3')}>
+                  <span
+                    className={cx(
+                      'grid size-7 shrink-0 place-items-center rounded-pill text-xs font-bold',
+                      done
+                        ? 'bg-ok-bg text-ok'
+                        : number === step
+                          ? 'bg-brand text-ink-inverse'
+                          : 'bg-surface-sunken text-ink-3',
+                    )}
+                  >
+                    {formatNumber(number)}
+                  </span>
+                  {name}
+                </span>
               </li>
             )
           })}
         </ol>
 
-        <div className="flex flex-col gap-4 p-6">
+        <div className="flex flex-col gap-4 p-5">
           {step === 1 ? (
             <Field label={BOOKING_POPUP.fields.service} required>
               <select
@@ -321,7 +331,7 @@ export function BookingDialog(props: BookingDialogProps) {
           )}
         </div>
 
-        <footer className="flex items-center justify-between gap-4 border-t border-line p-6">
+        <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
           <Button
             variant="ghost"
             onClick={() => setOpen(false)}

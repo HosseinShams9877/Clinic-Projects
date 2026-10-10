@@ -26,6 +26,8 @@ import { contactList } from '@/modules/debts'
 import { PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS } from '@/modules/payments'
 import { requireStaffPanel } from '@/app/_shell/session'
 
+import { DebtsKpi } from './_components/debts-kpi'
+
 export const metadata: Metadata = { title: DEBTS_PAGE.reception.title }
 
 /**
@@ -59,12 +61,27 @@ export default async function ReceptionDebtsPage() {
     contactList({ tx, ctx: session.permissions, now: realClock() }),
   )
 
+  // The KPI figures are summed from the real buckets, so a tile cannot disagree with the
+  // tables below: overdue is the three past-due buckets, due-soon is its own.
+  const sum = (rows: readonly { balance: bigint }[]) => rows.reduce((total, row) => total + row.balance, 0n)
+  const overdueRial = sum(buckets.overdue30) + sum(buckets.overdue7) + sum(buckets.overdue)
+  const dueSoonRial = sum(buckets.dueSoon)
+  const debtors =
+    buckets.overdue30.length + buckets.overdue7.length + buckets.overdue.length + buckets.dueSoon.length
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
         <h1 className="text-2xl font-bold text-ink">{DEBTS_PAGE.reception.title}</h1>
         <p className="text-sm text-ink-2">{DEBTS_PAGE.reception.lead}</p>
       </div>
+
+      <DebtsKpi
+        totalRial={overdueRial + dueSoonRial}
+        overdueRial={overdueRial}
+        dueSoonRial={dueSoonRial}
+        debtors={debtors}
+      />
 
       <DebtsTable buckets={buckets} showActions paymentOptions={PAYMENT_OPTIONS} />
     </div>

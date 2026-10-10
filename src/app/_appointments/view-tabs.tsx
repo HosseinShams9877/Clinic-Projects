@@ -63,9 +63,9 @@ export function ViewTabs({ view, cartableCount, basePath, search }: ViewTabsProp
             href={`${basePath}?view=${tab.view}${search}`}
             aria-current={active ? 'page' : undefined}
             className={cx(
-              'shrink-0 rounded-sm border px-3 py-2 text-sm font-semibold no-underline',
+              'shrink-0 rounded-xs border px-3 py-[6px] text-xs font-semibold no-underline',
               active
-                ? 'border-brand bg-brand-50 text-brand-700'
+                ? 'border-transparent bg-brand-50 text-brand-700'
                 : 'border-line-2 bg-surface text-ink-2 hover:bg-surface-2',
             )}
           >
