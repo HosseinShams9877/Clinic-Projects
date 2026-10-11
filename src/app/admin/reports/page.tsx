@@ -388,7 +388,7 @@ function CustomRangeForm({ from, to }: { readonly from: string; readonly to: str
           name="from"
           defaultValue={from}
           dir="ltr"
-          className="rounded-sm border border-line-2 bg-page px-3 py-[11px] text-sm text-ink tabular-nums"
+          className="rounded-sm border border-line-2 bg-surface px-3 py-[11px] text-sm text-ink tabular-nums"
         />
       </div>
       <div className="flex flex-col gap-1 text-sm">
@@ -397,12 +397,12 @@ function CustomRangeForm({ from, to }: { readonly from: string; readonly to: str
           name="to"
           defaultValue={to}
           dir="ltr"
-          className="rounded-sm border border-line-2 bg-page px-3 py-[11px] text-sm text-ink tabular-nums"
+          className="rounded-sm border border-line-2 bg-surface px-3 py-[11px] text-sm text-ink tabular-nums"
         />
       </div>
       <button
         type="submit"
-        className="rounded-sm bg-ink px-4 py-[11px] text-sm font-medium text-page"
+        className="rounded-sm bg-ink px-4 py-[11px] text-sm font-medium text-ink-inverse"
       >
         {REPORT_FIELDS.apply}
       </button>

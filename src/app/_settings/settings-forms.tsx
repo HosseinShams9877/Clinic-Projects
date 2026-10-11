@@ -26,6 +26,9 @@
 
 import { useActionState } from 'react'
 
+import { Button } from '@/core/components/button'
+import { CONTROL_CLASSES } from '@/core/components/form/control-classes'
+
 import {
   addHolidayAction,
   addOverrideAction,
@@ -58,7 +61,7 @@ import type { Toggle } from '@/modules/roles-permissions'
 type FieldLabels<C> = Readonly<Record<keyof C, string>>
 
 /** The tabs' shared field classes, so a field is the same field in every tab. */
-const FIELD_CLASS = 'rounded-md border border-line bg-page px-3 py-1.5 text-ink'
+const FIELD_CLASS = CONTROL_CLASSES
 const LABEL_CLASS = 'text-xs text-ink-3'
 
 /** The answer the server gives a form it could not save, or nothing when it could. */
@@ -67,15 +70,12 @@ function FormAnswer({ result }: { readonly result: ActionResult }) {
   return <p className="text-sm font-medium text-danger">{result.message}</p>
 }
 
-/** The one button every tab's form submits with. */
+/** The one button every tab's form submits with — the design system's primary button. */
 function Submit({ label }: { readonly label: string }) {
   return (
-    <button
-      type="submit"
-      className="self-start rounded-md bg-ink px-4 py-1.5 text-sm font-medium text-page"
-    >
+    <Button type="submit" variant="primary" className="self-start">
       {label}
-    </button>
+    </Button>
   )
 }
 
@@ -537,7 +537,7 @@ export function OptionsForm({
           {(Object.keys(toggleLabels) as readonly Toggle[]).map((toggle) => (
             <label
               key={toggle}
-              className="flex items-start gap-3 rounded-md border border-line bg-page px-3 py-2"
+              className="flex items-start gap-3 rounded-md border border-line bg-surface-2 px-3 py-2"
             >
               <input
                 type="checkbox"
@@ -565,7 +565,7 @@ export function OptionsForm({
             {overrides.map((override) => (
               <li
                 key={override.module}
-                className="flex items-center justify-between rounded-md border border-line bg-page px-3 py-2 text-sm text-ink"
+                className="flex items-center justify-between rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-ink"
               >
                 <span>{`${override.module} — ${override.implementation}`}</span>
                 <RemoveButton

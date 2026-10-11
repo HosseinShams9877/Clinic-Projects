@@ -20,10 +20,12 @@
 import type { Metadata } from 'next'
 
 import { PanelShell } from '@/app/_shell/PanelShell'
-import { PANEL_NAMES } from '@/app/catalog'
+import { panelTitle } from '@/app/_shell/panel-metadata'
 
-/** The tab title a page under this panel carries when it does not name its own. */
-export const metadata: Metadata = { title: PANEL_NAMES.doctor }
+/** The tab title a page under this panel carries — «<page> — <clinic>». */
+export function generateMetadata(): Promise<Metadata> {
+  return panelTitle('doctor')
+}
 
 export default function DoctorLayout({ children }: { children: React.ReactNode }) {
   return <PanelShell panel="doctor">{children}</PanelShell>

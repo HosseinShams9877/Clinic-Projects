@@ -21,6 +21,8 @@ import { panelPath } from './navigation'
 export interface PanelChromeProps {
   readonly panel: Panel
   readonly panelName: string
+  /** The clinic's own stored name, shown as the shell's brand. */
+  readonly clinicName: string
   readonly nav: readonly NavItem[]
   readonly roleLabel: string | null
   /** The long Jalali date the topbar chip shows, computed by the shell. */
@@ -34,7 +36,7 @@ export interface PanelChromeProps {
   readonly children: React.ReactNode
 }
 
-export function PanelChrome({ panel, panelName, nav, roleLabel, dateLabel, notifications, unreadCount, notificationsHref, children }: PanelChromeProps) {
+export function PanelChrome({ panel, panelName, clinicName, nav, roleLabel, dateLabel, notifications, unreadCount, notificationsHref, children }: PanelChromeProps) {
   const pathname = usePathname()
 
   // The drawer belongs to the route it was opened on, so a navigation closes it by
@@ -72,7 +74,10 @@ export function PanelChrome({ panel, panelName, nav, roleLabel, dateLabel, notif
           <span className="grid size-[38px] shrink-0 place-items-center rounded-md bg-brand-50 text-brand">
             <Icon name="doctor" size="card" />
           </span>
-          <span className="text-lg font-bold tracking-[var(--ls-heading)] text-ink-inverse">{panelName}</span>
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-lg font-bold tracking-[var(--ls-heading)] text-ink-inverse">{clinicName}</span>
+            <span className="truncate text-xs [color:color-mix(in_srgb,var(--ink-inverse),transparent_32%)]">{panelName}</span>
+          </span>
         </div>
         <nav
           className="flex flex-1 flex-col gap-1 px-3 pt-2 pb-5"

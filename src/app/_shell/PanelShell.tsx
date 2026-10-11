@@ -37,9 +37,11 @@
 
 import type { ReactNode } from 'react'
 
+import { prisma, runInTenantScope } from '@/core/db'
 import { ROLE_LABELS } from '@/core/localization'
 import { formatDate, todayLocalDate } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
+import { readIdentity } from '@/modules/settings'
 
 import { PANEL_HOMES, PANEL_NAMES, PANEL_SCOPE } from '@/app/catalog'
 
@@ -61,6 +63,22 @@ function todayLabel(): string {
 /** Where the bell's «همه اعلان‌ها» leads — the panel's own notifications page. */
 function notificationsHrefFor(panel: Panel): string {
   return panel === 'account' ? '/account/notifications' : `/${panel}/notifications`
+}
+
+/**
+ * The clinic's own name for the shell's logo and the tab title, read once per request.
+ *
+ * A documented second exception to the shell's "no module reads" rule (the bell is the
+ * first): the clinic name is a shell-level brand every panel's chrome carries, and it is
+ * one tenant-scoped read of the settings module's own `readIdentity`. The clinic's name
+ * is preferred, with the tenant's name as the fallback a single-clinic tenant carries.
+ */
+async function loadClinicLabel(
+  permissions: Parameters<typeof runInTenantScope>[0],
+  tenantId: string,
+): Promise<string> {
+  const identity = await runInTenantScope(permissions, prisma(), (tx) => readIdentity(tx, tenantId))
+  return identity.clinicName.trim() || identity.tenantName.trim()
 }
 
 export interface PanelShellProps {
@@ -98,11 +116,13 @@ export async function PanelShell({ panel, children }: PanelShellProps) {
 async function StaffPanelShell({ panel, children }: PanelShellProps) {
   const session: PanelSession = await requireStaffPanel(panel)
   const feed = await loadStaffFeed(panel, session.permissions, session.tenantId)
+  const clinicName = await loadClinicLabel(session.permissions, session.tenantId)
 
   return (
     <PanelChrome
       panel={panel}
       panelName={PANEL_NAMES[panel]}
+      clinicName={clinicName}
       roleLabel={ROLE_LABELS[session.role]}
       dateLabel={todayLabel()}
       notifications={feed.entries}
@@ -130,11 +150,13 @@ async function StaffPanelShell({ panel, children }: PanelShellProps) {
 async function CustomerPanelShell({ children }: Omit<PanelShellProps, 'panel'>) {
   const session = await requireCustomerPanel()
   const feed = await loadCustomerFeed(session.permissions, session.tenantId, session.customerId)
+  const clinicName = await loadClinicLabel(session.permissions, session.tenantId)
 
   return (
     <PanelChrome
       panel="account"
       panelName={PANEL_NAMES.account}
+      clinicName={clinicName}
       roleLabel={null}
       dateLabel={todayLabel()}
       notifications={feed.entries}

@@ -12,12 +12,12 @@
  * a registry validation the other five do not, so it lives in `./overrides.ts`.
  */
 
-import { DepositRefundPolicy, isMember } from '@/core/constants'
+import { DepositRefundPolicy, Permission, isMember } from '@/core/constants'
 import { asLocalTime, isValidLocalDate } from '@/core/localization'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 import { DEFAULT_CYCLE_SETTINGS } from '@/modules/cycles'
-import { type Toggle } from '@/modules/roles-permissions'
+import { requirePermission, type Toggle } from '@/modules/roles-permissions'
 import { DomainError } from '@/core/types'
 
 import type {
@@ -36,6 +36,8 @@ export async function saveIdentity(
   ctx: TenantContext,
   values: IdentitySettings,
 ): Promise<IdentitySettings> {
+  requirePermission(ctx, Permission.ManageClinicSettings)
+
   const tenantName = values.tenantName.trim()
   if (tenantName === '') {
     throw new DomainError('The clinic name must not be blank.', {
@@ -82,6 +84,8 @@ export async function saveBooking(
   ctx: TenantContext,
   values: BookingSettings,
 ): Promise<BookingSettings> {
+  requirePermission(ctx, Permission.ManageClinicSettings)
+
   const row = await tx.tenantSettings.upsert({
     where: { tenantId: ctx.tenantId },
     create: {
@@ -133,6 +137,8 @@ export async function saveWorkingHours(
     readonly holidays: ReadonlyArray<{ readonly localDate: string; readonly title: string; readonly isOfficial: boolean }>
   },
 ): Promise<void> {
+  requirePermission(ctx, Permission.ManageClinicSettings)
+
   for (const shift of values.shifts) {
     if (shift.weekday < 0 || shift.weekday > 6) {
       throw new DomainError(`The weekday ${shift.weekday} is not a day of the week.`, {
@@ -196,6 +202,8 @@ export async function saveCycleTab(
   ctx: TenantContext,
   values: CycleTabSettings,
 ): Promise<CycleTabSettings> {
+  requirePermission(ctx, Permission.ManageClinicSettings)
+
   await tx.tenantSettings.upsert({
     where: { tenantId: ctx.tenantId },
     create: { tenantId: ctx.tenantId, cycleSettings: JSON.stringify(values) },
@@ -210,6 +218,8 @@ export async function saveMessagesTab(
   ctx: TenantContext,
   values: MessagesTabSettings & { readonly templates: readonly MessageTemplateEdit[] },
 ): Promise<void> {
+  requirePermission(ctx, Permission.ManageClinicSettings)
+
   for (const template of values.templates) {
     const text = template.text.trim()
     if (text === '') {
@@ -262,6 +272,7 @@ export async function saveToggles(
   ctx: TenantContext,
   changes: Readonly<Partial<Record<Toggle, boolean>>>,
 ) {
+  requirePermission(ctx, Permission.ManageClinicSettings)
   return writeToggles(tx, ctx.tenantId, changes)
 }
 

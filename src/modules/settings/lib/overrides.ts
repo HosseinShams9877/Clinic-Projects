@@ -20,8 +20,9 @@ import { DomainError } from '@/core/types'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 import { REGISTRY, type RegistryKey } from '@/modules/registry'
-import { isMember, Module as ModuleConstants, type Module } from '@/core/constants'
+import { isMember, Module as ModuleConstants, Permission, type Module } from '@/core/constants'
 import { AuditAction, AuditEntity, recordAudit } from '@/modules/staff'
+import { requirePermission } from '@/modules/roles-permissions'
 
 /** The shape of the audit detail, so a reader of `audit_logs` knows what it holds. */
 export interface OverrideAuditDetail {
@@ -41,6 +42,7 @@ export async function setOverrideDeclaration(args: {
   readonly module: string
   readonly implementation: string
 }): Promise<OverrideAuditDetail> {
+  requirePermission(args.ctx, Permission.ManageClinicSettings)
   if (!isMember(ModuleConstants, args.module)) {
     throw new DomainError(`${args.module} is not a module this build has.`, {
       messageKey: 'settings.overrideNotInRegistry',
@@ -104,6 +106,7 @@ export async function removeOverrideDeclaration(args: {
   readonly ctx: TenantContext
   readonly module: string
 }): Promise<void> {
+  requirePermission(args.ctx, Permission.ManageClinicSettings)
   const current = await args.tx.tenantSettings.findUnique({
     where: { tenantId: args.ctx.tenantId },
     select: { overrides: true },
