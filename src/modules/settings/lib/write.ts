@@ -90,18 +90,21 @@ export async function saveBooking(
       appointmentSettings: JSON.stringify(values.timings),
       secretaryDiscountCap: values.secretaryDiscountCap,
       depositRefundPolicy: values.depositRefundPolicy,
+      debtGraceDays: values.debtGraceDays,
     },
     update: {
       bookingMode: values.mode,
       appointmentSettings: JSON.stringify(values.timings),
       secretaryDiscountCap: values.secretaryDiscountCap,
       depositRefundPolicy: values.depositRefundPolicy,
+      debtGraceDays: values.debtGraceDays,
     },
     select: {
       bookingMode: true,
       appointmentSettings: true,
       secretaryDiscountCap: true,
       depositRefundPolicy: true,
+      debtGraceDays: true,
     },
   })
 
@@ -112,6 +115,7 @@ export async function saveBooking(
     // The column is a free `String?`, so the code the matrix closes is narrowed here
     // and a value the row should never hold is the read's documented default.
     depositRefundPolicy: policyOf(row.depositRefundPolicy),
+    debtGraceDays: row.debtGraceDays,
   })
 }
 

@@ -8,6 +8,7 @@
 
 /** The doctor dashboard's three KPI tiles and the «اعلام مرخصی» card. */
 export const DOCTOR_DASHBOARD = {
+  scheduleTitle: 'ساعت‌های امروز من',
   kpi: {
     today: 'نوبت امروز من',
     doneSoFar: 'انجام‌شده تا این لحظه',
@@ -20,6 +21,7 @@ export const DOCTOR_DASHBOARD = {
     to: 'تا تاریخ',
     reason: 'توضیح (اختیاری)',
     submit: 'ثبت درخواست مرخصی',
+    cancel: 'انصراف',
     sent: 'درخواست مرخصی ثبت شد و برای تأیید مدیر ارسال شد.',
     invalid: 'بازه مرخصی نامعتبر است: تاریخ پایان باید بعد از تاریخ شروع باشد.',
   },

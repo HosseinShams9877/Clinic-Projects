@@ -134,6 +134,9 @@ export default async function SettingsPage({
               : toPersianDigits(surface.booking.secretaryDiscountCap)
           }
           depositRefundPolicy={surface.booking.depositRefundPolicy ?? ''}
+          debtGraceDays={
+            surface.booking.debtGraceDays === null ? '' : toPersianDigits(surface.booking.debtGraceDays)
+          }
           labels={BOOKING_FIELDS}
           modeLabels={BOOKING_MODE_LABELS}
           refundLabels={DEPOSIT_REFUND_LABELS}

@@ -43,6 +43,7 @@ export const bookingSchema = z.object({
   /** Toman, as the form sends it; `null` is no ceiling. */
   secretaryDiscountCap: z.union([z.bigint().nonnegative(), z.null()]),
   depositRefundPolicy: z.union([z.enum(['FULL', 'HALF', 'NONE']), z.null()]),
+  debtGraceDays: z.union([z.number().int().nonnegative(), z.null()]),
 })
 
 /** One row of the «ساعات کاری» shift table. */

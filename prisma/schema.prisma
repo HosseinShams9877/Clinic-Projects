@@ -92,6 +92,7 @@ model Tenant {
   jobs           JobQueue[]
   auditLogs      AuditLog[]
   otpChallenges  OtpChallenge[]
+  notificationReads NotificationRead[]
 
   @@map("tenants")
 }
@@ -997,4 +998,27 @@ model AudienceGroup {
   @@unique([tenantId, key], map: "group_tenant_key_key")
   @@index([tenantId, isActive, lastRefreshedAt], map: "group_tenant_refresh_idx")
   @@map("audience_groups")
+}
+
+// Per-principal read/hidden state for the topbar notifications. A notification is
+// derived (the bell's reads), so its "read" is not a column on the source row but a
+// row here keyed by a stable `notificationKey` (`<kind>:<entityId>`). `principalKind`
+// separates a staff `userId` from a customer `customerId`, since the two panels have
+// different principals. `hiddenAt` is the per-user delete. Tenant-scoped; its RLS
+// policy is in `prisma/migrations-pg/`.
+model NotificationRead {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  principalKind  String
+  principalId    String
+  notificationKey String
+  readAt         DateTime?
+  hiddenAt       DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([tenantId, principalId, notificationKey], map: "notifread_principal_key_key")
+  @@index([tenantId, principalId], map: "notifread_tenant_principal_idx")
+  @@map("notification_reads")
 }

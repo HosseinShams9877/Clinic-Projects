@@ -114,6 +114,7 @@ export async function saveBookingAction(
       },
       secretaryDiscountCap: moneyOrNone(form, 'secretaryDiscountCap'),
       depositRefundPolicy: stringOf(form, 'depositRefundPolicy') || null,
+      debtGraceDays: graceDaysOrNull(form),
     })
 
     await saveBooking(tx, ctx, values)
@@ -374,4 +375,18 @@ function moneyOrNone(form: FormData, name: string): bigint | null {
     })
   }
   return BigInt(normalized)
+}
+
+/** The debt grace-days a text field sent, or `null` when the manager left it empty. */
+function graceDaysOrNull(form: FormData): number | null {
+  const normalized = normalizeDigits(stringOf(form, 'debtGraceDays'))
+  if (normalized === '') return null
+  const parsed = Number.parseInt(normalized, 10)
+  if (Number.isNaN(parsed) || parsed < 0) {
+    throw new DomainError('The debtGraceDays field must be a whole number of days.', {
+      messageKey: 'settings.invalidValue',
+      detail: { field: 'debtGraceDays' },
+    })
+  }
+  return parsed
 }

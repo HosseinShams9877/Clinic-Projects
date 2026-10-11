@@ -44,7 +44,7 @@ import { realClock } from '@/core/lib/clock'
 import { PANEL_HOMES, PANEL_NAMES, PANEL_SCOPE } from '@/app/catalog'
 
 import { PanelChrome } from './PanelChrome'
-import { loadCustomerNotifications, loadStaffNotifications } from './notifications'
+import { loadCustomerFeed, loadStaffFeed } from './notifications'
 import type { Panel } from './navigation'
 import { customerNavigation, staffNavigation } from './navigation'
 import {
@@ -58,11 +58,9 @@ function todayLabel(): string {
   return formatDate(todayLocalDate(realClock()), 'long')
 }
 
-/** Where the bell's «همه اعلان‌ها» leads, by panel. */
+/** Where the bell's «همه اعلان‌ها» leads — the panel's own notifications page. */
 function notificationsHrefFor(panel: Panel): string {
-  if (panel === 'reception') return '/reception/appointments?view=cartable'
-  if (panel === 'account') return '/account/appointments'
-  return `/${panel}/appointments`
+  return panel === 'account' ? '/account/notifications' : `/${panel}/notifications`
 }
 
 export interface PanelShellProps {
@@ -99,7 +97,7 @@ export async function PanelShell({ panel, children }: PanelShellProps) {
  */
 async function StaffPanelShell({ panel, children }: PanelShellProps) {
   const session: PanelSession = await requireStaffPanel(panel)
-  const notifications = await loadStaffNotifications(panel, session.permissions, session.tenantId)
+  const feed = await loadStaffFeed(panel, session.permissions, session.tenantId)
 
   return (
     <PanelChrome
@@ -107,7 +105,8 @@ async function StaffPanelShell({ panel, children }: PanelShellProps) {
       panelName={PANEL_NAMES[panel]}
       roleLabel={ROLE_LABELS[session.role]}
       dateLabel={todayLabel()}
-      notifications={notifications}
+      notifications={feed.entries}
+      unreadCount={feed.unreadCount}
       notificationsHref={notificationsHrefFor(panel)}
       nav={staffNavigation(panel, session.permissions)}
     >
@@ -130,11 +129,7 @@ async function StaffPanelShell({ panel, children }: PanelShellProps) {
  */
 async function CustomerPanelShell({ children }: Omit<PanelShellProps, 'panel'>) {
   const session = await requireCustomerPanel()
-  const notifications = await loadCustomerNotifications(
-    session.permissions,
-    session.tenantId,
-    session.customerId,
-  )
+  const feed = await loadCustomerFeed(session.permissions, session.tenantId, session.customerId)
 
   return (
     <PanelChrome
@@ -142,7 +137,8 @@ async function CustomerPanelShell({ children }: Omit<PanelShellProps, 'panel'>) 
       panelName={PANEL_NAMES.account}
       roleLabel={null}
       dateLabel={todayLabel()}
-      notifications={notifications}
+      notifications={feed.entries}
+      unreadCount={feed.unreadCount}
       notificationsHref={notificationsHrefFor('account')}
       nav={customerNavigation()}
     >

@@ -50,6 +50,7 @@ const BOOKING_SELECT = {
   appointmentSettings: true,
   secretaryDiscountCap: true,
   depositRefundPolicy: true,
+  debtGraceDays: true,
 } as const
 
 const IDENTITY_SELECT = {
@@ -142,6 +143,7 @@ export async function readBooking(
     timings: timingsOrDefault(row?.appointmentSettings ?? null),
     secretaryDiscountCap: row?.secretaryDiscountCap ?? null,
     depositRefundPolicy: policyOrDefault(row?.depositRefundPolicy ?? null),
+    debtGraceDays: row?.debtGraceDays ?? null,
   })
 }
 

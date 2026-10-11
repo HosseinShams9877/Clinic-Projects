@@ -137,6 +137,7 @@ export function BookingForm({
   bookingHoldMinutes,
   secretaryDiscountCap,
   depositRefundPolicy,
+  debtGraceDays,
   labels,
   modeLabels,
   refundLabels,
@@ -147,6 +148,7 @@ export function BookingForm({
   readonly bookingHoldMinutes: number
   readonly secretaryDiscountCap: string
   readonly depositRefundPolicy: string
+  readonly debtGraceDays: string
   readonly labels: FieldLabels<typeof BOOKING_FIELDS>
   readonly modeLabels: Readonly<Record<string, string>>
   readonly refundLabels: Readonly<Record<string, string>>
@@ -188,6 +190,12 @@ export function BookingForm({
           label={labels.secretaryDiscountCap}
           name="secretaryDiscountCap"
           defaultValue={secretaryDiscountCap}
+        />
+        <Field
+          label={labels.debtGraceDays}
+          name="debtGraceDays"
+          defaultValue={debtGraceDays}
+          type="number"
         />
         <label className="flex flex-col gap-1 text-sm">
           <span className={LABEL_CLASS}>{labels.depositRefundPolicy}</span>

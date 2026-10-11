@@ -86,11 +86,13 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <h1 className="text-2xl font-bold text-ink">{PANEL_HOMES.doctor}</h1>
-        <p className="text-sm text-ink-2">{APPOINTMENTS_PAGE.doctor.lead}</p>
-        {data.settings.doctorSelfBooking && data.options.services.length > 0 ? (
-          <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold text-ink">{PANEL_HOMES.doctor}</h1>
+          <p className="text-sm text-ink-2">{APPOINTMENTS_PAGE.doctor.lead}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {data.settings.doctorSelfBooking && data.options.services.length > 0 ? (
             <BookingDialog
               variant="quickBook"
               panel="doctor"
@@ -101,8 +103,9 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
               services={data.options.services}
               customers={data.options.customers}
             />
-          </div>
-        ) : null}
+          ) : null}
+          <LeaveForm />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 panel:grid-cols-3">
@@ -111,20 +114,23 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
         <KpiTile label={DOCTOR_DASHBOARD.kpi.activeCycles} value={formatNumber(activeCycles)} icon="treatment" tone="bg-brand-50 text-brand" />
       </div>
 
-      <div className="flex flex-col gap-4">
-        <DayNav localDate={localDate} basePath={BASE_PATH} />
-        <DayGrid
-          localDate={localDate}
-          doctors={[{ id: session.permissions.userId, name: doctorName }]}
-          rows={data.rows}
-          services={data.options.services}
-          customers={data.options.customers}
-          panel="doctor"
-          writable
-        />
-      </div>
-
-      <LeaveForm />
+      <section className="flex flex-col rounded-lg border border-line bg-surface">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+          <h2 className="text-base font-bold text-ink">{DOCTOR_DASHBOARD.scheduleTitle}</h2>
+          <DayNav localDate={localDate} basePath={BASE_PATH} />
+        </div>
+        <div className="overflow-x-auto p-4">
+          <DayGrid
+            localDate={localDate}
+            doctors={[{ id: session.permissions.userId, name: doctorName }]}
+            rows={data.rows}
+            services={data.options.services}
+            customers={data.options.customers}
+            panel="doctor"
+            writable
+          />
+        </div>
+      </section>
     </div>
   )
 }

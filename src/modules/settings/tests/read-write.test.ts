@@ -189,6 +189,7 @@ describe('«نوبتدهی»', () => {
       timings: { slotDurationMinutes: 20, reminderLeadHours: 6, bookingHoldMinutes: 45 },
       secretaryDiscountCap: 500_000n,
       depositRefundPolicy: DepositRefundPolicy.Half,
+      debtGraceDays: 7,
     })
 
     expect(saved.mode).toBe(BookingMode.TimeRange)
@@ -223,6 +224,7 @@ describe('«نوبتدهی»', () => {
       timings: { slotDurationMinutes: 15, reminderLeadHours: 24, bookingHoldMinutes: 30 },
       secretaryDiscountCap: 500_000n,
       depositRefundPolicy: DepositRefundPolicy.Full,
+      debtGraceDays: 7,
     })
 
     const cleared = await saveBooking(unscoped as never, managerContext(), {
@@ -230,6 +232,7 @@ describe('«نوبتدهی»', () => {
       timings: { slotDurationMinutes: 15, reminderLeadHours: 24, bookingHoldMinutes: 30 },
       secretaryDiscountCap: null,
       depositRefundPolicy: null,
+      debtGraceDays: null,
     })
 
     expect(cleared.secretaryDiscountCap).toBeNull()

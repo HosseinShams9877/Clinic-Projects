@@ -24,6 +24,16 @@ export const NOTIFICATIONS_POPOVER = {
   itemsSuffix: ' مورد',
 } as const
 
+/** The full notifications page — the bell's «همه اعلان‌ها» destination. */
+export const NOTIFICATIONS_PAGE = {
+  title: 'اعلان‌ها',
+  lead: 'هر چیزی که نیاز به توجه شما دارد، یک‌جا.',
+  empty: 'اعلانی برای امروز نیست.',
+  markAll: 'علامت‌گذاری همه به‌عنوان خوانده‌شده',
+  delete: 'حذف',
+  open: 'باز کردن',
+} as const
+
 /**
  * The notification kinds the role-aware bell renders, one lead per cartable chip.
  *

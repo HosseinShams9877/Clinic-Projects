@@ -71,6 +71,8 @@ export interface BookingSettings {
   readonly secretaryDiscountCap: bigint | null
   /** §4.4's policy — NULL is no refund until the manager sets one. */
   readonly depositRefundPolicy: DepositRefundPolicy | null
+  /** «مهلت تا سررسید» — days after a session before its balance is past due; NULL = default. */
+  readonly debtGraceDays: number | null
 }
 
 /** One of the clinic's weekly shifts, as the «ساعات کاری» tab renders it. */

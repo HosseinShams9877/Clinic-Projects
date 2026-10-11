@@ -64,6 +64,7 @@ export const BOOKING_FIELDS = Object.freeze({
   bookingHoldMinutes: 'نگه‌داشتن اسلات رزرو شده (دقیقه)',
   secretaryDiscountCap: 'سقف تخفیف منشی (تومان)',
   depositRefundPolicy: 'سیاست بازگرداندن بیعانه',
+  debtGraceDays: 'مهلت تا سررسید (روز)',
   /** The label of the empty option, which is the policy the manager has not set. */
   none: 'تعیین نشده',
   save: 'ذخیره نوبتدهی',

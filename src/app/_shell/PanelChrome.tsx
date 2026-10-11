@@ -5,12 +5,14 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 import { Icon } from '@/core/components/icons'
+import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from '@/core/components/popover'
 import { cx } from '@/core/lib'
 
 import { NAV_LABELS, SHELL_ARIA } from '@/app/catalog'
 
 import { TOPBAR } from './catalog'
-import { NotificationBell, type NotificationItem } from './NotificationBell'
+import { NotificationBell } from './NotificationBell'
+import type { NotificationEntry } from './notifications'
 import { TopbarSearch } from './TopbarSearch'
 import { signOut } from './actions'
 import type { NavItem, Panel } from './navigation'
@@ -23,14 +25,16 @@ export interface PanelChromeProps {
   readonly roleLabel: string | null
   /** The long Jalali date the topbar chip shows, computed by the shell. */
   readonly dateLabel: string
-  /** The day's notifications for the bell, read once by the shell. */
-  readonly notifications: readonly NotificationItem[]
+  /** The notifications the bell lists, read once by the shell. */
+  readonly notifications: readonly NotificationEntry[]
+  /** How many of them are unread — the bell's badge. */
+  readonly unreadCount: number
   /** Where «همه اعلان‌ها» leads. */
   readonly notificationsHref: string
   readonly children: React.ReactNode
 }
 
-export function PanelChrome({ panel, panelName, nav, roleLabel, dateLabel, notifications, notificationsHref, children }: PanelChromeProps) {
+export function PanelChrome({ panel, panelName, nav, roleLabel, dateLabel, notifications, unreadCount, notificationsHref, children }: PanelChromeProps) {
   const pathname = usePathname()
 
   // The drawer belongs to the route it was opened on, so a navigation closes it by
@@ -175,16 +179,50 @@ export function PanelChrome({ panel, panelName, nav, roleLabel, dateLabel, notif
               <Icon name="message" size="nav" />
             </button>
 
-            <NotificationBell items={notifications} allHref={notificationsHref} />
+            <NotificationBell panel={panel} items={notifications} unreadCount={unreadCount} allHref={notificationsHref} />
 
             {roleLabel === null ? null : (
-              <span className="flex items-center gap-2 rounded-pill bg-surface-sunken px-2 py-1 text-ink-2">
-                <span className="grid size-[26px] shrink-0 place-items-center rounded-pill bg-brand-50 text-brand">
-                  <Icon name="customer" size="compact" />
-                </span>
-                <span className="whitespace-nowrap text-sm font-semibold max-panel:hidden">{roleLabel}</span>
-                <Icon name="chevronDown" size="compact" />
-              </span>
+              <PopoverRoot>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cx(
+                      'flex items-center gap-2 rounded-pill border-none bg-surface-sunken px-2 py-1 text-ink-2',
+                      '[transition:background-color_var(--transition-control)] hover:bg-surface-2',
+                    )}
+                    aria-label={TOPBAR.menuLabel}
+                  >
+                    <span className="grid size-[26px] shrink-0 place-items-center rounded-pill bg-brand-50 text-brand">
+                      <Icon name="customer" size="compact" />
+                    </span>
+                    <span className="whitespace-nowrap text-sm font-semibold max-panel:hidden">{roleLabel}</span>
+                    <Icon name="chevronDown" size="compact" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverPortal>
+                  <PopoverContent align="end" sideOffset={8} className="w-56 p-0">
+                    <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-pill bg-brand-50 text-brand">
+                        <Icon name="customer" size="compact" />
+                      </span>
+                      <span className="text-sm font-semibold text-ink">{roleLabel}</span>
+                    </div>
+                    <form action={signOut}>
+                      <button
+                        type="submit"
+                        className={cx(
+                          'flex w-full items-center gap-3 border-none bg-transparent px-4 py-3 text-start text-sm font-semibold text-ink-2',
+                          '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
+                          'hover:bg-surface-sunken hover:text-danger',
+                        )}
+                      >
+                        <Icon name="logout" size="compact" />
+                        {NAV_LABELS.logout}
+                      </button>
+                    </form>
+                  </PopoverContent>
+                </PopoverPortal>
+              </PopoverRoot>
             )}
           </div>
         </header>
