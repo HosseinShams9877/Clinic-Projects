@@ -9,6 +9,14 @@
  * (`?new=1`), so an open is a bookmarkable fact the wizard's own revalidation clears; the
  * other two carry a type or a proposal the URL cannot hold, and they open in memory.
  *
+ * ## Why the URL state is read once, on mount
+ *
+ * `useState` reads its initial value once per mount, and the header's «کمپین جدید» is
+ * a `router.push` — a client navigation, not a reload. The page passes a `key` that
+ * changes with the URL's open state, so a push remounts this component rather than
+ * re-rendering it, and the fresh mount reads the fresh `?new=1`. That is why the
+ * effect a first draft needed is gone: the key is the mechanism.
+ *
  * ## Why the assistant's figures are the reads they are
  *
  * The demo's output panel carries four figures. Two of them — a parsed rule list and an

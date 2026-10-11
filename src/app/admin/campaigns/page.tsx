@@ -8,6 +8,13 @@
  * tenant owns, and a tenant whose eight a migration created is a tenant whose ninth a
  * later release cannot add.
  *
+ * ## Why `dynamic` is forced
+ *
+ * The header's «کمپین جدید» is a `router.push` that writes `?new=1`, and the
+ * workspace's open state is that param. A cached render would keep the old
+ * `searchParams` and never open the wizard after the push, so the page is forced
+ * dynamic: every navigation re-reads the URL.
+ *
  * ## What the page counts, and what it does not
  *
  * The demo's header names a ninety-day window and its tiles name a month of sends.
@@ -75,6 +82,13 @@ import { NewCampaignButton } from './_components/NewCampaignButton'
 import { StatusChips, type StatusChip } from './_components/StatusChips'
 
 export const metadata: Metadata = { title: CAMPAIGNS_PAGE.title }
+
+/**
+ * The page is forced dynamic: the header's «کمپین جدید» writes `?new=1` with a
+ * `router.push`, and the workspace's open state is that param. A cached render would
+ * keep the old `searchParams` and never open the wizard after the push.
+ */
+export const dynamic = 'force-dynamic'
 
 /** The page's own route, as the chips, the pagination and the wizard's close link to. */
 const BASE_PATH = '/admin/campaigns'
@@ -266,6 +280,16 @@ export default async function AdminCampaignsPage({
 
   const groupOptions: readonly GroupOption[] = groups
 
+  /*
+   * The workspace remounts whenever the URL's open state changes. `useState` reads
+   * `openFromUrl` once per mount, and the header's `router.push` is a client
+   * navigation that does not remount on its own — so the key is what makes the fresh
+   * mount read the fresh param. The `presetType` is part of the key because two
+   * pushes that differ only in their type must also produce a fresh mount.
+   */
+  const workspaceKey =
+    params[NEW_PARAM] !== undefined ? `open-${presetType}` : 'closed'
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -289,6 +313,7 @@ export default async function AdminCampaignsPage({
       />
 
       <CampaignWorkspace
+        key={workspaceKey}
         typeCards={TYPE_CARDS}
         groups={groupOptions}
         typeOptions={TYPE_OPTIONS}

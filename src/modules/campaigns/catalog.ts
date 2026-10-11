@@ -16,9 +16,10 @@
  * ## The status machine's six labels
  *
  * The six are `03` §2.6's own, and the five a manager acts on are the ones the row
- * renders. `AWAITING_APPROVAL` is the gate's own state and the one the sentence below
- * names, because a campaign parked there is a campaign no one has decided on, and the
- * honest thing to show is that the decision is the hold-up and whose it is.
+ * renders. `AWAITING_APPROVAL` is the gate's own state, and its hint no longer claims
+ * a second person is required — `ADR-0026` removed that rule, so a manager who reads
+ * the row is told the truth: the campaign sends nothing until it is approved, whoever
+ * approves it.
  */
 
 import type {
@@ -26,7 +27,6 @@ import type {
   CampaignScheduleKind,
   CampaignStatus,
   CampaignType,
-
 } from '@/core/constants'
 import { ZWNJ } from '@/core/localization'
 
@@ -41,7 +41,6 @@ export type CampaignsMessageKey =
   | 'campaigns.notApproved'
   | 'campaigns.notActive'
   | 'campaigns.alreadyClosed'
-  | 'campaigns.cannotApproveOwn'
   | 'campaigns.typeUnknown'
   | 'campaigns.groupNotActive'
 
@@ -60,10 +59,6 @@ export const MESSAGES: Readonly<Record<CampaignsMessageKey, string>> = {
   'campaigns.notApproved': 'این کمپین هنوز تأیید نشده است و نمی‌تواند ارسال شود.',
   'campaigns.notActive': 'این کمپین فعال نیست.',
   'campaigns.alreadyClosed': 'این کمپین به پایان رسیده است.',
-
-  // The approval may not be the person who created the draft: the gate is a second
-  // pair of eyes, and approving one's own draft is the gate walked around.
-  'campaigns.cannotApproveOwn': 'شما نمی‌توانید کمپینی را که خودتان ساخته‌اید تأیید کنید.',
 
   // A value the closed sets do not hold, reached from a form forwarding a string.
   'campaigns.typeUnknown': 'نوع کمپین نامعتبر است.',
@@ -145,11 +140,15 @@ export const CAMPAIGN_STATUS_LABELS: Readonly<Record<CampaignStatus, string>> = 
 /**
  * The sentence the page shows beside a status, which is where the approval gate
  * becomes legible: a manager reading «در انتظار تأیید» knows the campaign sends
- * nothing until a second person approves it.
+ * nothing until it is approved.
+ *
+ * ADR-0026 removed the rule that the approver may not be the creator, so the hint no
+ * longer claims a second person is required — it names the gate the schema holds, and
+ * not a person the row cannot name.
  */
 export const CAMPAIGN_STATUS_HINTS: Readonly<Record<CampaignStatus, string>> = {
   DRAFT: 'این کمپین هنوز برای تأیید ارسال نشده است.',
-  AWAITING_APPROVAL: 'این کمپین تا تأیید یک نفر دیگر ارسال نمی‌شود.',
+  AWAITING_APPROVAL: 'این کمپین تا تأیید نشود ارسال نمی‌شود.',
   APPROVED: 'این کمپین تأیید شده و می‌توانید آن را فعال کنید.',
   ACTIVE: 'این کمپین فعال است و در زمان مقرر ارسال می‌شود.',
   PAUSED: 'این کمپین موقتاً متوقف شده است.',

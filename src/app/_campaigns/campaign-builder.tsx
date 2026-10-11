@@ -82,7 +82,11 @@ export interface OptionList {
  * manager's own and not the shared builder's.
  */
 export interface BuilderChrome {
-  readonly steps: Readonly<{ readonly audience: string; readonly message: string; readonly schedule: string }>
+  readonly steps: Readonly<{
+    readonly audience: string
+    readonly message: string
+    readonly schedule: string
+  }>
   readonly prev: string
   readonly next: string
   readonly attribution: string
@@ -522,10 +526,25 @@ function dateFromProposal(proposal: AssistantProposal | null): string {
   return fromUtcInstant(new Date(proposal.scheduledAt), DEFAULT_CLINIC_UTC_OFFSET_MINUTES).localDate
 }
 
-/** One field's value from a submitted form, or '' when the field was absent. */
+/**
+ * One field's value from a submitted form, or '' when the field was absent.
+ *
+ * `HTMLInputElement` does not cover a `<textarea>`, and `HTMLSelectElement` does not
+ * cover an `<input>`, so the check is over the three classes a form control can be:
+ * an input, a textarea and a select all carry a `.value` string, and the function
+ * reads whichever the form submitted. A check for `HTMLInputElement` alone silently
+ * returns `''` for the message field, which is a textarea — the bug the ticket named.
+ */
 function asFormString(form: HTMLFormElement, name: string): string {
-  const value = form.elements.namedItem(name)
-  return value instanceof HTMLInputElement ? value.value : ''
+  const element = form.elements.namedItem(name)
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement
+  ) {
+    return element.value
+  }
+  return ''
 }
 
 /** Whether a checkbox in a submitted form was checked. */

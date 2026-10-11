@@ -18,14 +18,6 @@
  *    the scan is `status = ACTIVE` and a row's status is a column a future writer could
  *    set without this file. The two columns are the facts; the status is the label.
  *
- * ## Why approval is not the creator's own
- *
- * A gate the author opens for themselves is a gate the product does not have. The
- * approval refuses when the approver is the creator, and the refusal is a `DomainError`
- * on the server rather than a hidden button — a button hidden in the UI is a convention
- * a second pair of eyes can grant itself by any other path, and the rule is that it
- * cannot.
- *
  * ## Why the schedule is required at creation
  *
  * A campaign with no `scheduledAt` is a campaign the dispatch scan cannot order, and
@@ -33,6 +25,15 @@
  * `DAILY_AT` needs the time of day it recurs at, and `MONTHLY_DAY` needs the day it
  * lands on — the three are the three `scheduleKind` values the schema holds, and a
  * campaign that names none of them is a draft the builder has not finished.
+ *
+ * ## Why the approver may be the creator (ADR-0026)
+ *
+ * The original rule required that a campaign's approver not be its creator, as a second
+ * pair of eyes on bulk sending. That assumes a clinic with more than one manager; a
+ * single-manager clinic has no second pair of eyes and could not send anything at all.
+ * The clinic's own decision (`ADR-0026`) removed the check. The two-step shape — approve
+ * then activate — is kept, and the two columns are still written by `approveCampaign`
+ * and nowhere else, so the schema-level invariant remains enforced on both paths.
  */
 
 import {
@@ -205,15 +206,14 @@ export async function submitCampaignForApproval(args: {
 /**
  * «تأیید کمپین» — the gate's first half, and the only writer of the two columns.
  *
- * The approver may not be the creator, for the reason the file header gives. The
- * campaign moves to `APPROVED`, which is the state that makes activation possible and
- * is *not* the state that sends: an approved campaign still sends nothing until a
- * person activates it, and the two-step shape is what keeps "the manager approved the
- * text" and "the manager started the campaign" as two decisions the audit can tell
- * apart.
+ * A manager may approve their own campaign (ADR-0026). The campaign moves to
+ * `APPROVED`, which is the state that makes activation possible and is *not* the state
+ * that sends: an approved campaign still sends nothing until a person activates it, and
+ * the two-step shape is what keeps "the text was reviewed" and "the campaign was
+ * started" as two decisions the audit can tell apart.
  *
  * @throws PermissionError — no `manage_campaigns`.
- * @throws DomainError — the campaign is not awaiting approval, or the approver created it.
+ * @throws DomainError — the campaign is not awaiting approval.
  */
 export async function approveCampaign(args: {
   readonly tx: TransactionClient
@@ -228,16 +228,8 @@ export async function approveCampaign(args: {
     throw new DomainError(
       `Campaign ${args.campaignId} is ${current.status}, not awaiting approval.`,
       {
-      messageKey: 'campaigns.notAwaitingApproval',
-      detail: { campaignId: args.campaignId, status: current.status },
-    })
-  }
-  if (args.ctx.userId === current.createdByUserId) {
-    throw new DomainError(
-      `User ${args.ctx.userId} cannot approve a campaign they created.`,
-      {
-        messageKey: 'campaigns.cannotApproveOwn',
-        detail: { campaignId: args.campaignId, userId: args.ctx.userId },
+        messageKey: 'campaigns.notAwaitingApproval',
+        detail: { campaignId: args.campaignId, status: current.status },
       },
     )
   }
