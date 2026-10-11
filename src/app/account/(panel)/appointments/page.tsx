@@ -1,31 +1,35 @@
 /**
  * The customer's own sessions — `02-architecture.md` §9's `account/appointments.html`.
  *
- * The two halves the list splits into, and the two actions a row still owned by the
- * person carries. The scope is the session's `customerId` in the module's `where`
- * (`09-security.md` §7); there is no `customerId` on this page's request, because
- * there is no such parameter to read, and the id comes from the resolution.
+ * The demo renders each session as a card — a date chip, the service and its
+ * doctor·time line, a status badge with the deposit note, and the actions the row
+ * still owns — split into upcoming and past. The scope is the session's `customerId`
+ * in the module's `where` (`09-security.md` §7); the id comes from the resolution and
+ * from no request parameter.
  *
  * ## Why the actions are a client island and the rows are not
  *
- * The rows are a read and the actions are a write, and `02-architecture.md` §6 makes
- * those two components. The page renders the rows server-side from the one scoped
- * read, and hands each row its own island, which is the component that can hold a
- * pending state and the Persian sentence a refused write sends back.
- *
- * ## Why a past row renders nothing where an upcoming row renders two buttons
- *
- * The state machine owns that question, and the island asks it rather than the page —
- * a cancelled or completed session is a row the module will not move, so the row shows
- * its status and nothing else. The page does not filter the actions itself for the
- * same reason the module does not expose a "may I" primitive: the answer is a fact
- * about the row, and the row's own status is the fact.
+ * The rows are a read and the actions are a write (`02-architecture.md` §6). The page
+ * renders the cards server-side from the one scoped read and hands each upcoming card
+ * its own island, which holds the pending state and the Persian sentence a refused
+ * write returns. A past card carries only a rebook link.
  */
 
 import type { Metadata } from 'next'
+import Link from 'next/link'
 
 import { prisma, runInTenantScope } from '@/core/db'
-import { dateToLocalDate, formatDate, toPersianDigits } from '@/core/localization'
+import { Icon } from '@/core/components/icons'
+import { cx } from '@/core/lib'
+import {
+  asLocalDate,
+  asLocalTime,
+  formatMoney,
+  formatTime,
+  jalaliParts,
+  monthName,
+  toPersianDigits,
+} from '@/core/localization'
 import {
   APPOINTMENT_STATUS_LABELS,
   CUSTOMER_APPOINTMENTS_PAGE,
@@ -34,14 +38,13 @@ import {
 } from '@/modules/appointments'
 import { realClock } from '@/core/lib/clock'
 
+import { ACCOUNT_APPOINTMENTS } from '@/app/account/catalog'
 import { OwnAppointmentActions } from '@/app/_account/appointment-actions'
+import { dateToLocalDate } from '@/core/localization'
 import { requireCustomerPanel } from '@/app/_shell/session'
 
 export const metadata: Metadata = { title: CUSTOMER_APPOINTMENTS_PAGE.title }
 
-/**
- * «نوبت‌های من» — the person's upcoming and past sessions.
- */
 export default async function AccountAppointmentsPage() {
   const session = await requireCustomerPanel()
   const now = realClock()
@@ -52,125 +55,127 @@ export default async function AccountAppointmentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <h1 className="text-2xl font-bold text-ink">{CUSTOMER_APPOINTMENTS_PAGE.title}</h1>
-        <p className="text-sm text-ink-2">{CUSTOMER_APPOINTMENTS_PAGE.lead}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold text-ink">{CUSTOMER_APPOINTMENTS_PAGE.title}</h1>
+          <p className="text-sm text-ink-2 tabular-nums">
+            {ACCOUNT_APPOINTMENTS.countSub(toPersianDigits(upcoming.length), toPersianDigits(past.length))}
+          </p>
+        </div>
+        <Link
+          href="/booking"
+          className="inline-flex items-center gap-2 rounded-sm bg-brand-btn px-[18px] py-[10px] text-sm font-semibold text-ink-inverse no-underline shadow-brand hover:bg-brand-600"
+        >
+          <Icon name="add" size="compact" />
+          {ACCOUNT_APPOINTMENTS.book}
+        </Link>
       </div>
 
-      <AppointmentList
-        title={CUSTOMER_APPOINTMENTS_PAGE.upcoming.title}
-        empty={CUSTOMER_APPOINTMENTS_PAGE.upcoming.empty}
-        rows={upcoming}
-        now={now}
-        actionable
-      />
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-bold text-ink">{CUSTOMER_APPOINTMENTS_PAGE.upcoming.title}</h2>
+        {upcoming.length === 0 ? (
+          <EmptyRow label={CUSTOMER_APPOINTMENTS_PAGE.upcoming.empty} />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {upcoming.map((row) => (
+              <ApptCard key={row.id} row={row} now={now} actionable />
+            ))}
+          </div>
+        )}
+      </section>
 
-      <AppointmentList
-        title={CUSTOMER_APPOINTMENTS_PAGE.past.title}
-        empty={CUSTOMER_APPOINTMENTS_PAGE.past.empty}
-        rows={past}
-        now={now}
-      />
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-bold text-ink">{CUSTOMER_APPOINTMENTS_PAGE.past.title}</h2>
+        {past.length === 0 ? (
+          <EmptyRow label={CUSTOMER_APPOINTMENTS_PAGE.past.empty} />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {past.map((row) => (
+              <ApptCard key={row.id} row={row} now={now} />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
 
-/** One half of the list, as a table the person reads across. */
-function AppointmentList({
-  title,
-  empty,
-  rows,
+/* ── One session, as the demo's card ──────────────────────────────────────────── */
+
+function ApptCard({
+  row,
   now,
   actionable,
 }: {
-  readonly title: string
-  readonly empty: string
-  readonly rows: readonly OwnAppointmentRow[]
+  readonly row: OwnAppointmentRow
   readonly now: Date
-  /** Whether the rows in this half may still carry the customer's two actions. */
   readonly actionable?: boolean
 }) {
-  if (rows.length === 0) {
-    return (
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-bold text-ink">{title}</h2>
-        <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">
-          {empty}
-        </p>
-      </section>
-    )
-  }
-
+  const day = asLocalDate(row.localDate)
+  const parts = jalaliParts(day)
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-bold text-ink">{title}</h2>
-      <div className="overflow-x-auto rounded-lg border border-line bg-surface">
-        <table className="w-full border-collapse text-sm">
-          <caption className="sr-only">{title}</caption>
-          <thead>
-            <tr className="border-b border-line bg-surface-2 text-ink-3">
-              <Th>{CUSTOMER_APPOINTMENTS_PAGE.columns.date}</Th>
-              <Th>{CUSTOMER_APPOINTMENTS_PAGE.columns.time}</Th>
-              <Th>{CUSTOMER_APPOINTMENTS_PAGE.columns.service}</Th>
-              <Th>{CUSTOMER_APPOINTMENTS_PAGE.columns.doctor}</Th>
-              <Th>{CUSTOMER_APPOINTMENTS_PAGE.columns.status}</Th>
-              {actionable ? <Th>{CUSTOMER_APPOINTMENTS_PAGE.actions.cancel}</Th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-b border-line last:border-b-0 hover:bg-surface-2">
-                <td className="px-4 py-3 whitespace-nowrap tabular-nums text-ink-2">
-                  {formatDate(dateToLocalDate(row.scheduledAt), 'short')}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap tabular-nums text-ink-2">
-                  {toPersianDigits(row.localTime)}
-                </td>
-                <td className="px-4 py-3 text-ink">{row.serviceName ?? '—'}</td>
-                <td className="px-4 py-3 text-ink-2">{row.doctorName ?? '—'}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-ink-2">
-                  {asStatusLabel(row.status)}
-                </td>
-                {actionable ? (
-                  <td className="px-4 py-3">
-                    <OwnAppointmentActions
-                      appointmentId={row.id}
-                      status={row.status}
-                      currentLocalDate={dateToLocalDate(now)}
-                    />
-                  </td>
-                ) : null}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  )
-}
-
-/** The status as the catalog's own label, and the deposit the person paid for it. */
-function asStatusLabel(status: string): React.ReactNode {
-  if (status in APPOINTMENT_STATUS_LABELS) {
-    return APPOINTMENT_STATUS_LABELS[status as keyof typeof APPOINTMENT_STATUS_LABELS]
-  }
-  return status
-}
-
-/** One column header, with the alignment the design system's tables keep. */
-function Th({
-  children,
-  className,
-}: {
-  readonly children: React.ReactNode
-  readonly className?: string
-}) {
-  return (
-    <th
-      scope="col"
-      className={`whitespace-nowrap px-4 py-3 text-start text-xs font-semibold ${className ?? ''}`}
+    <div
+      className={cx(
+        'flex flex-wrap items-center gap-4 rounded-lg border border-line bg-surface p-4',
+        actionable ? '' : 'opacity-90',
+      )}
     >
-      {children}
-    </th>
+      <div className="grid size-14 shrink-0 place-items-center rounded-md bg-brand-50 text-brand-700">
+        <span className="text-lg font-bold tabular-nums leading-none">{toPersianDigits(parts.day)}</span>
+        <span className="text-[11px]">{monthName(parts.month)}</span>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="font-semibold text-ink">{row.serviceName ?? '—'}</span>
+        <span className="text-sm text-ink-3">
+          {row.doctorName === null ? '' : `${row.doctorName} · `}
+          <span className="tabular-nums">{`${ACCOUNT_APPOINTMENTS.at} ${formatTime(timeOf(row.localTime))}`}</span>
+        </span>
+        <span className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={row.status} />
+          <span className="text-xs text-ink-3 tabular-nums">
+            {row.depositAmount > 0n
+              ? `${ACCOUNT_APPOINTMENTS.deposit} ${formatMoney(row.depositAmount)}`
+              : ACCOUNT_APPOINTMENTS.noDeposit}
+          </span>
+        </span>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2">
+        {actionable ? (
+          <OwnAppointmentActions appointmentId={row.id} status={row.status} currentLocalDate={dateToLocalDate(now)} />
+        ) : (
+          <Link
+            href="/booking"
+            className="inline-flex items-center rounded-sm border border-line-2 bg-surface px-3 py-[6px] text-xs font-semibold text-ink-2 no-underline hover:bg-surface-2"
+          >
+            {ACCOUNT_APPOINTMENTS.rebook}
+          </Link>
+        )}
+      </div>
+    </div>
   )
+}
+
+/** The status, as the catalog's own label on a tone the state picks. */
+function StatusBadge({ status }: { readonly status: string }) {
+  const label =
+    status in APPOINTMENT_STATUS_LABELS
+      ? APPOINTMENT_STATUS_LABELS[status as keyof typeof APPOINTMENT_STATUS_LABELS]
+      : status
+  const tone =
+    status === 'COMPLETED'
+      ? 'bg-ok-bg text-ok'
+      : status === 'CANCELLED' || status === 'NO_SHOW' || status === 'RESCHEDULED'
+        ? 'bg-neutral-bg text-ink-3'
+        : 'bg-info-bg text-info'
+  return <span className={cx('inline-flex rounded-pill px-2 py-[2px] text-xs font-semibold', tone)}>{label}</span>
+}
+
+/** The empty state the two sections share. */
+function EmptyRow({ label }: { readonly label: string }) {
+  return <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">{label}</p>
+}
+
+/** A stored `HH:mm` as the branded `LocalTime` the formatter takes. */
+function timeOf(value: string): ReturnType<typeof asLocalTime> {
+  return asLocalTime(value)
 }

@@ -66,7 +66,17 @@ export default async function AccountProfilePage() {
       </div>
 
       <section className="flex flex-col gap-5 rounded-lg border border-line bg-surface p-5 shadow-1">
-        <h2 className="text-base font-bold text-ink">{CUSTOMER_PANEL.profile.title}</h2>
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="grid size-14 shrink-0 place-items-center rounded-pill bg-brand-50 text-xl font-bold text-brand-700"
+          >
+            {profile.firstName.slice(0, 1)}
+          </span>
+          <h2 className="text-lg font-bold text-ink">
+            {profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`}
+          </h2>
+        </div>
         <OwnProfileForm
           firstName={profile.firstName}
           lastName={profile.lastName}

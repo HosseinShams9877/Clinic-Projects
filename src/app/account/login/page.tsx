@@ -62,6 +62,12 @@ export default function CustomerLoginPage() {
   return (
     <main className="min-h-dvh flex flex-col items-center justify-center p-8 px-[var(--content-pad)] panel:p-7 panel:px-[var(--content-pad-sm)]">
       <div className="flex w-full max-w-[440px] flex-col items-stretch gap-6">
+        <span
+          aria-hidden="true"
+          className="mx-auto grid size-12 place-items-center rounded-md bg-brand-50 text-brand"
+        >
+          <Icon name="doctor" size="card" />
+        </span>
         <h1 className="text-center text-3xl font-extrabold tracking-[var(--ls-heading)] text-ink">
           {CUSTOMER_LOGIN_PAGE.title}
         </h1>
