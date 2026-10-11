@@ -2,13 +2,12 @@
  * The manager's appointments oversight page — `02-architecture.md` §9's
  * `admin/appointments.html`.
  *
- * The manager sees the same clinic the desk sees, read-only. `04-roles-permissions.md`
- * §2.1 gives the manager all sixteen permissions, which includes
- * `manage_appointments` — but the oversight surface's own contract
- * (`02-architecture.md` §9) is that it is the *view* of the clinic's schedule, and the
- * writes happen at the desk. `writable: false` is that contract: the grid renders no
- * «نوبت جدید» and no row actions, and a page whose every affordance would have been a
- * refusal renders none of them.
+ * The manager sees the same clinic the desk sees, and — because the manager holds
+ * `manage_appointments` (`04-roles-permissions.md` §2.1) — may book, edit, cancel and
+ * block from it too. `writable` is `true`: the grid's empty cells open the booking
+ * popup for any doctor's column, and a booked cell carries the row actions. The manager
+ * booking for any doctor is the one thing the desk's own grid (one clinic, every
+ * doctor) and the manager's oversight share, so they share the one grid.
  *
  * ## Why the filters are the page's and not the module's
  *
@@ -103,7 +102,7 @@ export default async function AdminAppointmentsPage({
             services={data.services}
             customers={data.customers}
             panel="admin"
-            writable={false}
+            writable={true}
           />
         </div>
       </section>

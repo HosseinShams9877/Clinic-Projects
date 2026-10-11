@@ -33,6 +33,7 @@ import { AcquisitionSource, isMember } from '@/core/constants'
 
 import { CUSTOMER_PROFILE_PAGE, CUSTOMERS_PAGE, RECEPTION_CUSTOMERS } from '@/app/catalog'
 import { loadCustomerProfile } from '@/app/_customers/page-data'
+import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import {
   ACQUISITION_SOURCE_LABELS,
   CUSTOMER_LIFECYCLE_LABELS,
@@ -43,10 +44,18 @@ import { requireStaffPanel } from '@/app/_shell/session'
 export const metadata: Metadata = { title: CUSTOMERS_PAGE.reception.title }
 
 type RouteParams = Promise<{ readonly id: string }>
+type RouteSearch = Promise<{ readonly [key: string]: string | string[] | undefined }>
 
-export default async function ReceptionCustomerDetailPage({ params }: { readonly params: RouteParams }) {
+export default async function ReceptionCustomerDetailPage({
+  params,
+  searchParams,
+}: {
+  readonly params: RouteParams
+  readonly searchParams: RouteSearch
+}) {
   const session = await requireStaffPanel('reception')
   const { id } = await params
+  const page = pageFromParam((await searchParams).page)
 
   const data = await runInTenantScope(session.permissions, prisma(), async (tx) => {
     try {
@@ -59,6 +68,9 @@ export default async function ReceptionCustomerDetailPage({ params }: { readonly
 
   const { profile, primaryDoctorName, primaryClinicName } = data
   const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
+  const appts = paginate(profile.appointments, page)
+  const apptsHrefFor = (next: number): string =>
+    next > 1 ? `/reception/customers/${id}?page=${String(next)}` : `/reception/customers/${id}`
 
   return (
     <div className="flex flex-col gap-6">
@@ -121,7 +133,7 @@ export default async function ReceptionCustomerDetailPage({ params }: { readonly
                 </tr>
               </thead>
               <tbody>
-                {profile.appointments.map((row) => (
+                {appts.slice.map((row) => (
                   <tr key={row.id} className="border-b border-line last:border-b-0">
                     <td className="px-4 py-3 text-ink-2 tabular-nums">
                       {formatDate(asLocalDate(row.localDate), 'short')} {formatTime(asLocalTime(row.localTime))}
@@ -136,6 +148,9 @@ export default async function ReceptionCustomerDetailPage({ params }: { readonly
                 ))}
               </tbody>
             </table>
+            <div className="border-t border-line px-4 py-3">
+              <Pagination page={page} totalPages={appts.totalPages} hrefFor={apptsHrefFor} />
+            </div>
           </div>
         )}
       </section>

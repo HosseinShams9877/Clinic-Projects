@@ -34,6 +34,9 @@ import { AppointmentStatus } from '@/core/constants'
 import { canTransition } from '@/modules/appointments'
 
 import { APPOINTMENTS_PAGE } from '@/app/catalog'
+import { CANCEL_CONFIRM } from './catalog'
+import { EditDialog, type DoctorOption } from './edit-dialog'
+import type { ServiceOption } from './booking-dialog'
 import {
   cancelAppointmentAction,
   markArrivedAction,
@@ -45,17 +48,31 @@ import {
 /** The panel the actions resolve, which is the caller's own. */
 type ActionPanel = 'reception' | 'doctor' | 'admin'
 
-/** The row's own props: its id, its status, and which panel is acting on it. */
+/** What the «ویرایش نوبت» button needs — the row's own values and the pick lists. */
+export interface RowEditContext {
+  readonly doctorId: string
+  readonly serviceId: string | null
+  readonly localDate: string
+  readonly localTime: string
+  readonly isSlotBlock: boolean
+  readonly services: readonly ServiceOption[]
+  readonly doctorOptions: readonly DoctorOption[]
+}
+
+/** The row's own props: its id, its status, which panel is acting, and the edit context. */
 export interface RowActionsProps {
   readonly appointmentId: string
   readonly status: string
   readonly panel: ActionPanel
+  /** The edit popup's data; omitted on surfaces that do not offer an edit (the cartable). */
+  readonly edit?: RowEditContext
 }
 
 /** The actions one row offers, as the state machine permits them. */
-export function RowActions({ appointmentId, status, panel }: RowActionsProps) {
+export function RowActions({ appointmentId, status, panel, edit }: RowActionsProps) {
   const [pending, startTransition] = useTransition()
   const [message, setMessage] = useState<string | null>(null)
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
 
   function run(action: (panel: ActionPanel, id: string) => Promise<ActionResult>) {
     startTransition(async () => {
@@ -71,8 +88,12 @@ export function RowActions({ appointmentId, status, panel }: RowActionsProps) {
   const canComplete = canTransition(status as AppointmentStatus, AppointmentStatus.Completed)
   const canNoShow = canTransition(status as AppointmentStatus, AppointmentStatus.NoShow)
   const canCancel = canTransition(status as AppointmentStatus, AppointmentStatus.Cancelled)
+  // An edit is offered on a live booking only — a row the machine would still let the
+  // desk cancel, that holds a service (not a slot block). A terminal row offers none.
+  const canEdit =
+    edit !== undefined && !edit.isSlotBlock && edit.serviceId !== null && (canArrive || canCancel)
 
-  if (!canArrive && !canComplete && !canNoShow && !canCancel) {
+  if (!canArrive && !canComplete && !canNoShow && !canCancel && !canEdit) {
     // A terminal row offers nothing. Rendering an empty group would still claim the
     // row's end cell, so the component returns nothing instead.
     return null
@@ -105,15 +126,54 @@ export function RowActions({ appointmentId, status, panel }: RowActionsProps) {
           onClick={() => run(markNoShowAction)}
         />
       ) : null}
+      {canEdit && edit !== undefined ? (
+        <EditDialog
+          appointmentId={appointmentId}
+          panel={panel}
+          services={edit.services}
+          doctorOptions={edit.doctorOptions}
+          canChangeDoctor={panel === 'admin'}
+          current={{
+            doctorId: edit.doctorId,
+            serviceId: edit.serviceId ?? '',
+            localDate: edit.localDate,
+            localTime: edit.localTime,
+          }}
+        />
+      ) : null}
       {canCancel ? (
         <ActionButton
           label={APPOINTMENTS_PAGE.controls.cancel}
           icon="close"
           disabled={pending}
-          onClick={() => run(cancelAppointmentAction)}
+          onClick={() => setConfirmingCancel(true)}
         />
       ) : null}
       </div>
+
+      {confirmingCancel ? (
+        <div className="flex flex-col gap-2 rounded-sm border border-danger-bg bg-danger-bg/40 p-3">
+          <p className="text-xs font-semibold text-ink">{CANCEL_CONFIRM.title}</p>
+          <p className="text-xs text-ink-2">{CANCEL_CONFIRM.body}</p>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              size="small"
+              variant="danger"
+              disabled={pending}
+              onClick={() => {
+                setConfirmingCancel(false)
+                run(cancelAppointmentAction)
+              }}
+            >
+              {CANCEL_CONFIRM.confirm}
+            </Button>
+            <Button size="small" variant="ghost" disabled={pending} onClick={() => setConfirmingCancel(false)}>
+              {CANCEL_CONFIRM.dismiss}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {message === null ? null : (
         <p
           className="flex items-center gap-1 text-xs text-danger"

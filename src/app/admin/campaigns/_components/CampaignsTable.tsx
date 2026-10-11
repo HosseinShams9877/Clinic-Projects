@@ -89,15 +89,15 @@ export interface CampaignsTableProps {
 
 /** The eight column headers, in the table's own order. */
 const TABLE_HEADERS = [
-  ADMIN_CAMPAIGNS.columns.campaign,
-  ADMIN_CAMPAIGNS.columns.type,
-  ADMIN_CAMPAIGNS.columns.run,
-  ADMIN_CAMPAIGNS.columns.channel,
-  ADMIN_CAMPAIGNS.columns.audience,
-  ADMIN_CAMPAIGNS.columns.sent,
-  ADMIN_CAMPAIGNS.columns.visits,
-  ADMIN_CAMPAIGNS.columns.status,
-  ADMIN_CAMPAIGNS.columns.action,
+  { label: ADMIN_CAMPAIGNS.columns.campaign, numeric: false },
+  { label: ADMIN_CAMPAIGNS.columns.type, numeric: false },
+  { label: ADMIN_CAMPAIGNS.columns.run, numeric: false },
+  { label: ADMIN_CAMPAIGNS.columns.channel, numeric: false },
+  { label: ADMIN_CAMPAIGNS.columns.audience, numeric: true },
+  { label: ADMIN_CAMPAIGNS.columns.sent, numeric: true },
+  { label: ADMIN_CAMPAIGNS.columns.visits, numeric: true },
+  { label: ADMIN_CAMPAIGNS.columns.status, numeric: false },
+  { label: ADMIN_CAMPAIGNS.columns.action, numeric: false },
 ] as const
 
 /**
@@ -134,11 +134,14 @@ export function CampaignsTable({ campaigns }: CampaignsTableProps) {
           <tr>
             {TABLE_HEADERS.map((header) => (
               <th
-                key={header}
+                key={header.label}
                 scope="col"
-                className="whitespace-nowrap px-4 py-3 text-start text-xs font-semibold"
+                className={cx(
+                  'whitespace-nowrap px-4 py-3 text-xs font-semibold',
+                  header.numeric ? 'text-end' : 'text-start',
+                )}
               >
-                {header}
+                {header.label}
               </th>
             ))}
           </tr>

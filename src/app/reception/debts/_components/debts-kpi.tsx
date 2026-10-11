@@ -26,10 +26,10 @@ export interface DebtsKpiProps {
 
 export function DebtsKpi({ collectedRial, avgDelayDays, overdueCount, totalRial }: DebtsKpiProps) {
   const tiles: readonly { label: string; value: string; icon: IconName; tone: string }[] = [
-    { label: RECEPTION_DEBTS.kpi.collected, value: formatMoney(collectedRial), icon: 'success', tone: 'bg-ok-bg text-ok' },
-    { label: RECEPTION_DEBTS.kpi.avgDelay, value: `${formatNumber(avgDelayDays)} ${RECEPTION_DEBTS.days}`, icon: 'clock', tone: 'bg-warn-bg text-warn' },
-    { label: RECEPTION_DEBTS.kpi.overdue, value: formatNumber(overdueCount), icon: 'alert', tone: 'bg-danger-bg text-danger' },
     { label: RECEPTION_DEBTS.kpi.total, value: formatMoney(totalRial), icon: 'debt', tone: 'bg-info-bg text-info' },
+    { label: RECEPTION_DEBTS.kpi.overdue, value: formatNumber(overdueCount), icon: 'alert', tone: 'bg-danger-bg text-danger' },
+    { label: RECEPTION_DEBTS.kpi.avgDelay, value: `${formatNumber(avgDelayDays)} ${RECEPTION_DEBTS.days}`, icon: 'clock', tone: 'bg-warn-bg text-warn' },
+    { label: RECEPTION_DEBTS.kpi.collected, value: formatMoney(collectedRial), icon: 'success', tone: 'bg-ok-bg text-ok' },
   ]
   return (
     <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">

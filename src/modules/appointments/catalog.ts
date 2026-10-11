@@ -36,6 +36,7 @@ export type AppointmentsMessageKey =
   | 'appointment.blockOverlapsBooking'
   | 'appointment.depositRequired'
   | 'appointment.customerCancelWindowClosed'
+  | 'appointment.invalidWorkingHours'
 
 /**
  * The sentence for each key.
@@ -69,6 +70,10 @@ export const MESSAGES: Readonly<Record<AppointmentsMessageKey, string>> = {
   // The customer's own cancellation window (Phase 9's `own-panel.ts`). The fix is to
   // call the clinic, because the desk can still cancel where the customer cannot.
   'appointment.customerCancelWindowClosed': `لغو نوبت فقط تا ۲۴ ساعت قبل از شروع جلسه امکان${ZWNJ}پذیر است. برای لغو در ساعات پایانی لطفاً با کلینیک تماس بگیرید.`,
+
+  // A doctor's working-hours form sent a weekday outside 0–6 or a window that ends
+  // before it starts. The desk fixes the field; the sentence names the shape, not the row.
+  'appointment.invalidWorkingHours': 'ساعت کاری نامعتبر است: زمان پایان باید بعد از زمان شروع باشد.',
 }
 
 /* ── §4.3 The 8 states, as §2.2's table labels them ───────────────────────── */

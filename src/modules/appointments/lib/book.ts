@@ -70,7 +70,7 @@ import { requirePermission } from '@/modules/roles-permissions'
 import type { AppointmentsMessageKey } from '../catalog'
 import { blockRanges, type Range } from './slots'
 import { readBookingSettings, type BookingSettings } from './settings'
-import { assertTransition } from './status'
+import { assertTransition, isTerminal } from './status'
 
 /** The Prisma error a unique-index violation raises. */
 const UNIQUE_VIOLATION = 'P2002'
@@ -573,6 +573,134 @@ export async function cancelAppointment(args: {
 }
 
 /**
+ * «ویرایش نوبت» — corrects a booking in place, keeping its own row.
+ *
+ * Where `rescheduleAppointment` is the customer-facing *move* that closes the old row
+ * and opens a linked new one (so a no-show analysis still sees the first booking),
+ * this is the manager's and secretary's *correction*: the same row's doctor, service,
+ * duration, day and time are changed, its id is kept, and its cycle link and deposit
+ * ride along. The two are different writes because they answer different questions —
+ * "the patient asked to come another day" versus "the desk typed the wrong service".
+ *
+ * ## Why the price is re-snapshotted and not editable
+ *
+ * The price is always the chosen service's own catalogue price, re-read here when the
+ * service changes. There is no price field a caller sends — so the `SECRETARY_EDIT_PRICE`
+ * rule is honoured by construction: a secretary changing the service picks a different
+ * catalogue price, which is the service's and not a manual override the rule governs,
+ * and no path here lets any caller type an amount.
+ *
+ * The new slot goes through the same window guard a first booking uses, and the unique
+ * index settles a move into a taken slot with the same «این ساعت قبلاً رزرو شده» the
+ * booking path raises.
+ *
+ * @throws PermissionError — the caller holds no `manage_appointments`.
+ * @throws DomainError, as `appointment.illegalTransition` — the row is a slot block or
+ *   already terminal (cancelled, rescheduled, completed), none of which is a booking to
+ *   correct.
+ * @throws DomainError, as `appointment.closed` / `appointment.slotTaken` — the target
+ *   slot is outside the doctor's hours or already held.
+ */
+export async function updateAppointment(args: {
+  readonly tx: TransactionClient
+  readonly ctx: TenantContext
+  readonly appointmentId: string
+  readonly doctorId?: string
+  readonly serviceId?: string
+  readonly newLocalDate?: LocalDate
+  readonly newLocalTime?: LocalTime
+  readonly durationMinutes?: number
+}): Promise<CreatedAppointment> {
+  requirePermission(args.ctx, 'manage_appointments')
+
+  const current = await loadOwnAppointment(args.tx, args.ctx, args.appointmentId)
+
+  if (current.customerId === null || current.serviceId === null) {
+    throw appointmentError(
+      `Appointment ${current.id} is a slot block, not a booking, so it cannot be edited.`,
+      'appointment.illegalTransition',
+      { appointmentId: current.id },
+    )
+  }
+  if (isTerminal(asStatus(current.status))) {
+    throw appointmentError(
+      `Appointment ${current.id} is ${current.status} and holds no slot to edit.`,
+      'appointment.illegalTransition',
+      { appointmentId: current.id },
+    )
+  }
+
+  const doctorId = args.doctorId ?? current.doctorId
+  const serviceId = args.serviceId ?? current.serviceId
+  const localDate = args.newLocalDate ?? (current.localDate as LocalDate)
+  const localTime = args.newLocalTime ?? asLocalTime(current.localTime)
+
+  // The duration and the price follow the service: a corrected service is a corrected
+  // length and a corrected catalogue price, both read from the service row and never
+  // from the caller. An unchanged service keeps the row's own snapshot.
+  const service = await args.tx.service.findFirst({
+    where: { id: serviceId, tenantId: args.ctx.tenantId },
+    select: { durationMinutes: true, price: true },
+  })
+  if (service === null) {
+    throw appointmentError(
+      `Service ${serviceId} was not found in this tenant.`,
+      'appointment.notFound',
+      { appointmentId: current.id },
+    )
+  }
+  const durationMinutes = args.durationMinutes ?? (args.serviceId !== undefined ? service.durationMinutes : current.durationMinutes)
+
+  const settings = await readBookingSettings(args.tx, args.ctx.tenantId)
+  await assertSlotBookable(
+    {
+      tx: args.tx,
+      ctx: args.ctx,
+      clinicId: current.clinicId,
+      doctorId,
+      customerId: current.customerId,
+      serviceId,
+      localDate,
+      localTime,
+      durationMinutes,
+      priceAtBooking: service.price,
+      depositAmount: current.depositAmount,
+      source: current.source ?? AppointmentSource.Reception,
+    },
+    settings,
+  )
+
+  const scheduledAt = toUtcInstant(localDate, localTime, settings.utcOffsetMinutes)
+  const slotKey = scheduledAt.toISOString()
+
+  try {
+    return await args.tx.appointment.update({
+      where: { id: current.id },
+      data: {
+        doctorId,
+        serviceId,
+        scheduledAt,
+        localDate,
+        localTime,
+        durationMinutes,
+        priceAtBooking: service.price,
+        slotKey,
+      },
+      select: APPOINTMENT_SELECT,
+    })
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw appointmentError(
+        `The slot ${slotKey} for doctor ${doctorId} was taken by a concurrent booking.`,
+        'appointment.slotTaken',
+        { doctorId, slotKey },
+      )
+    }
+    throw error
+  }
+}
+
+/**
  * Loads one appointment as the caller's own tenant sees it.
  *
  * @throws NotFoundError — the row is outside the caller's tenant, which is the
@@ -594,6 +722,8 @@ async function loadOwnAppointment(
       serviceId: true,
       cycleId: true,
       status: true,
+      localDate: true,
+      localTime: true,
       durationMinutes: true,
       priceAtBooking: true,
       depositAmount: true,
@@ -620,6 +750,8 @@ interface LoadedAppointment {
   readonly cycleId: string | null
   /** A plain `String` column (`03-data-model.md` §5); narrowed at the transition guard. */
   readonly status: string
+  readonly localDate: string
+  readonly localTime: string
   readonly durationMinutes: number
   readonly priceAtBooking: bigint
   readonly depositAmount: bigint

@@ -204,9 +204,9 @@ export const APPOINTMENTS_PAGE = {
     lead: 'ستون هر پزشک و ساعت نوبت‌های او. برای ثبت نوبت جدید، «نوبت جدید» را باز کنید.',
   },
   admin: {
-    title: 'نمایش نوبت‌ها',
-    /** The oversight page is read-only, and the sentence says so. */
-    lead: 'این صفحه فقط مشاهده است. ثبت و تغییر نوبت در پنل پذیرش انجام می‌شود.',
+    title: 'نوبت‌های کلینیک',
+    /** The manager sees every doctor's day and may book, edit, cancel and block on it. */
+    lead: 'برنامه همه پزشکان کلینیک. برای ثبت، ویرایش یا لغو نوبت روی خانه‌های جدول عمل کنید.',
     /** The filters' own headings. */
     filters: { doctor: 'پزشک', status: 'وضعیت', date: 'تاریخ' },
   },
@@ -370,7 +370,7 @@ export const CUSTOMERS_PAGE = {
     lead: 'پرونده مشتریان کلینیک. جستجو با نام یا شماره موبایل.',
   },
   admin: {
-    title: 'همه مشتریان',
+    title: 'مشتریان',
     lead: 'پرونده کامل مشتریان کلینیک، با تاریخچه نوبت‌ها و پرداخت‌ها.',
   },
   doctor: {
@@ -492,7 +492,7 @@ export const CUSTOMER_PROFILE_PAGE = {
  * a derivation that drops the count.
  */
 export const LEADS_PAGE = {
-  title: 'کارتابل لید',
+  title: 'لیدها و پیگیری‌ها',
   lead: 'افرادی که با کلینیک تماس گرفته‌اند و هنوز خدمتی دریافت نکرده‌اند.',
   counts: {
     new: 'بی‌پاسخ',
@@ -563,7 +563,7 @@ export const CYCLES_PAGE = {
     lead: 'مشتریانی که موعد جلسه بعدی رسیده و هنوز نوبت ندارند. تماس بگیرید و نتیجه را ثبت کنید.',
   },
   admin: {
-    title: 'دوره‌های درمان',
+    title: 'چرخه درمان',
     lead: 'نگاه کلی کلینیک به دوره‌های در حال انجام، موعد رسیده و ریزش. تکمیل دوره‌های نامحدود را مدیر انجام می‌دهد.',
   },
   doctor: {
@@ -684,7 +684,7 @@ export const SERVICES_PAGE = {
  * is the chrome around them.
  */
 export const STAFF_PAGE = {
-  title: 'کارکنان',
+  title: 'کارکنان و دسترسی',
   lead: 'نقش و دسترسی‌های هر کاربر، و درخواست‌های مرخصی پزشکان.',
   invite: {
     title: 'دعوت کاربر',
@@ -757,15 +757,15 @@ export const STAFF_PAGE = {
  */
 export const DEBTS_PAGE = {
   reception: {
-    title: 'مانده حساب',
+    title: `مانده${ZWNJ}حساب`,
     lead: 'بدهی‌های گذشته از سررسید، از قدیمی‌ترین. تماس بگیرید، نتیجه را ثبت کنید و در صورت نیاز سررسید را تغییر دهید.',
   },
   admin: {
-    title: 'بدهی‌ها',
+    title: `مانده${ZWNJ}حساب`,
     lead: 'نگاه کلی کلینیک به بدهی‌های باز. این صفحه فقط خواندنی است؛ ثبت پرداخت و پیگیری در صفحه پیشخوان انجام می‌شود.',
   },
   doctor: {
-    title: 'بدهی‌های من',
+    title: `مانده${ZWNJ}حساب`,
     lead: 'بدهی‌های مراجعینی که جلسه‌های آن‌ها را شما انجام داده‌اید.',
   },
   columns: {

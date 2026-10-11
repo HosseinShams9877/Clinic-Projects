@@ -15,20 +15,31 @@ import { realClock } from '@/core/lib/clock'
 
 import { DEBTS_PAGE } from '@/app/catalog'
 import { DebtsTable } from '@/app/_debts/debts-table'
+import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import { doctorDebts } from '@/modules/debts'
 import { requireStaffPanel } from '@/app/_shell/session'
 
 export const metadata: Metadata = { title: DEBTS_PAGE.doctor.title }
 
+/** The page's own route, as the pagination links to. */
+const BASE_PATH = '/doctor/debts'
+
+type PageSearchParams = Promise<{ readonly [key: string]: string | string[] | undefined }>
+
 /**
- * «بدهی‌های من» — the debts of the customers this doctor treated.
+ * «مانده‌حساب» — the debts of the customers this doctor treated.
  */
-export default async function DoctorDebtsPage() {
+export default async function DoctorDebtsPage({ searchParams }: { readonly searchParams: PageSearchParams }) {
   const session = await requireStaffPanel('doctor')
+  const page = pageFromParam((await searchParams).page)
 
   const buckets = await runInTenantScope(session.permissions, prisma(), (tx) =>
     doctorDebts({ tx, ctx: session.permissions, now: realClock() }),
   )
+
+  const allRows = [...buckets.overdue30, ...buckets.overdue7, ...buckets.overdue, ...buckets.dueSoon]
+  const { slice, totalPages } = paginate(allRows, page)
+  const hrefFor = (next: number): string => (next > 1 ? `${BASE_PATH}?page=${String(next)}` : BASE_PATH)
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,9 +48,9 @@ export default async function DoctorDebtsPage() {
         <p className="text-sm text-ink-2">{DEBTS_PAGE.doctor.lead}</p>
       </div>
 
-      <DebtsTable
-        rows={[...buckets.overdue30, ...buckets.overdue7, ...buckets.overdue, ...buckets.dueSoon]}
-      />
+      <DebtsTable rows={slice} />
+
+      <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
     </div>
   )
 }

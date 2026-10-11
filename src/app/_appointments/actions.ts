@@ -81,6 +81,7 @@ import {
   recordArrival,
   recordNoShow,
   recordResult,
+  updateAppointment,
 } from '@/modules/appointments'
 import { attributeAppointmentToCampaign } from '@/modules/campaigns'
 import { loadBookableService } from '@/modules/services'
@@ -127,6 +128,17 @@ export interface BlockInput {
   readonly localTime: string
   readonly durationMinutes: number
   readonly reason?: string
+}
+
+/** The fields the edit popup collects — each optional, the row keeps what is omitted. */
+export interface EditInput {
+  readonly appointmentId: string
+  /** The doctor to move the booking to. The action drops this unless the manager sent it. */
+  readonly doctorId?: string
+  readonly serviceId?: string
+  readonly localDate?: string
+  readonly localTime?: string
+  readonly durationMinutes?: number
 }
 
 /**
@@ -453,5 +465,36 @@ export async function cancelAppointmentAction(
 
   if (!('id' in result)) return result
   revalidateAppointments()
+  return { ok: true, appointmentId: result.id }
+}
+
+/**
+ * «ویرایش نوبت» — corrects a booking in place.
+ *
+ * Only the manager panel may move a booking to another doctor: the desk's secretary
+ * corrects the service, the day, the time and the duration of the doctor already on the
+ * row, and the doctor select is not even rendered for them (`row-actions`), so the
+ * action drops a `doctorId` from any panel but `admin` rather than trusting the form.
+ * Price is never sent — the module re-snapshots it from the chosen service, which is
+ * what keeps `SECRETARY_EDIT_PRICE` off by construction.
+ */
+export async function updateAppointmentAction(panel: Panel, input: EditInput): Promise<ActionResult> {
+  const result = await inTenantScope(panel, async ({ tx, ctx }) => {
+    const updated = await updateAppointment({
+      tx,
+      ctx,
+      appointmentId: input.appointmentId,
+      doctorId: panel === 'admin' ? input.doctorId : undefined,
+      serviceId: input.serviceId,
+      newLocalDate: input.localDate === undefined ? undefined : asLocalDate(input.localDate),
+      newLocalTime: input.localTime === undefined ? undefined : asLocalTime(input.localTime),
+      durationMinutes: input.durationMinutes,
+    })
+    return updated
+  })
+
+  if (!('id' in result)) return result
+  revalidateAppointments()
+  revalidateCycles()
   return { ok: true, appointmentId: result.id }
 }

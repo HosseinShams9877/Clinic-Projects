@@ -52,8 +52,9 @@ import { Combobox } from '@/core/components/combobox'
 import { Field, TextInput } from '@/core/components/form'
 import { Icon } from '@/core/components/icons'
 import { STAFF_PAGE } from '@/app/catalog'
+import { ADMIN_STAFF } from '@/app/admin/catalog'
 import { cx } from '@/core/lib'
-import { toPersianDigits } from '@/core/localization'
+import { toPersianDigits, weekdayName } from '@/core/localization'
 import { PERMISSION_LABELS, ROLE_LABELS } from '@/core/localization'
 import { Permission, Role } from '@/core/constants'
 
@@ -64,6 +65,7 @@ import {
   deactivateMembershipAction,
   inviteStaffAction,
   rejectLeaveRequestAction,
+  setDoctorWorkingHoursAction,
   updateMembershipPermissionsAction,
   type ActionResult,
   type InviteInput,
@@ -218,16 +220,22 @@ export interface StaffRowActionsProps {
    * not a second computation of it.
    */
   readonly grid: readonly { readonly permission: Permission; readonly held: boolean; readonly locked: boolean }[]
+  /** The doctor's weekly hours, when the row is a doctor — opens the «ساعت کاری» form. */
+  readonly workingHours?: {
+    readonly doctorId: string
+    readonly rows: readonly { readonly weekday: number; readonly startTime: string; readonly endTime: string }[]
+  }
 }
 
 /**
  * The things the manager does to a membership: open its permissions, change its role,
  * and switch it on or off.
  */
-export function StaffRowActions({ membership, grid }: StaffRowActionsProps) {
+export function StaffRowActions({ membership, grid, workingHours }: StaffRowActionsProps) {
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
   const [editing, setEditing] = useState(false)
+  const [hoursOpen, setHoursOpen] = useState(false)
   const [role, setRole] = useState<string | null>(membership.role)
 
   function run(action: () => Promise<ActionResult>, onOk: () => void) {
@@ -256,6 +264,17 @@ export function StaffRowActions({ membership, grid }: StaffRowActionsProps) {
         >
           {STAFF_PAGE.columns.permissions}
         </Button>
+        {workingHours !== undefined ? (
+          <Button
+            size="small"
+            variant="neutral"
+            leadingIcon="clock"
+            disabled={pending}
+            onClick={() => setHoursOpen(true)}
+          >
+            {ADMIN_STAFF.workingHours.trigger}
+          </Button>
+        ) : null}
         {membership.isActive ? (
           <Button
             size="small"
@@ -295,8 +314,155 @@ export function StaffRowActions({ membership, grid }: StaffRowActionsProps) {
           }}
         />
       ) : null}
+
+      {hoursOpen && workingHours !== undefined ? (
+        <WorkingHoursModal
+          doctorId={workingHours.doctorId}
+          doctorName={`${membership.user.firstName} ${membership.user.lastName}`}
+          initial={workingHours.rows}
+          onClose={() => setHoursOpen(false)}
+          onDone={(outcome) => {
+            if (outcome.ok) {
+              setHoursOpen(false)
+              return
+            }
+            setAnswer(outcome)
+          }}
+        />
+      ) : null}
     </div>
   )
+}
+
+/* ── The «ساعت کاری» modal ─────────────────────────────────────────────────── */
+
+/** The seven weekdays, شنبه-first, as the form's own rows. */
+const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const
+
+/** One weekday's editable state in the working-hours form. */
+interface DayState {
+  readonly weekday: number
+  readonly active: boolean
+  readonly startTime: string
+  readonly endTime: string
+}
+
+/**
+ * «ساعت کاری پزشک» — the doctor's weekly hours, one row per weekday.
+ *
+ * A day's checkbox is whether the doctor works it; unchecking a day drops its row from
+ * the write, which is how the module stores "does not work this day" (the absence of a
+ * row). The two time fields are a day's window, sent only for the days left checked.
+ */
+function WorkingHoursModal({
+  doctorId,
+  doctorName,
+  initial,
+  onClose,
+  onDone,
+}: {
+  readonly doctorId: string
+  readonly doctorName: string
+  readonly initial: readonly { readonly weekday: number; readonly startTime: string; readonly endTime: string }[]
+  readonly onClose: () => void
+  readonly onDone: (outcome: ActionResult) => void
+}) {
+  const [pending, startTransition] = useTransition()
+  const titleId = useId()
+  const [days, setDays] = useState<readonly DayState[]>(() => initialDays(initial))
+
+  function patch(weekday: number, change: Partial<DayState>) {
+    setDays((prev) => prev.map((day) => (day.weekday === weekday ? { ...day, ...change } : day)))
+  }
+
+  function submit() {
+    const rows = days
+      .filter((day) => day.active)
+      .map((day) => ({ weekday: day.weekday, startTime: day.startTime, endTime: day.endTime }))
+    startTransition(async () => onDone(await setDoctorWorkingHoursAction({ doctorId, rows })))
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg"
+      >
+        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
+          <h2 id={titleId} className="text-lg font-bold text-ink">
+            {`${ADMIN_STAFF.workingHours.title} — ${doctorName}`}
+          </h2>
+          <Button size="icon" variant="ghost" icon="close" aria-label={ADMIN_STAFF.workingHours.close} onClick={onClose} />
+        </header>
+
+        <p className="px-6 pt-6 text-sm text-ink-2">{ADMIN_STAFF.workingHours.lead}</p>
+
+        <div className="flex flex-col gap-2 p-6">
+          {days.map((state) => (
+            <div key={state.weekday} className="flex flex-wrap items-center gap-3 rounded-sm border border-line bg-surface-2 px-3 py-2">
+              <label className="flex min-w-[96px] items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={state.active}
+                  onChange={(event) => patch(state.weekday, { active: event.currentTarget.checked })}
+                  className="size-4 rounded-xs border border-line-2 accent-brand"
+                />
+                <span className="text-sm font-semibold text-ink">{weekdayLabel(state.weekday)}</span>
+              </label>
+              <span className="flex items-center gap-1 text-xs text-ink-3">
+                {ADMIN_STAFF.workingHours.from}
+                <input
+                  type="time"
+                  value={state.startTime}
+                  disabled={!state.active}
+                  onChange={(event) => patch(state.weekday, { startTime: event.currentTarget.value })}
+                  className="rounded-xs border border-line-2 bg-surface px-2 py-1 text-ink tabular-nums disabled:bg-surface-sunken"
+                />
+                {ADMIN_STAFF.workingHours.to}
+                <input
+                  type="time"
+                  value={state.endTime}
+                  disabled={!state.active}
+                  onChange={(event) => patch(state.weekday, { endTime: event.currentTarget.value })}
+                  className="rounded-xs border border-line-2 bg-surface px-2 py-1 text-ink tabular-nums disabled:bg-surface-sunken"
+                />
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <footer className="flex items-center justify-end gap-2 border-t border-line p-6">
+          <Button variant="ghost" onClick={onClose} disabled={pending}>
+            {ADMIN_STAFF.workingHours.cancel}
+          </Button>
+          <Button variant="primary" loading={pending} onClick={submit}>
+            {ADMIN_STAFF.workingHours.save}
+          </Button>
+        </footer>
+      </div>
+    </Overlay>
+  )
+}
+
+/** One weekday's own name, شنبه-first, via the localization helper's index. */
+function weekdayLabel(weekday: number): string {
+  const names = [0, 1, 2, 3, 4, 5, 6].map((index) => weekdayName(index as Parameters<typeof weekdayName>[0]))
+  return names[weekday] ?? ''
+}
+
+/** The seven weekdays' opening state, from the hours the doctor already holds. */
+function initialDays(
+  initial: readonly { readonly weekday: number; readonly startTime: string; readonly endTime: string }[],
+): readonly DayState[] {
+  const byDay = new Map(initial.map((row) => [row.weekday, row]))
+  return WEEKDAYS.map((weekday) => {
+    const row = byDay.get(weekday)
+    return row === undefined
+      ? { weekday, active: false, startTime: '09:00', endTime: '17:00' }
+      : { weekday, active: true, startTime: row.startTime, endTime: row.endTime }
+  })
 }
 
 /* ── The permission modal ─────────────────────────────────────────────────── */

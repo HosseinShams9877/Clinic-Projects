@@ -514,6 +514,20 @@ export const ADMIN_STAFF = {
   /** «نمایش ۵ کاربر» — the card foot's own sentence, around the shown count. */
   showingPrefix: 'نمایش ',
   showingSuffix: ' کاربر',
+  /** «نمایش ۵ درخواست» — the leave table's own foot, around its shown count. */
+  leaveShowingSuffix: ' درخواست',
+  /** The «ساعت کاری» form a doctor's row opens. */
+  workingHours: {
+    trigger: 'ساعت کاری',
+    title: 'ساعت کاری پزشک',
+    lead: 'روزهایی که این پزشک کار می‌کند و ساعت شروع و پایان هر روز.',
+    active: 'فعال',
+    from: 'از',
+    to: 'تا',
+    save: 'ذخیره ساعت کاری',
+    cancel: 'انصراف',
+    close: 'بستن',
+  },
 } as const
 
 /**

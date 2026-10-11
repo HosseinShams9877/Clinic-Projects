@@ -73,6 +73,7 @@ import { Icon } from '@/core/components/icons'
 import type { IconName } from '@/core/components/icons'
 
 import { ADMIN_CUSTOMER_PROFILE } from '@/app/admin/catalog'
+import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import { CUSTOMER_PROFILE_PAGE } from '@/app/catalog'
 import { loadCustomerProfile } from '@/app/_customers/page-data'
 import {
@@ -93,6 +94,10 @@ import { requireStaffPanel } from '@/app/_shell/session'
 
 export const metadata: Metadata = { title: CUSTOMER_PROFILE_PAGE.title }
 
+/** The two history list params, each paging one of the profile's own tables. */
+const APPTS_PAGE_PARAM = 'appts'
+const PAYS_PAGE_PARAM = 'pays'
+
 /** A month, as the messages card's thirty-day window counts it. */
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -101,11 +106,16 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
  */
 export default async function CustomerProfilePage({
   params,
+  searchParams,
 }: {
   readonly params: Promise<{ readonly id: string }>
+  readonly searchParams: Promise<{ readonly [key: string]: string | string[] | undefined }>
 }) {
   const session = await requireStaffPanel('admin')
   const { id } = await params
+  const query = await searchParams
+  const apptsPage = pageFromParam(query[APPTS_PAGE_PARAM])
+  const paysPage = pageFromParam(query[PAYS_PAGE_PARAM])
 
   const data = await loadProfile(session.permissions, id)
 
@@ -113,6 +123,18 @@ export default async function CustomerProfilePage({
   const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
   const balance = profile.chargedTotal - profile.paidTotal
   const activeCycles = cycles.filter((row) => row.status === CycleStatus.Active || row.status === CycleStatus.Due || row.status === CycleStatus.AtRisk)
+
+  const appts = paginate(profile.appointments, apptsPage)
+  const pays = paginate(profile.payments, paysPage)
+  const basePath = `/admin/customer/${id}`
+  /** One href keeping whichever of the two history pages the URL already names. */
+  const historyHref = (next: { readonly appts: number; readonly pays: number }): string => {
+    const sp = new URLSearchParams()
+    if (next.appts > 1) sp.set(APPTS_PAGE_PARAM, String(next.appts))
+    if (next.pays > 1) sp.set(PAYS_PAGE_PARAM, String(next.pays))
+    const qs = sp.toString()
+    return qs === '' ? basePath : `${basePath}?${qs}`
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -177,11 +199,21 @@ export default async function CustomerProfilePage({
             title={ADMIN_CUSTOMER_PROFILE.cards.visits}
             note={`${toPersianDigits(profile.appointments.length)} ${ADMIN_CUSTOMER_PROFILE.recentSuffix}`}
           >
-            <AppointmentHistory rows={profile.appointments} />
+            <AppointmentHistory
+              rows={appts.slice}
+              page={apptsPage}
+              totalPages={appts.totalPages}
+              hrefFor={(next) => historyHref({ appts: next, pays: paysPage })}
+            />
           </Card>
 
           <Card title={ADMIN_CUSTOMER_PROFILE.cards.payments}>
-            <PaymentHistory rows={profile.payments} />
+            <PaymentHistory
+              rows={pays.slice}
+              page={paysPage}
+              totalPages={pays.totalPages}
+              hrefFor={(next) => historyHref({ appts: apptsPage, pays: next })}
+            />
           </Card>
         </div>
 
@@ -425,7 +457,13 @@ function CycleStatusBadge({ status }: { readonly status: string }) {
 /** The appointment history, as the profile's own table renders it. */
 function AppointmentHistory({
   rows,
+  page,
+  totalPages,
+  hrefFor,
 }: {
+  readonly page: number
+  readonly totalPages: number
+  readonly hrefFor: (page: number) => string
   readonly rows: ReadonlyArray<{
     readonly id: string
     readonly scheduledAt: Date
@@ -442,7 +480,8 @@ function AppointmentHistory({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="flex flex-col gap-3">
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-line-2 text-ink-3">
@@ -469,6 +508,8 @@ function AppointmentHistory({
           ))}
         </tbody>
       </table>
+      </div>
+      <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
     </div>
   )
 }
@@ -476,7 +517,13 @@ function AppointmentHistory({
 /** The payment history, as the profile's own table renders it. */
 function PaymentHistory({
   rows,
+  page,
+  totalPages,
+  hrefFor,
 }: {
+  readonly page: number
+  readonly totalPages: number
+  readonly hrefFor: (page: number) => string
   readonly rows: ReadonlyArray<{
     readonly id: string
     readonly amount: bigint
@@ -490,7 +537,8 @@ function PaymentHistory({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="flex flex-col gap-3">
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-line-2 text-ink-3">
@@ -513,6 +561,8 @@ function PaymentHistory({
           ))}
         </tbody>
       </table>
+      </div>
+      <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
     </div>
   )
 }

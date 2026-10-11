@@ -86,9 +86,25 @@ export const metadata: Metadata = { title: STAFF_PAGE.title }
 /** The page's own route, as the pagination links to. */
 const BASE_PATH = '/admin/staff'
 
-/** The href for a page of the staff list, which is the list's only filter. */
-function pageHrefFor(next: number): string {
-  return next > 1 ? `${BASE_PATH}?page=${String(next)}` : BASE_PATH
+/** The two list params the page reads — the staff list's page and the leave list's. */
+const STAFF_PAGE_PARAM = 'page'
+const LEAVE_PAGE_PARAM = 'leave'
+
+/**
+ * One href for the page, keeping whichever of the two list pages the URL already names.
+ *
+ * The staff list and the leave list each paginate independently on the one page, so a
+ * link that moved one must keep the other where it is — a shared `?page=` would move
+ * both at once and the manager would lose their place in the table they were not
+ * paging.
+ */
+function listHrefFor(current: { readonly staff: number; readonly leave: number }, change: Partial<{ staff: number; leave: number }>): string {
+  const next = { ...current, ...change }
+  const sp = new URLSearchParams()
+  if (next.staff > 1) sp.set(STAFF_PAGE_PARAM, String(next.staff))
+  if (next.leave > 1) sp.set(LEAVE_PAGE_PARAM, String(next.leave))
+  const qs = sp.toString()
+  return qs === '' ? BASE_PATH : `${BASE_PATH}?${qs}`
 }
 
 /** The search params every page in the product reads, as the framework hands them. */
@@ -100,14 +116,17 @@ type PageSearchParams = Promise<{ readonly [key: string]: string | string[] | un
 export default async function StaffPage({ searchParams }: { readonly searchParams: PageSearchParams }) {
   const session = await requireStaffPanel('admin')
   const params = await searchParams
-  const page = pageFromParam(params.page)
+  const page = pageFromParam(params[STAFF_PAGE_PARAM])
+  const leavePage = pageFromParam(params[LEAVE_PAGE_PARAM])
 
   const data = await runInTenantScope(session.permissions, prisma(), (tx) =>
     loadStaffPage({ tx, ctx: session.permissions }),
   )
 
-  const { slice, totalPages } = paginate(data.staff, page)
+  const staffList = paginate(data.staff, page)
+  const leaveList = paginate(data.leaveRequests, leavePage)
   const roleCount = new Set(data.staff.map((row) => row.role)).size
+  const pages = { staff: page, leave: leavePage }
 
   return (
     <div className="flex flex-col gap-8">
@@ -131,11 +150,23 @@ export default async function StaffPage({ searchParams }: { readonly searchParam
         <span>{ADMIN_STAFF.alert}</span>
       </div>
 
-      <StaffList data={data} slice={slice} totalPages={totalPages} page={page} />
+      <StaffList
+        data={data}
+        slice={staffList.slice}
+        totalPages={staffList.totalPages}
+        page={page}
+        hrefFor={(next) => listHrefFor(pages, { staff: next })}
+      />
 
       <RoleMatrix />
 
-      <LeaveTable data={data} />
+      <LeaveTable
+        data={data}
+        slice={leaveList.slice}
+        totalPages={leaveList.totalPages}
+        page={leavePage}
+        hrefFor={(next) => listHrefFor(pages, { leave: next })}
+      />
 
       <AuditTrail data={data} />
     </div>
@@ -234,11 +265,13 @@ function StaffList({
   slice,
   totalPages,
   page,
+  hrefFor,
 }: {
   readonly data: StaffPageData
   readonly slice: readonly StaffRow[]
   readonly totalPages: number
   readonly page: number
+  readonly hrefFor: (page: number) => string
 }) {
   if (data.staff.length === 0) {
     return (
@@ -293,7 +326,15 @@ function StaffList({
                   {permissionText(row)}
                 </td>
                 <td className="px-4 py-3">
-                  <StaffRowActions membership={row} grid={permissionGrid(row)} />
+                  <StaffRowActions
+                    membership={row}
+                    grid={permissionGrid(row)}
+                    workingHours={
+                      isMember(Role, row.role) && row.role === Role.Doctor
+                        ? { doctorId: row.userId, rows: data.doctorHours[row.userId] ?? [] }
+                        : undefined
+                    }
+                  />
                 </td>
               </tr>
             ))}
@@ -306,7 +347,7 @@ function StaffList({
             slice.length,
           )}${ADMIN_STAFF.showingSuffix}`}
         </p>
-        <Pagination page={page} totalPages={totalPages} hrefFor={pageHrefFor} />
+        <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
       </div>
     </section>
   )
@@ -349,7 +390,19 @@ function RoleBadge({ role }: { readonly role: string }) {
 /* ── The leave table ──────────────────────────────────────────────────────── */
 
 /** The doctors' leave requests, as the page's own second table renders them. */
-function LeaveTable({ data }: { readonly data: StaffPageData }) {
+function LeaveTable({
+  data,
+  slice,
+  totalPages,
+  page,
+  hrefFor,
+}: {
+  readonly data: StaffPageData
+  readonly slice: StaffPageData['leaveRequests']
+  readonly totalPages: number
+  readonly page: number
+  readonly hrefFor: (page: number) => string
+}) {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-base font-bold text-ink">{STAFF_PAGE.membership.leaveTitle}</h2>
@@ -372,7 +425,7 @@ function LeaveTable({ data }: { readonly data: StaffPageData }) {
               </tr>
             </thead>
             <tbody>
-              {data.leaveRequests.map((row) => (
+              {slice.map((row) => (
                 <tr key={row.id} className="border-b border-line align-top last:border-b-0">
                   <td className="px-4 py-3 font-semibold text-ink">{row.doctorName ?? '—'}</td>
                   <td className="px-4 py-3 text-ink-2 tabular-nums">
@@ -392,6 +445,12 @@ function LeaveTable({ data }: { readonly data: StaffPageData }) {
               ))}
             </tbody>
           </table>
+          <div className="flex flex-col gap-3 border-t border-line px-4 py-3 panel:flex-row panel:items-center panel:justify-between">
+            <p className="text-xs text-ink-3 tabular-nums">
+              {`${ADMIN_STAFF.showingPrefix}${toPersianDigits(slice.length)}${ADMIN_STAFF.leaveShowingSuffix}`}
+            </p>
+            <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
+          </div>
         </div>
       )}
     </section>

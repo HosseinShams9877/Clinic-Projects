@@ -40,12 +40,15 @@ import {
   type LeaveRow,
   type StaffRow,
 } from '@/modules/staff'
+import { readDoctorWorkingHours, type DoctorHoursRow } from '@/modules/appointments'
 import { effectivePermissions } from '@/modules/roles-permissions'
 import { Permission, PERMISSIONS, Role, isMember } from '@/core/constants'
 
 /** The page's own three tables, and the names they render. */
 export interface StaffPageData {
   readonly staff: readonly StaffRow[]
+  /** Each doctor membership's weekly working hours, keyed by the doctor's user id. */
+  readonly doctorHours: Readonly<Record<string, readonly DoctorHoursRow[]>>
   readonly audit: readonly (AuditRow & {
     /** The actor's name, or `null` for a row a worker wrote. */
     readonly actorName: string | null
@@ -74,6 +77,18 @@ export async function loadStaffPage(args: {
     listLeaveRequests({ tx: args.tx, ctx: args.ctx }),
   ])
 
+  // Each doctor's weekly hours, for the «ساعت کاری» form the doctor's row opens. Read
+  // only for doctor memberships — a secretary and the manager hold no working-hours row.
+  const doctorRows = staff.filter((row) => isMember(Role, row.role) && row.role === Role.Doctor)
+  const hoursPairs = await Promise.all(
+    doctorRows.map(async (row) => [
+      row.userId,
+      await readDoctorWorkingHours({ tx: args.tx, ctx: args.ctx, doctorId: row.userId }),
+    ] as const),
+  )
+  const doctorHours: Record<string, readonly DoctorHoursRow[]> = {}
+  for (const [doctorId, rows] of hoursPairs) doctorHours[doctorId] = rows
+
   const names = await loadUserNames(args.tx, args.ctx.tenantId, [
     ...audit.map((row) => row.actorUserId),
     ...leaveRequests.map((row) => [row.doctorId, row.approvedByUserId]),
@@ -81,6 +96,7 @@ export async function loadStaffPage(args: {
 
   return {
     staff,
+    doctorHours,
     audit: audit.map((row) => ({ ...row, actorName: nameOf(names, row.actorUserId) })),
     leaveRequests: leaveRequests.map((row) => ({
       ...row,

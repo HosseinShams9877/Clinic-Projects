@@ -28,14 +28,21 @@
 import type { Metadata } from 'next'
 
 import { prisma, runInTenantScope } from '@/core/db'
-import { asLocalDate, isValidLocalDate, todayLocalDate, type LocalDate } from '@/core/localization'
+import { asLocalDate, formatNumber, isValidLocalDate, todayLocalDate, type LocalDate } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
+import { AppointmentStatus, CycleStatus, isMember } from '@/core/constants'
 import { doctorDay, readBookingSettings } from '@/modules/appointments'
+import { doctorCycles } from '@/modules/cycles'
+import { Icon } from '@/core/components/icons'
+import type { IconName } from '@/core/components/icons'
+import { cx } from '@/core/lib'
 
 import { APPOINTMENTS_PAGE, PANEL_HOMES } from '@/app/catalog'
+import { DOCTOR_DASHBOARD } from '@/app/doctor/catalog'
 import { BookingDialog } from '@/app/_appointments/booking-dialog'
 import { DayGrid, DayNav } from '@/app/_appointments/day-grid'
 import { loadPopupOptions } from '@/app/_appointments/options'
+import { LeaveForm } from '@/app/doctor/_components/LeaveForm'
 import { requireStaffPanel } from '@/app/_shell/session'
 
 export const metadata: Metadata = { title: PANEL_HOMES.doctor }
@@ -55,7 +62,7 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
   const localDate = dateFromParam(params.day)
 
   const data = await runInTenantScope(session.permissions, prisma(), async (tx) => {
-    const [rows, options, settings] = await Promise.all([
+    const [rows, options, settings, cycles] = await Promise.all([
       doctorDay({
         tx,
         tenantId: session.tenantId,
@@ -64,11 +71,18 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
       }),
       loadPopupOptions({ tx, ctx: session.permissions }),
       readBookingSettings(tx, session.tenantId),
+      doctorCycles({ tx, ctx: session.permissions }),
     ])
-    return { rows, options, settings }
+    return { rows, options, settings, cycles }
   })
 
   const doctorName = doctorDisplayName(data.rows)
+  const bookings = data.rows.filter((row) => !row.isSlotBlock)
+  const doneToday = bookings.filter((row) => row.status === AppointmentStatus.Completed).length
+  const activeCycles = data.cycles.filter(
+    (row) => isMember(CycleStatus, row.status) &&
+      (row.status === CycleStatus.Active || row.status === CycleStatus.Due || row.status === CycleStatus.AtRisk),
+  ).length
 
   return (
     <div className="flex flex-col gap-6">
@@ -91,6 +105,12 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
         ) : null}
       </div>
 
+      <div className="grid grid-cols-1 gap-3 panel:grid-cols-3">
+        <KpiTile label={DOCTOR_DASHBOARD.kpi.today} value={formatNumber(bookings.length)} icon="appointment" tone="bg-info-bg text-info" />
+        <KpiTile label={DOCTOR_DASHBOARD.kpi.doneSoFar} value={formatNumber(doneToday)} icon="confirm" tone="bg-ok-bg text-ok" />
+        <KpiTile label={DOCTOR_DASHBOARD.kpi.activeCycles} value={formatNumber(activeCycles)} icon="treatment" tone="bg-brand-50 text-brand" />
+      </div>
+
       <div className="flex flex-col gap-4">
         <DayNav localDate={localDate} basePath={BASE_PATH} />
         <DayGrid
@@ -103,6 +123,33 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
           writable
         />
       </div>
+
+      <LeaveForm />
+    </div>
+  )
+}
+
+/** One count, as the dashboard's KPI tile: a coloured icon square, label, and number. */
+function KpiTile({
+  label,
+  value,
+  icon,
+  tone,
+}: {
+  readonly label: string
+  readonly value: string
+  readonly icon: IconName
+  readonly tone: string
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-line bg-surface px-4 py-3">
+      <span className={cx('grid size-10 shrink-0 place-items-center rounded-md', tone)}>
+        <Icon name={icon} size="card" />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-xs text-ink-3">{label}</span>
+        <span className="truncate text-lg font-bold text-ink tabular-nums">{value}</span>
+      </span>
     </div>
   )
 }

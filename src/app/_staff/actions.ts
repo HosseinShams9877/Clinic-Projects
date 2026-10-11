@@ -61,6 +61,7 @@ import {
   AuditEntity,
 } from '@/modules/staff'
 import type { AuditDetail } from '@/modules/staff'
+import { setDoctorWorkingHours } from '@/modules/appointments'
 
 import { moduleFailureMessage } from '@/app/_shared/module-failure'
 import type { Panel } from '@/app/_shell/navigation'
@@ -238,6 +239,31 @@ export async function rejectLeaveRequestAction(leaveRequestId: string): Promise<
   )
   if (!('succeeded' in result)) return result
   revalidateStaff()
+  return { ok: true }
+}
+
+/** One weekday's window the «ساعت کاری» form submits. */
+export interface WorkingHoursInput {
+  readonly doctorId: string
+  readonly rows: readonly { readonly weekday: number; readonly startTime: string; readonly endTime: string }[]
+}
+
+/**
+ * «ساعت کاری» — replaces a doctor's weekly working hours.
+ *
+ * The write is the appointments module's, because that module owns the
+ * `DoctorWorkingHours` table; the staff page composes it here. Revalidates the three
+ * appointment grids too, because a changed window changes which slots they offer.
+ */
+export async function setDoctorWorkingHoursAction(input: WorkingHoursInput): Promise<ActionResult> {
+  const result = await inTenantScope(({ tx, ctx }) =>
+    setDoctorWorkingHours({ tx, ctx, doctorId: input.doctorId, rows: input.rows }).then(() => SUCCESS),
+  )
+  if (!('succeeded' in result)) return result
+  revalidateStaff()
+  revalidatePath('/admin/appointments')
+  revalidatePath('/reception/appointments')
+  revalidatePath('/doctor')
   return { ok: true }
 }
 

@@ -6,6 +6,14 @@
  * the dedupe is the module's. On success the dialog closes and the list revalidates;
  * on failure it shows the catalog's one error sentence. Residence area is not collected
  * here — `createOrFindCustomer` does not accept it — and no field is faked.
+ *
+ * Two shapes, one dialog:
+ * - **Desktop (≥1000px)**: a centred modal, all corners rounded, `panel:max-w-2xl`,
+ *   the four fields in two columns, the two action buttons at the bottom of the card.
+ * - **Mobile (<1000px)**: a bottom sheet pinned to the bottom edge, only the top
+ *   corners rounded, capped at 92% of the viewport, with a sticky header, a scrollable
+ *   body, and the two action buttons **stuck to the bottom of the sheet** — so they are
+ *   always reachable however long the form is.
  */
 
 'use client'
@@ -19,6 +27,7 @@ import { Field, TextInput } from '@/core/components/form'
 import { Icon } from '@/core/components/icons'
 import { AcquisitionSource } from '@/core/constants'
 import { ACQUISITION_SOURCE_LABELS } from '@/modules/customers'
+import { cx } from '@/core/lib'
 
 import { RECEPTION_CUSTOMERS } from '@/app/catalog'
 import { addCustomerAction } from '../actions'
@@ -37,6 +46,19 @@ export function AddCustomerDialog() {
   const [mobile, setMobile] = useState('')
   const [source, setSource] = useState<string | null>(null)
 
+  function reset() {
+    setFirstName('')
+    setLastName('')
+    setMobile('')
+    setSource(null)
+    setFailed(false)
+  }
+
+  function close() {
+    setOpen(false)
+    reset()
+  }
+
   if (!open) {
     return (
       <Button variant="primary" leadingIcon="add" onClick={() => setOpen(true)}>
@@ -50,13 +72,14 @@ export function AddCustomerDialog() {
     if (firstName === '' || mobile === '') return
     setFailed(false)
     startTransition(() => {
-      void addCustomerAction({ firstName, lastName, mobile, acquisitionSource: source ?? '' }).then((result) => {
+      void addCustomerAction({
+        firstName,
+        lastName,
+        mobile,
+        acquisitionSource: source ?? '',
+      }).then((result) => {
         if (result.ok) {
-          setOpen(false)
-          setFirstName('')
-          setLastName('')
-          setMobile('')
-          setSource(null)
+          close()
           return
         }
         setFailed(true)
@@ -64,56 +87,133 @@ export function AddCustomerDialog() {
     })
   }
 
+  const canSubmit = firstName !== '' && mobile !== ''
+
   return (
     <div
-      className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-[var(--overlay)] p-0 panel:items-center panel:p-6"
-      onClick={() => setOpen(false)}
+      className={cx(
+        // Backdrop: full-screen, above everything.
+        'fixed inset-0 z-[var(--z-modal)] flex flex-col bg-[var(--overlay)]',
+        // Mobile: pin the sheet to the bottom edge.
+        'justify-end',
+        // Desktop: centre the card, with outer padding.
+        'panel:items-center panel:justify-center panel:p-6',
+      )}
+      onClick={close}
     >
       <div
         role="dialog"
         aria-modal="true"
-        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-md"
+        aria-labelledby="add-customer-title"
+        className={cx(
+          // Base card
+          'flex w-full flex-col overflow-hidden bg-surface shadow-3',
+          // Mobile: bottom sheet — only the top corners rounded, capped height.
+          'max-h-[92dvh] rounded-t-2xl',
+          // Desktop: centred modal — all corners rounded, capped width and height.
+          'panel:max-h-[85dvh] panel:max-w-2xl panel:rounded-2xl',
+        )}
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
-          <h2 className="text-lg font-bold text-ink">{RECEPTION_CUSTOMERS.add.title}</h2>
-          <Button size="icon" variant="ghost" icon="close" aria-label={RECEPTION_CUSTOMERS.add.cancel} onClick={() => setOpen(false)} />
+        {/* Header */}
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-5 py-4">
+          <h2 id="add-customer-title" className="text-lg font-bold text-ink">
+            {RECEPTION_CUSTOMERS.add.title}
+          </h2>
+          <Button
+            size="icon"
+            variant="ghost"
+            icon="close"
+            aria-label={RECEPTION_CUSTOMERS.add.cancel}
+            onClick={close}
+          />
         </header>
-        <form className="flex flex-col gap-4 p-5" onSubmit={submit}>
-          <Field label={RECEPTION_CUSTOMERS.add.firstName} required>
-            <TextInput name="firstName" value={firstName} onChange={(event) => setFirstName(event.target.value)} />
-          </Field>
-          <Field label={RECEPTION_CUSTOMERS.add.lastName}>
-            <TextInput name="lastName" value={lastName} onChange={(event) => setLastName(event.target.value)} />
-          </Field>
-          <Field label={RECEPTION_CUSTOMERS.add.mobile} required>
-            <TextInput name="mobile" value={mobile} inputMode="numeric" dir="ltr" onChange={(event) => setMobile(event.target.value)} />
-          </Field>
-          <Field label={RECEPTION_CUSTOMERS.add.source}>
-            <Combobox
-              name="acquisitionSource"
-              value={source}
-              onChange={setSource}
-              options={SOURCE_OPTIONS}
-              placeholder={RECEPTION_CUSTOMERS.add.sourcePlaceholder}
-              emptyMessage={RECEPTION_CUSTOMERS.add.sourcePlaceholder}
-            />
-          </Field>
+
+        {/* The form body — scrolls on both layouts. */}
+        <form
+          id="add-customer-form"
+          onSubmit={submit}
+          className="flex flex-1 flex-col gap-4 overflow-y-auto p-5"
+        >
+          <div className="flex flex-col gap-4 panel:flex-row">
+            <Field label={RECEPTION_CUSTOMERS.add.firstName} required className="flex-1">
+              <TextInput
+                name="firstName"
+                value={firstName}
+                autoComplete="given-name"
+                onChange={(event) => setFirstName(event.target.value)}
+              />
+            </Field>
+            <Field label={RECEPTION_CUSTOMERS.add.lastName} className="flex-1">
+              <TextInput
+                name="lastName"
+                value={lastName}
+                autoComplete="family-name"
+                onChange={(event) => setLastName(event.target.value)}
+              />
+            </Field>
+          </div>
+
+          <div className="flex flex-col gap-4 panel:flex-row">
+            <Field label={RECEPTION_CUSTOMERS.add.mobile} required className="flex-1">
+              <TextInput
+                name="mobile"
+                value={mobile}
+                inputMode="numeric"
+                dir="ltr"
+                autoComplete="tel"
+                className="tabular-nums"
+                onChange={(event) => setMobile(event.target.value)}
+              />
+            </Field>
+            <Field label={RECEPTION_CUSTOMERS.add.source} className="flex-1">
+              <Combobox
+                name="acquisitionSource"
+                value={source}
+                onChange={setSource}
+                options={SOURCE_OPTIONS}
+                placeholder={RECEPTION_CUSTOMERS.add.sourcePlaceholder}
+                emptyMessage={RECEPTION_CUSTOMERS.add.sourcePlaceholder}
+              />
+            </Field>
+          </div>
+
           {failed ? (
             <p className="flex items-center gap-1 text-sm text-danger" role="alert">
               <Icon name="error" size="compact" />
               {RECEPTION_CUSTOMERS.add.error}
             </p>
           ) : null}
-          <div className="flex items-center justify-end gap-2">
-            <Button type="button" variant="ghost" disabled={pending} onClick={() => setOpen(false)}>
-              {RECEPTION_CUSTOMERS.add.cancel}
-            </Button>
-            <Button type="submit" variant="primary" loading={pending} disabled={firstName === '' || mobile === ''}>
-              {RECEPTION_CUSTOMERS.add.submit}
-            </Button>
-          </div>
         </form>
+
+        {/*
+          Actions — outside the form. On mobile this is a sticky footer pinned to
+          the bottom edge of the sheet; on desktop it is a normal footer bar at the
+          bottom of the card. The submit button references the form by id, so the
+          whole layout stays one form.
+        */}
+        <footer
+          className={cx(
+            'flex shrink-0 items-center justify-end gap-2 border-t border-line bg-surface px-5 py-3',
+            // Mobile: sticky at the bottom of the scroll area.
+            'sticky bottom-0',
+            // Desktop: static (normal footer).
+            'panel:static',
+          )}
+        >
+          <Button type="button" variant="ghost" disabled={pending} onClick={close}>
+            {RECEPTION_CUSTOMERS.add.cancel}
+          </Button>
+          <Button
+            type="submit"
+            form="add-customer-form"
+            variant="primary"
+            loading={pending}
+            disabled={!canSubmit}
+          >
+            {RECEPTION_CUSTOMERS.add.submit}
+          </Button>
+        </footer>
       </div>
     </div>
   )

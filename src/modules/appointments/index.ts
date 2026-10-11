@@ -61,6 +61,7 @@ export {
   bookPublicAppointment,
   cancelAppointment,
   rescheduleAppointment,
+  updateAppointment,
 } from './lib/book'
 
 export type { PublicBookArgs, PublicBookingContext } from './lib/book'
@@ -92,6 +93,12 @@ export {
 } from './lib/job'
 
 export { clinicDay, doctorDay, doctorsOnDay, doctorWindowsOnDay, unrecordedCartable, unrecordedOnDay, weekDays } from './lib/queries'
+
+export {
+  readDoctorWorkingHours,
+  setDoctorWorkingHours,
+  type DoctorHoursRow,
+} from './lib/working-hours'
 
 export {
   CUSTOMER_CANCEL_WINDOW_MS,

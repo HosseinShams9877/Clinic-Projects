@@ -48,7 +48,8 @@ import { Icon } from '@/core/components/icons'
 import type { IconName } from '@/core/components/icons'
 import type { BookingDialogProps } from './booking-dialog'
 import { BookingDialog, type CustomerOption, type ServiceOption } from './booking-dialog'
-import { RowActions } from './row-actions'
+import { BlockDialog } from './block-dialog'
+import { RowActions, type RowEditContext } from './row-actions'
 
 /** The grid's own props: the day's facts and what the page may do with them. */
 export interface DayGridProps {
@@ -154,7 +155,13 @@ export function DayGrid(props: DayGridProps) {
                     return (
                       <td key={doctor.id} className="min-w-[140px] border-b border-l border-line p-2 align-top">
                         {row !== null ? (
-                          <BookedCell row={row} writable={props.writable} panel={props.panel} />
+                          <BookedCell
+                            row={row}
+                            writable={props.writable}
+                            panel={props.panel}
+                            services={props.services}
+                            doctorOptions={columns}
+                          />
                         ) : offSchedule ? (
                           <OffScheduleCell />
                         ) : (
@@ -189,7 +196,12 @@ export function DayGrid(props: DayGridProps) {
             <p className="mt-1 text-xs text-ink-3">{row.doctorName}</p>
             {props.writable ? (
               <div className="mt-3">
-                <RowActions appointmentId={row.id} status={row.status} panel={props.panel} />
+                <RowActions
+                  appointmentId={row.id}
+                  status={row.status}
+                  panel={props.panel}
+                  edit={editContext(row, props.services, columns)}
+                />
               </div>
             ) : null}
           </li>
@@ -207,10 +219,14 @@ function BookedCell({
   row,
   writable,
   panel,
+  services,
+  doctorOptions,
 }: {
   readonly row: AppointmentRow
   readonly writable: boolean
   readonly panel: BookingDialogProps['panel']
+  readonly services: readonly ServiceOption[]
+  readonly doctorOptions: readonly DoctorColumn[]
 }) {
   return (
     <div
@@ -220,7 +236,7 @@ function BookedCell({
         BORDER_CLASSES[row.status] ?? BORDER_CLASSES.default,
       )}
     >
-      <Cell row={row} writable={writable} panel={panel} />
+      <Cell row={row} writable={writable} panel={panel} services={services} doctorOptions={doctorOptions} />
     </div>
   )
 }
@@ -287,6 +303,9 @@ function FreeCell({
         services={services}
         customers={customers}
       />
+      <span className="[&_button]:[border-style:solid]">
+        <BlockDialog panel={panel} doctorId={doctor.id} localDate={localDate} time={time} />
+      </span>
     </span>
   )
 }
@@ -307,10 +326,14 @@ function Cell({
   row,
   writable,
   panel,
+  services,
+  doctorOptions,
 }: {
   readonly row: AppointmentRow
   readonly writable: boolean
   readonly panel: BookingDialogProps['panel']
+  readonly services: readonly ServiceOption[]
+  readonly doctorOptions: readonly DoctorColumn[]
 }) {
   const srcIcon = sourceIcon(row.source)
   return (
@@ -328,9 +351,33 @@ function Cell({
       {row.isSlotBlock ? (
         <span className="text-xs text-ink-3">{APPOINTMENTS_PAGE.controls.blockHours}</span>
       ) : null}
-      {writable ? <RowActions appointmentId={row.id} status={row.status} panel={panel} /> : null}
+      {writable ? (
+        <RowActions
+          appointmentId={row.id}
+          status={row.status}
+          panel={panel}
+          edit={editContext(row, services, doctorOptions)}
+        />
+      ) : null}
     </div>
   )
+}
+
+/** The edit popup's data for a row, as `RowActions` hands it to the dialog. */
+function editContext(
+  row: AppointmentRow,
+  services: readonly ServiceOption[],
+  doctorOptions: readonly DoctorColumn[],
+): RowEditContext {
+  return {
+    doctorId: row.doctorId,
+    serviceId: row.serviceId,
+    localDate: row.localDate,
+    localTime: row.localTime,
+    isSlotBlock: row.isSlotBlock,
+    services,
+    doctorOptions,
+  }
 }
 
 /**
