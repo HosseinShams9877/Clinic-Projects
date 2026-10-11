@@ -169,6 +169,29 @@ export async function loadDoctorNames(
   return names
 }
 
+/**
+ * The customer ids → mobiles map, for the pages that render a cycle or a debt beside
+ * the person it belongs to.
+ *
+ * The cycles and debts reads carry `customerId` and not the mobile, because the module
+ * that owns the row owns its own columns and the mobile is the customer module's; the
+ * app tier looks it up here, the same way `loadDoctorNames` covers the doctor column.
+ * The read is bounded by the rows the page already holds and scoped to the tenant, so a
+ * page cannot dial a number that is not its own customer's.
+ */
+export async function loadCustomerMobiles(
+  tx: TransactionClient,
+  tenantId: string,
+  ids: readonly string[],
+): Promise<Readonly<Record<string, string>>> {
+  if (ids.length === 0) return {}
+  const rows = await tx.customer.findMany({
+    where: { id: { in: [...ids] }, tenantId },
+    select: { id: true, mobile: true },
+  })
+  return Object.fromEntries(rows.map((row) => [row.id, row.mobile]))
+}
+
 /** One membership's person's name, or `null` when the row is not the caller's tenant's. */
 async function membershipName(
   tx: TransactionClient,

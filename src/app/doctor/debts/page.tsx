@@ -37,7 +37,9 @@ export default async function DoctorDebtsPage() {
         <p className="text-sm text-ink-2">{DEBTS_PAGE.doctor.lead}</p>
       </div>
 
-      <DebtsTable buckets={buckets} />
+      <DebtsTable
+        rows={[...buckets.overdue30, ...buckets.overdue7, ...buckets.overdue, ...buckets.dueSoon]}
+      />
     </div>
   )
 }

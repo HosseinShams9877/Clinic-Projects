@@ -42,11 +42,13 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
-import { unscopedPrisma } from '@/core/db'
+import { prisma, unscopedPrisma, runInTenantScope } from '@/core/db'
 import { realClock } from '@/core/lib/clock'
 import { revokeSession, SESSION_COOKIE } from '@/modules/auth'
 
-import { sessionToken } from './session'
+import { loadCustomersList } from '@/app/_customers/page-data'
+import { resolveStaffPanel, sessionToken } from './session'
+import type { Panel } from './navigation'
 
 /**
  * Revokes the session the cookie names and sends the person to the entry page.
@@ -63,4 +65,37 @@ export async function signOut(): Promise<void> {
   const store = await cookies()
   store.delete(SESSION_COOKIE)
   redirect('/')
+}
+
+/** One topbar search hit — a customer the staff member may open. */
+export interface TopbarSearchResult {
+  readonly id: string
+  readonly name: string
+  readonly mobile: string
+}
+
+/**
+ * The topbar's live customer search — the top few customers matching a name or mobile.
+ *
+ * Reuses the app's own `loadCustomersList` (the same read the customers page runs), so
+ * no new module query is added; the doctor's panel searches their own patients and the
+ * desk and manager the whole file, which is the scope each already reads under. Services
+ * are deliberately not searched here — there is no exposed services-by-name query and no
+ * reception destination for one — so the dropdown is customers only.
+ */
+export async function quickSearchCustomersAction(
+  panel: Panel,
+  query: string,
+): Promise<readonly TopbarSearchResult[]> {
+  if (query.trim() === '') return []
+  const session = await resolveStaffPanel(panel)
+  const scope = panel === 'doctor' ? 'own' : 'all'
+  const data = await runInTenantScope(session.permissions, prisma(), (tx) =>
+    loadCustomersList({ tx, ctx: session.permissions, scope, query }),
+  )
+  return data.rows.slice(0, 6).map((row) => ({
+    id: row.id,
+    name: row.lastName === null ? row.firstName : `${row.firstName} ${row.lastName}`,
+    mobile: row.mobile,
+  }))
 }

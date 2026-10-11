@@ -32,9 +32,9 @@ import { Combobox } from '@/core/components/combobox'
 import { Field, TextInput } from '@/core/components/form'
 import { Icon } from '@/core/components/icons'
 import { JalaliDatePicker } from '@/core/components/date-picker'
-import { DEBTS_PAGE } from '@/app/catalog'
+import { DEBTS_PAGE, RECEPTION_DEBTS } from '@/app/catalog'
 import { realClock } from '@/core/lib/clock'
-import { todayLocalDate } from '@/core/localization'
+import { formatMoney, toLatinDigits, todayLocalDate } from '@/core/localization'
 import type { DebtRow } from '@/modules/debts'
 
 import {
@@ -75,7 +75,6 @@ export function DebtRowActions({
   const [answer, setAnswer] = useState<ActionResult | null>(null)
   const [paymentOn, setPaymentOn] = useState(false)
   const [followUpOn, setFollowUpOn] = useState(false)
-  const [rescheduleOn, setRescheduleOn] = useState(false)
 
   return (
     <div className="flex flex-col items-start gap-2">
@@ -88,7 +87,6 @@ export function DebtRowActions({
             setAnswer(null)
             setPaymentOn((prev) => !prev)
             setFollowUpOn(false)
-            setRescheduleOn(false)
           }}
         >
           {DEBTS_PAGE.actions.payment}
@@ -101,23 +99,9 @@ export function DebtRowActions({
             setAnswer(null)
             setFollowUpOn((prev) => !prev)
             setPaymentOn(false)
-            setRescheduleOn(false)
           }}
         >
           {DEBTS_PAGE.actions.followUp}
-        </Button>
-        <Button
-          size="small"
-          variant="ghost"
-          leadingIcon="calendar"
-          onClick={() => {
-            setAnswer(null)
-            setRescheduleOn((prev) => !prev)
-            setPaymentOn(false)
-            setFollowUpOn(false)
-          }}
-        >
-          {DEBTS_PAGE.actions.reschedule}
         </Button>
       </div>
 
@@ -134,21 +118,20 @@ export function DebtRowActions({
         <FollowUpForm row={row} onAnswer={setAnswer} onDone={() => setFollowUpOn(false)} />
       ) : null}
 
-      {rescheduleOn ? (
-        <RescheduleForm row={row} onAnswer={setAnswer} onDone={() => setRescheduleOn(false)} />
-      ) : null}
-
       <FormAnswer answer={answer} />
     </div>
   )
 }
 
 /**
- * «ثبت پرداخت» — the amount the customer handed over, and a discount when there is one.
+ * «ثبت دریافت» — the demo's `m-pay`: the amount received, the balance left after it, the
+ * method, and (when it does not settle) an optional new due date, all in one form.
  *
- * The two selects are the closed lists' own keys, and the labels come from the module's
- * catalog — the two sets are the receipt's, and the form is not a second place they are
- * spelled.
+ * The remaining-after figure is computed live from the row's balance, and the payment
+ * `kind` is derived from it — a payment that clears the balance is `FINAL`, otherwise
+ * `PARTIAL` — so the desk never picks it by hand. When a new due date is given on an
+ * unsettled balance, the form records the payment and then moves the date, so the two
+ * demo fields are one submit.
  */
 function PaymentForm({
   row,
@@ -164,30 +147,40 @@ function PaymentForm({
   const [pending, startTransition] = useTransition()
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<string | null>(null)
-  const [kind, setKind] = useState<string | null>(null)
-  const [discountAmount, setDiscountAmount] = useState('')
-  const [discountReason, setDiscountReason] = useState('')
-  const [note, setNote] = useState('')
+  const [newDueDate, setNewDueDate] = useState<string | null>(null)
   const formId = useId()
+
+  const amountRial = BigInt(Number(toLatinDigits(amount).replace(/[^0-9]/g, '')) || 0)
+  const remaining = row.balance - amountRial
+  const settles = remaining <= 0n
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (method === null || kind === null || amount === '') return
+    if (method === null || amount === '') return
     onAnswer(null)
     startTransition(async () => {
       const outcome = await recordPaymentAction(RECEPTION_PANEL, row.appointmentId, {
         amount,
         method,
-        kind,
-        discountAmount,
-        discountReason: discountReason === '' ? null : discountReason,
-        note: note === '' ? null : note,
+        kind: settles ? 'FINAL' : 'PARTIAL',
+        discountAmount: '',
+        discountReason: null,
+        note: null,
       })
-      if (outcome.ok) {
-        onDone()
+      if (!outcome.ok) {
+        onAnswer(outcome)
         return
       }
-      onAnswer(outcome)
+      // The demo merges the new due date into m-pay: once the receipt is in, move the
+      // promised date if the balance did not clear and the desk named one.
+      if (!settles && newDueDate !== null) {
+        const due = await rescheduleDueDateAction(RECEPTION_PANEL, row.appointmentId, { dueDate: newDueDate })
+        if (!due.ok) {
+          onAnswer(due)
+          return
+        }
+      }
+      onDone()
     })
   }
 
@@ -205,55 +198,34 @@ function PaymentForm({
           onChange={(event) => setAmount(event.target.value)}
         />
       </Field>
-      <div className="flex flex-col gap-3 panel:flex-row">
-        <Field label={DEBTS_PAGE.actions.method} required className="flex-1">
-          <Combobox
-            name="method"
-            value={method}
-            onChange={setMethod}
-            options={options.method}
-            placeholder={DEBTS_PAGE.actions.method}
-            emptyMessage={DEBTS_PAGE.actions.methodEmpty}
-          />
-        </Field>
-        <Field label={DEBTS_PAGE.actions.kind} required className="flex-1">
-          <Combobox
-            name="kind"
-            value={kind}
-            onChange={setKind}
-            options={options.kind}
-            placeholder={DEBTS_PAGE.actions.kind}
-            emptyMessage={DEBTS_PAGE.actions.kindEmpty}
-          />
-        </Field>
+      <div className="flex items-center justify-between rounded-sm bg-surface px-3 py-2 text-sm">
+        <span className="text-ink-3">{RECEPTION_DEBTS.pay.remainingAfter}</span>
+        <span className="font-semibold text-ink tabular-nums">
+          {formatMoney(settles ? 0n : remaining)}
+        </span>
       </div>
-      <div className="flex flex-col gap-3 panel:flex-row">
-        <Field label={DEBTS_PAGE.actions.discountAmount} className="flex-1">
-          <TextInput
-            name="discountAmount"
-            value={discountAmount}
-            inputMode="numeric"
-            onChange={(event) => setDiscountAmount(event.target.value)}
-          />
-        </Field>
-        <Field label={DEBTS_PAGE.actions.discountReason} className="flex-1">
-          <TextInput
-            name="discountReason"
-            value={discountReason}
-            onChange={(event) => setDiscountReason(event.target.value)}
-          />
-        </Field>
-      </div>
-      <Field label={DEBTS_PAGE.actions.note}>
-        <TextInput name="note" value={note} onChange={(event) => setNote(event.target.value)} />
+      <Field label={DEBTS_PAGE.actions.method} required>
+        <Combobox
+          name="method"
+          value={method}
+          onChange={setMethod}
+          options={options.method}
+          placeholder={DEBTS_PAGE.actions.method}
+          emptyMessage={DEBTS_PAGE.actions.methodEmpty}
+        />
       </Field>
+      {settles ? null : (
+        <Field label={RECEPTION_DEBTS.pay.newDueDate}>
+          <JalaliDatePicker value={newDueDate} onChange={setNewDueDate} min={today()} />
+        </Field>
+      )}
       <div className="flex items-center gap-2">
         <Button
           type="submit"
           size="small"
           variant="primary"
           loading={pending}
-          disabled={method === null || kind === null || amount === ''}
+          disabled={method === null || amount === ''}
         >
           {DEBTS_PAGE.actions.confirm}
         </Button>
@@ -309,61 +281,6 @@ function FollowUpForm({
           variant="primary"
           loading={pending}
           disabled={nextContactAt === null}
-        >
-          {DEBTS_PAGE.actions.confirm}
-        </Button>
-        <Button type="button" size="small" variant="ghost" disabled={pending} onClick={onDone}>
-          {DEBTS_PAGE.actions.cancel}
-        </Button>
-      </div>
-    </form>
-  )
-}
-
-/** «تغییر سررسید» — the date the customer promised, which the module stores as an override. */
-function RescheduleForm({
-  row,
-  onAnswer,
-  onDone,
-}: {
-  readonly row: DebtRow
-  readonly onAnswer: (answer: ActionResult | null) => void
-  readonly onDone: () => void
-}) {
-  const [pending, startTransition] = useTransition()
-  const [dueDate, setDueDate] = useState<string | null>(null)
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (dueDate === null) return
-    onAnswer(null)
-    startTransition(async () => {
-      const outcome = await rescheduleDueDateAction(RECEPTION_PANEL, row.appointmentId, {
-        dueDate,
-      })
-      if (outcome.ok) {
-        onDone()
-        return
-      }
-      onAnswer(outcome)
-    })
-  }
-
-  return (
-    <form
-      className="flex flex-col gap-3 rounded-sm border border-line-2 bg-surface-2 p-3 panel:min-w-72"
-      onSubmit={submit}
-    >
-      <Field label={DEBTS_PAGE.actions.dueDate} required>
-        <JalaliDatePicker value={dueDate} onChange={setDueDate} min={today()} />
-      </Field>
-      <div className="flex items-center gap-2">
-        <Button
-          type="submit"
-          size="small"
-          variant="primary"
-          loading={pending}
-          disabled={dueDate === null}
         >
           {DEBTS_PAGE.actions.confirm}
         </Button>

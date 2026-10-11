@@ -21,17 +21,17 @@ import { RECEPTION_CYCLES } from '@/app/catalog'
 export type CyclesFilter = 'all' | 'overdue' | 'notContacted'
 
 export interface CyclesCounts {
-  readonly total: number
   readonly overdue: number
-  readonly notContacted: number
-  readonly scheduled: number
+  readonly todayContact: number
+  readonly sessionsToday: number
+  readonly autoSms: number
 }
 
 const TILES: readonly { key: keyof CyclesCounts; label: string; icon: IconName; tone: string }[] = [
   { key: 'overdue', label: RECEPTION_CYCLES.kpi.overdue, icon: 'alert', tone: 'bg-danger-bg text-danger' },
-  { key: 'notContacted', label: RECEPTION_CYCLES.kpi.notContacted, icon: 'phone', tone: 'bg-warn-bg text-warn' },
-  { key: 'scheduled', label: RECEPTION_CYCLES.kpi.scheduled, icon: 'success', tone: 'bg-ok-bg text-ok' },
-  { key: 'total', label: RECEPTION_CYCLES.kpi.total, icon: 'treatment', tone: 'bg-info-bg text-info' },
+  { key: 'todayContact', label: RECEPTION_CYCLES.kpi.todayContact, icon: 'phone', tone: 'bg-warn-bg text-warn' },
+  { key: 'sessionsToday', label: RECEPTION_CYCLES.kpi.sessionsToday, icon: 'success', tone: 'bg-ok-bg text-ok' },
+  { key: 'autoSms', label: RECEPTION_CYCLES.kpi.autoSms, icon: 'notification', tone: 'bg-info-bg text-info' },
 ]
 
 export function CyclesKpi({ counts }: { readonly counts: CyclesCounts }) {
@@ -54,17 +54,15 @@ export function CyclesKpi({ counts }: { readonly counts: CyclesCounts }) {
 
 export function CyclesChips({
   active,
-  counts,
   basePath,
 }: {
   readonly active: CyclesFilter
-  readonly counts: CyclesCounts
   readonly basePath: string
 }) {
-  const chips: readonly { key: CyclesFilter; label: string; count: number }[] = [
-    { key: 'all', label: RECEPTION_CYCLES.filter.all, count: counts.total },
-    { key: 'overdue', label: RECEPTION_CYCLES.filter.overdue, count: counts.overdue },
-    { key: 'notContacted', label: RECEPTION_CYCLES.filter.notContacted, count: counts.notContacted },
+  const chips: readonly { key: CyclesFilter; label: string }[] = [
+    { key: 'all', label: RECEPTION_CYCLES.filter.all },
+    { key: 'overdue', label: RECEPTION_CYCLES.filter.overdue },
+    { key: 'notContacted', label: RECEPTION_CYCLES.filter.notContacted },
   ]
   return (
     <nav className="flex flex-wrap items-center gap-2">
@@ -83,7 +81,6 @@ export function CyclesChips({
             )}
           >
             {chip.label}
-            <span className="ms-2 tabular-nums">{formatNumber(chip.count)}</span>
           </Link>
         )
       })}

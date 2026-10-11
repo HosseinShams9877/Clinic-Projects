@@ -14,22 +14,22 @@ import { formatMoney, formatNumber } from '@/core/localization'
 import { RECEPTION_DEBTS } from '@/app/catalog'
 
 export interface DebtsKpiProps {
+  /** Payments received in the current clinic-local month, in rial. */
+  readonly collectedRial: bigint
+  /** The mean days overdue across the past-due rows. */
+  readonly avgDelayDays: number
+  /** How many rows are past their due date. */
+  readonly overdueCount: number
   /** Total outstanding balance across every bucket, in rial. */
   readonly totalRial: bigint
-  /** Balance of the three past-due buckets, in rial. */
-  readonly overdueRial: bigint
-  /** Balance of the due-soon bucket, in rial. */
-  readonly dueSoonRial: bigint
-  /** How many debtors there are in total. */
-  readonly debtors: number
 }
 
-export function DebtsKpi({ totalRial, overdueRial, dueSoonRial, debtors }: DebtsKpiProps) {
+export function DebtsKpi({ collectedRial, avgDelayDays, overdueCount, totalRial }: DebtsKpiProps) {
   const tiles: readonly { label: string; value: string; icon: IconName; tone: string }[] = [
+    { label: RECEPTION_DEBTS.kpi.collected, value: formatMoney(collectedRial), icon: 'success', tone: 'bg-ok-bg text-ok' },
+    { label: RECEPTION_DEBTS.kpi.avgDelay, value: `${formatNumber(avgDelayDays)} ${RECEPTION_DEBTS.days}`, icon: 'clock', tone: 'bg-warn-bg text-warn' },
+    { label: RECEPTION_DEBTS.kpi.overdue, value: formatNumber(overdueCount), icon: 'alert', tone: 'bg-danger-bg text-danger' },
     { label: RECEPTION_DEBTS.kpi.total, value: formatMoney(totalRial), icon: 'debt', tone: 'bg-info-bg text-info' },
-    { label: RECEPTION_DEBTS.kpi.overdue, value: formatMoney(overdueRial), icon: 'alert', tone: 'bg-danger-bg text-danger' },
-    { label: RECEPTION_DEBTS.kpi.dueSoon, value: formatMoney(dueSoonRial), icon: 'clock', tone: 'bg-warn-bg text-warn' },
-    { label: RECEPTION_DEBTS.kpi.debtors, value: formatNumber(debtors), icon: 'customer', tone: 'bg-ok-bg text-ok' },
   ]
   return (
     <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">

@@ -1,12 +1,22 @@
 /**
- * The campaign builder — the assistant's box, the form, and the live count.
+ * The campaign builder — the demo's three-step «کمپین جدید» wizard.
  *
- * The page's three halves are the builder, the assistant and the results table, and this
- * file is the first two: the assistant reads a brief into a proposal, the proposal fills
- * the builder's fields, and the preview's count beside the audience field is the number
- * the manager is committing to. The create writes a **draft** — the approval step is a
- * row's own state and lives in the results table, because a gate the builder performed
- * would be a gate the builder's own button undid.
+ * The page's three halves are the type cards, the assistant and the clinic's own
+ * campaigns, and this file is the modal the first two open: a proposal or a chosen
+ * type lands in the wizard's fields, the audience's live count sits beside the group
+ * the manager is committing to, and the create writes a **draft** — the approval step
+ * is a row's own state and lives in the results table, because a gate the builder
+ * performed would be a gate the builder's own button undid.
+ *
+ * ## Why the wizard is three steps and one form
+ *
+ * The demo's three panes are a reading order, not three submissions: the manager
+ * answers «به کسی که...» before «چه می‌گوییم؟» before «کی؟», and the fields the
+ * module's contract takes are the same eight either way. The three panes are one
+ * `<form>` whose off-screen steps are `hidden` and not unmounted, so a step's fields
+ * keep what the manager typed when the step is left, and the footer's single submit
+ * sends every step at once. Validation is the module's own and arrives as a sentence
+ * under the step the field belongs to.
  *
  * ## Why the count is fetched and not computed
  *
@@ -15,19 +25,28 @@
  * a count would be a second answer to "who is in this group", and the two would disagree
  * about the one fact the manager is approving.
  *
- * ## Why the assistant's proposal lands in the form and not the database
+ * ## Why a proposal lands in the form and not the database
  *
  * The interpreter never writes anything; its answer is a draft a person reads. The
- * «اعمال پیشنهاد» button is the person's, and the fields it fills are editable — a
- * proposal the manager could not change would be a decision the assistant made.
+ * «بررسی و شروع» button that carries a proposal in is the person's, and the fields it
+ * fills are editable — a proposal the manager could not change would be a decision the
+ * assistant made.
  *
  * ## Why the option lists arrive as props
  *
  * The `campaigns` barrel is a server-only surface — it holds the dispatch, and the
  * dispatch's graph reaches modules a browser cannot load. A client component that
  * imported it for its label maps would pull that graph into the browser bundle, so the
- * page builds the two dropdown lists and hands the low-confidence sentence down, the
- * same way the debts surface hands its option lists down (`_debts/debts-forms.tsx`).
+ * page builds the dropdown lists and hands the wizard's own chrome copy down, the same
+ * way the debts surface hands its option lists down (`_debts/debts-forms.tsx`).
+ *
+ * ## What the demo's wizard holds and this one does not
+ *
+ * A doctor and a service limiter, a discount code, an end date, and the two suppression
+ * switches. None is a field the module's `CampaignInput` takes: the audience is a group
+ * and a group is already a query over the clinic's own customers, and the dispatch's
+ * own suppression is not a switch a campaign holds. A control that wrote nothing would
+ * be a control the page cannot back, so the steps carry the eight fields that are real.
  */
 
 'use client'
@@ -46,7 +65,6 @@ import { fromUtcInstant } from '@/core/localization'
 
 import {
   createCampaignAction,
-  interpretBriefAction,
   previewAudienceCountAction,
   type AssistantProposal,
   type CampaignFormInput,
@@ -59,8 +77,20 @@ export interface OptionList {
 }
 
 /**
- * The audience options the page loaded for this tenant, and the two label lists the
- * type and channel dropdowns render.
+ * The wizard's own chrome — the three step tabs, the two nav buttons, and the
+ * attribution alert — as the admin page's catalog holds them, because the steps are the
+ * manager's own and not the shared builder's.
+ */
+export interface BuilderChrome {
+  readonly steps: Readonly<{ readonly audience: string; readonly message: string; readonly schedule: string }>
+  readonly prev: string
+  readonly next: string
+  readonly attribution: string
+}
+
+/**
+ * The audience options the page loaded for this tenant, the two label lists the type and
+ * channel dropdowns render, and the wizard's own chrome copy.
  */
 export interface CampaignBuilderProps {
   readonly groups: readonly { readonly id: string; readonly name: string }[]
@@ -68,6 +98,14 @@ export interface CampaignBuilderProps {
   readonly channelOptions: readonly OptionList[]
   /** The sentence the assistant's low-confidence note renders, from its own catalog. */
   readonly lowConfidenceHint: string
+  /** The wizard's own chrome, from the admin page's catalog. */
+  readonly chrome: BuilderChrome
+  /** A type one of the page's cards chose, preselected on the wizard's first step. */
+  readonly presetType: string | null
+  /** The assistant's proposal, prefilling the fields it decided. */
+  readonly presetProposal: AssistantProposal | null
+  /** The one way out, which the page owns so a close and a revalidation agree. */
+  readonly onClose: () => void
 }
 
 /** The three schedule kinds, as the form's own select offers them. */
@@ -77,46 +115,40 @@ const SCHEDULE_OPTIONS = [
   { value: 'MONTHLY_DAY', label: CAMPAIGNS_PAGE.builder.scheduleOptions.MONTHLY_DAY },
 ] as const
 
+/** The three steps' own indices, as the tab state reads them. */
+const STEP_AUDIENCE = 0
+const STEP_MESSAGE = 1
+const STEP_SCHEDULE = 2
+const STEP_COUNT = 3
+
 /**
- * «کمپین جدید» — the builder and the assistant, opened from the page's own header.
+ * «کمپین جدید» — the three-step wizard, opened from the page's header, its type cards,
+ * and the assistant's own «بررسی و شروع».
  */
 export function CampaignBuilder({
   groups,
   typeOptions,
   channelOptions,
   lowConfidenceHint,
+  chrome,
+  presetType,
+  presetProposal,
+  onClose,
 }: CampaignBuilderProps) {
-  const [open, setOpen] = useState(false)
+  const [step, setStep] = useState(STEP_AUDIENCE)
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
-  const [brief, setBrief] = useState('')
-  const [proposal, setProposal] = useState<AssistantProposal | null>(null)
-  const [assistantAnswer, setAssistantAnswer] = useState<string | null>(null)
-  const [groupId, setGroupId] = useState<string | null>(null)
-  const [scheduleKind, setScheduleKind] = useState<string>('ONE_TIME')
-  const [type, setType] = useState<string>('OCCASION')
-  const [channel, setChannel] = useState<string>('SMS')
+  // The proposal is a seed and not editable state here: the assistant's own card edits
+  // the text it proposed, and the builder receives the proposal the manager accepted.
+  const [proposal] = useState<AssistantProposal | null>(presetProposal)
+  const [groupId, setGroupId] = useState<string | null>(presetProposal?.audienceGroupId ?? null)
+  const [scheduleKind, setScheduleKind] = useState<string>(presetProposal?.scheduleKind ?? 'ONE_TIME')
+  const [type, setType] = useState<string>(presetType ?? presetProposal?.type ?? 'OCCASION')
+  const [channel, setChannel] = useState<string>(presetProposal?.channel ?? 'SMS')
   const titleId = useId()
 
   // The count follows the group, because the count is the group's and not the form's.
   const count = useAudienceCount(groupId)
-
-  if (!open) {
-    return (
-      <Button variant="primary" leadingIcon="message" onClick={() => setOpen(true)}>
-        {CAMPAIGNS_PAGE.builder.title}
-      </Button>
-    )
-  }
-
-  function applyProposal(next: AssistantProposal) {
-    setProposal(next)
-    setGroupId(next.audienceGroupId)
-    setScheduleKind(next.scheduleKind)
-    if (next.type !== null) setType(next.type)
-    setChannel(next.channel)
-    setAssistantAnswer(null)
-  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -137,20 +169,22 @@ export function CampaignBuilder({
       const outcome = await createCampaignAction(input)
       if (outcome.ok) {
         setAnswer({ ok: true, message: CAMPAIGNS_PAGE.builder.actions.created })
-        setOpen(false)
+        onClose()
         return
       }
       setAnswer({ ok: false, message: outcome.message })
     })
   }
 
+  const steps = [chrome.steps.audience, chrome.steps.message, chrome.steps.schedule]
+
   return (
-    <Overlay onClose={() => setOpen(false)}>
+    <Overlay onClose={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-2xl"
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[720px]"
       >
         <header className="flex items-center justify-between gap-4 border-b border-line p-6">
           <h2 id={titleId} className="text-lg font-bold text-ink">
@@ -161,48 +195,49 @@ export function CampaignBuilder({
             variant="ghost"
             icon="close"
             aria-label={CAMPAIGNS_PAGE.builder.actions.cancel}
-            onClick={() => setOpen(false)}
+            onClick={onClose}
           />
         </header>
 
-        <div className="flex flex-col gap-6 p-6">
-          <AssistantBox
-            brief={brief}
-            onBriefChange={setBrief}
-            proposal={proposal}
-            onApply={applyProposal}
-            answer={assistantAnswer}
-            onAnswer={setAssistantAnswer}
-            lowConfidenceHint={lowConfidenceHint}
-          />
+        <nav
+          className="flex flex-wrap items-center gap-2 p-6 pb-0"
+          aria-label={CAMPAIGNS_PAGE.builder.title}
+        >
+          {steps.map((label, index) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => setStep(index)}
+              aria-current={index === step ? 'step' : undefined}
+              className={cx(
+                'rounded-pill px-4 py-[6px] text-xs font-semibold no-underline',
+                index === step
+                  ? 'bg-brand text-ink-inverse'
+                  : 'bg-surface text-ink-2 border border-line-2 hover:bg-surface-2',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
 
-          <form id={BUILDER_FORM_ID} className="flex flex-col gap-4" onSubmit={submit}>
+        <form id={BUILDER_FORM_ID} className="flex flex-col gap-4 p-6" onSubmit={submit}>
+          <div className={cx('flex flex-col gap-4', step === STEP_AUDIENCE ? 'flex' : 'hidden')}>
             <div className="flex flex-col gap-4 panel:flex-row">
               <Field label={CAMPAIGNS_PAGE.builder.fields.name} required className="flex-1">
                 <TextInput name="name" defaultValue={nameFromProposal(proposal, typeOptions)} />
               </Field>
-              <Field label={CAMPAIGNS_PAGE.builder.fields.channel} className="w-full panel:w-40">
+              <Field label={CAMPAIGNS_PAGE.builder.fields.type} className="w-full panel:w-48">
                 <Combobox
-                  name="channel"
-                  value={channel}
-                  onChange={setChannel}
-                  options={channelOptions}
-                  placeholder={CAMPAIGNS_PAGE.builder.fields.channel}
+                  name="type"
+                  value={type}
+                  onChange={setType}
+                  options={typeOptions}
+                  placeholder={CAMPAIGNS_PAGE.builder.fields.type}
                   emptyMessage={CAMPAIGNS_PAGE.results.empty}
                 />
               </Field>
             </div>
-
-            <Field label={CAMPAIGNS_PAGE.builder.fields.type}>
-              <Combobox
-                name="type"
-                value={type}
-                onChange={setType}
-                options={typeOptions}
-                placeholder={CAMPAIGNS_PAGE.builder.fields.type}
-                emptyMessage={CAMPAIGNS_PAGE.results.empty}
-              />
-            </Field>
 
             <Field
               label={CAMPAIGNS_PAGE.builder.fields.audienceGroup}
@@ -219,6 +254,36 @@ export function CampaignBuilder({
               />
             </Field>
 
+            <p className="flex items-center gap-1 text-xs text-ink-3">
+              <Icon name="info" size="compact" />
+              {lowConfidenceHint}
+            </p>
+          </div>
+
+          <div className={cx('flex flex-col gap-4', step === STEP_MESSAGE ? 'flex' : 'hidden')}>
+            <Field label={CAMPAIGNS_PAGE.builder.fields.channel}>
+              <input type="hidden" name="channel" value={channel} />
+              <div className="grid grid-cols-2 gap-3">
+                {channelOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setChannel(option.value)}
+                    aria-pressed={channel === option.value}
+                    className={cx(
+                      'flex items-center gap-3 rounded-md border p-3 text-start',
+                      channel === option.value
+                        ? 'border-brand bg-brand-50'
+                        : 'border-line-2 bg-surface hover:bg-surface-2',
+                    )}
+                  >
+                    <Icon name="message" size="compact" />
+                    <span className="text-sm font-semibold text-ink">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            </Field>
+
             <Field
               label={CAMPAIGNS_PAGE.builder.fields.messageText}
               required
@@ -226,32 +291,25 @@ export function CampaignBuilder({
             >
               <TextArea name="messageText" defaultValue={proposal?.messageText ?? ''} rows={4} />
             </Field>
+          </div>
 
-            <div className="flex flex-col gap-4 panel:flex-row">
-              <Field label={CAMPAIGNS_PAGE.builder.fields.scheduleKind} className="flex-1">
-                <Combobox
-                  name="scheduleKind"
-                  value={scheduleKind}
-                  onChange={setScheduleKind}
-                  options={SCHEDULE_OPTIONS}
-                  placeholder={CAMPAIGNS_PAGE.builder.fields.scheduleKind}
-                  emptyMessage={CAMPAIGNS_PAGE.results.empty}
-                />
-              </Field>
-              <Field
-                label={CAMPAIGNS_PAGE.builder.fields.dailyCap}
-                className="w-full panel:w-40"
-                hint={CAMPAIGNS_PAGE.builder.hints.dailyCap}
-              >
-                <TextInput name="dailyCap" inputMode="numeric" dir="ltr" />
-              </Field>
-            </div>
+          <div className={cx('flex flex-col gap-4', step === STEP_SCHEDULE ? 'flex' : 'hidden')}>
+            <Field label={CAMPAIGNS_PAGE.builder.fields.scheduleKind}>
+              <Combobox
+                name="scheduleKind"
+                value={scheduleKind}
+                onChange={setScheduleKind}
+                options={SCHEDULE_OPTIONS}
+                placeholder={CAMPAIGNS_PAGE.builder.fields.scheduleKind}
+                emptyMessage={CAMPAIGNS_PAGE.results.empty}
+              />
+            </Field>
 
             {scheduleKind !== 'DAILY_AT' ? (
               <div className="flex flex-col gap-4 panel:flex-row">
                 <Field
                   label={CAMPAIGNS_PAGE.builder.fields.localDate}
-                  required={scheduleKind !== 'DAILY_AT'}
+                  required
                   className="flex-1"
                 >
                   <TextInput
@@ -268,7 +326,9 @@ export function CampaignBuilder({
                       name="localTime"
                       dir="ltr"
                       inputMode="numeric"
-                      defaultValue={proposal?.scheduledTime ?? CAMPAIGNS_PAGE.builder.hints.defaultTime}
+                      defaultValue={
+                        proposal?.scheduledTime ?? CAMPAIGNS_PAGE.builder.hints.defaultTime
+                      }
                       placeholder={CAMPAIGNS_PAGE.builder.hints.defaultTime}
                     />
                   </Field>
@@ -280,11 +340,20 @@ export function CampaignBuilder({
                   name="localTime"
                   dir="ltr"
                   inputMode="numeric"
-                  defaultValue={proposal?.scheduledTime ?? CAMPAIGNS_PAGE.builder.hints.defaultTime}
+                  defaultValue={
+                    proposal?.scheduledTime ?? CAMPAIGNS_PAGE.builder.hints.defaultTime
+                  }
                   placeholder={CAMPAIGNS_PAGE.builder.hints.defaultTime}
                 />
               </Field>
             )}
+
+            <Field
+              label={CAMPAIGNS_PAGE.builder.fields.dailyCap}
+              hint={CAMPAIGNS_PAGE.builder.hints.dailyCap}
+            >
+              <TextInput name="dailyCap" inputMode="numeric" dir="ltr" />
+            </Field>
 
             <label className="flex items-center gap-3 text-sm font-semibold text-ink">
               <input
@@ -296,17 +365,44 @@ export function CampaignBuilder({
               {CAMPAIGNS_PAGE.builder.fields.isRecurring}
             </label>
 
-            <FormAnswer answer={answer} />
-          </form>
-        </div>
+            <div
+              role="status"
+              className="flex items-start gap-3 rounded-md bg-info-bg px-4 py-3 text-sm text-info [border:1px_solid_var(--info)]"
+            >
+              <Icon name="info" size="card" />
+              <span>{chrome.attribution}</span>
+            </div>
+          </div>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-line p-6">
-          <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
-            {CAMPAIGNS_PAGE.builder.actions.cancel}
+          <FormAnswer answer={answer} />
+        </form>
+
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-line p-6">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setStep((current) => Math.max(STEP_AUDIENCE, current - 1))}
+            disabled={step === STEP_AUDIENCE}
+          >
+            {chrome.prev}
           </Button>
-          <Button type="submit" form={BUILDER_FORM_ID} variant="primary" loading={pending}>
-            {CAMPAIGNS_PAGE.builder.actions.create}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {step < STEP_COUNT - 1 ? (
+              <Button
+                type="button"
+                variant="neutral"
+                onClick={() => setStep((current) => Math.min(STEP_COUNT - 1, current + 1))}
+              >
+                {chrome.next}
+              </Button>
+            ) : null}
+            <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
+              {CAMPAIGNS_PAGE.builder.actions.cancel}
+            </Button>
+            <Button type="submit" form={BUILDER_FORM_ID} variant="primary" loading={pending}>
+              {CAMPAIGNS_PAGE.builder.actions.create}
+            </Button>
+          </div>
         </footer>
       </div>
     </Overlay>
@@ -315,123 +411,6 @@ export function CampaignBuilder({
 
 /** The id the footer's submit button refers to, so the form and its button are one. */
 const BUILDER_FORM_ID = 'campaign-builder-form'
-
-/* ── The assistant's box ───────────────────────────────────────────────────── */
-
-/**
- * «دستیار کمپین» — one textarea, one button, and the proposal that comes back.
- *
- * The low-confidence hint renders beside a proposal the assistant did not match to a
- * purpose, because a default presented as an answer is the one failure the assistant
- * can make silently.
- */
-function AssistantBox({
-  brief,
-  onBriefChange,
-  proposal,
-  onApply,
-  answer,
-  onAnswer,
-  lowConfidenceHint,
-}: {
-  readonly brief: string
-  readonly onBriefChange: (value: string) => void
-  readonly proposal: AssistantProposal | null
-  readonly onApply: (proposal: AssistantProposal) => void
-  readonly answer: string | null
-  readonly onAnswer: (value: string | null) => void
-  readonly lowConfidenceHint: string
-}) {
-  const [pending, startTransition] = useTransition()
-  const [applied, setApplied] = useState(false)
-  const headingId = useId()
-
-  function interpret() {
-    startTransition(async () => {
-      const outcome = await interpretBriefAction(brief)
-      if (!outcome.ok) {
-        onAnswer(outcome.message)
-        return
-      }
-      onAnswer(null)
-      onApply(outcome.proposal)
-      setApplied(false)
-    })
-  }
-
-  const lowConfidence = proposal !== null && proposal.confidence < 1
-
-  return (
-    <section
-      aria-labelledby={headingId}
-      className="flex flex-col gap-3 rounded-lg border border-line bg-surface-2 p-4"
-    >
-      <div className="flex items-center gap-2">
-        <Icon name="treatment" size="compact" />
-        <h3 id={headingId} className="text-sm font-bold text-ink">
-          {CAMPAIGNS_PAGE.builder.assistant.title}
-        </h3>
-      </div>
-      <p className="text-xs text-ink-2">{CAMPAIGNS_PAGE.builder.assistant.lead}</p>
-
-      <TextArea
-        value={brief}
-        onChange={(event) => onBriefChange(event.currentTarget.value)}
-        placeholder={CAMPAIGNS_PAGE.builder.assistant.placeholder}
-        rows={3}
-      />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          size="small"
-          variant="neutral"
-          loading={pending}
-          disabled={brief.trim() === ''}
-          onClick={interpret}
-        >
-          {CAMPAIGNS_PAGE.builder.assistant.interpret}
-        </Button>
-        {proposal !== null && !applied ? (
-          <Button
-            type="button"
-            size="small"
-            variant="primary"
-            disabled={pending}
-            onClick={() => {
-              onApply(proposal)
-              setApplied(true)
-            }}
-          >
-            {CAMPAIGNS_PAGE.builder.assistant.apply}
-          </Button>
-        ) : null}
-      </div>
-
-      {lowConfidence ? (
-        <p
-          className="flex items-center gap-1 text-xs text-warning"
-          role="status"
-          aria-live="polite"
-        >
-          <Icon name="error" size="compact" />
-          {lowConfidenceHint}
-        </p>
-      ) : null}
-
-      {answer !== null ? (
-        <p
-          className="flex items-center gap-1 text-xs text-danger"
-          role="alert"
-          aria-live="polite"
-        >
-          <Icon name="error" size="compact" />
-          {answer}
-        </p>
-      ) : null}
-    </section>
-  )
-}
 
 /* ── The live count ────────────────────────────────────────────────────────── */
 
@@ -473,7 +452,9 @@ function useAudienceCount(groupId: string | null): { readonly hint: string | und
   if (state.groupId !== groupId) {
     return { hint: CAMPAIGNS_PAGE.builder.hints.audienceCountLoading }
   }
-  if (state.status === 'count') return { hint: CAMPAIGNS_PAGE.builder.hints.audienceCount(state.value) }
+  if (state.status === 'count') {
+    return { hint: CAMPAIGNS_PAGE.builder.hints.audienceCount(state.value) }
+  }
   if (state.status === 'error') return { hint: state.message }
   return { hint: CAMPAIGNS_PAGE.builder.hints.audienceCountLoading }
 }

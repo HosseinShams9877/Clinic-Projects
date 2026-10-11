@@ -37,11 +37,16 @@
 
 import type { ReactNode } from 'react'
 
+import { prisma, runInTenantScope } from '@/core/db'
 import { ROLE_LABELS } from '@/core/localization'
+import { formatDate, formatTime, fromUtcInstant, todayLocalDate } from '@/core/localization'
+import { realClock } from '@/core/lib/clock'
+import { todaysReminders } from '@/modules/notifications'
 
 import { PANEL_HOMES, PANEL_NAMES, PANEL_SCOPE } from '@/app/catalog'
 
 import { PanelChrome } from './PanelChrome'
+import type { NotificationItem } from './NotificationBell'
 import type { Panel } from './navigation'
 import { customerNavigation, staffNavigation } from './navigation'
 import {
@@ -49,6 +54,42 @@ import {
   requireStaffPanel,
   type PanelSession,
 } from './session'
+
+/**
+ * The day's notifications for the topbar bell, read once per request by the shell.
+ *
+ * **Documented exception to the shell's "no module reads" rule.** The shell is
+ * otherwise pure composition (see this file's header), but the bell is a shell-level
+ * element every panel carries, and its feed is one tenant-scoped query — so the shell
+ * makes this single read rather than every page re-wiring the same bell. The rows are
+ * flattened to plain data for `NotificationBell`; the time uses the default clinic
+ * offset, which is the whole-product default `fromUtcInstant` already applies.
+ */
+async function loadNotifications(
+  permissions: Parameters<typeof runInTenantScope>[0],
+  tenantId: string,
+): Promise<readonly NotificationItem[]> {
+  const rows = await runInTenantScope(permissions, prisma(), (tx) =>
+    todaysReminders(tx, tenantId, realClock()),
+  )
+  return rows.map((row) => ({
+    id: row.id,
+    time: formatTime(fromUtcInstant(row.createdAt).localTime),
+    text: row.renderedText,
+  }))
+}
+
+/** The long Jalali date the topbar chip shows. */
+function todayLabel(): string {
+  return formatDate(todayLocalDate(realClock()), 'long')
+}
+
+/** Where the bell's «همه اعلان‌ها» leads, by panel. */
+function notificationsHrefFor(panel: Panel): string {
+  if (panel === 'reception') return '/reception/appointments?view=cartable'
+  if (panel === 'account') return '/account/appointments'
+  return `/${panel}/appointments`
+}
 
 export interface PanelShellProps {
   readonly panel: Panel
@@ -84,12 +125,16 @@ export async function PanelShell({ panel, children }: PanelShellProps) {
  */
 async function StaffPanelShell({ panel, children }: PanelShellProps) {
   const session: PanelSession = await requireStaffPanel(panel)
+  const notifications = await loadNotifications(session.permissions, session.tenantId)
 
   return (
     <PanelChrome
       panel={panel}
       panelName={PANEL_NAMES[panel]}
       roleLabel={ROLE_LABELS[session.role]}
+      dateLabel={todayLabel()}
+      notifications={notifications}
+      notificationsHref={notificationsHrefFor(panel)}
       nav={staffNavigation(panel, session.permissions)}
     >
       {children}
@@ -110,13 +155,17 @@ async function StaffPanelShell({ panel, children }: PanelShellProps) {
  * nowhere else.
  */
 async function CustomerPanelShell({ children }: Omit<PanelShellProps, 'panel'>) {
-  await requireCustomerPanel()
+  const session = await requireCustomerPanel()
+  const notifications = await loadNotifications(session.permissions, session.tenantId)
 
   return (
     <PanelChrome
       panel="account"
       panelName={PANEL_NAMES.account}
       roleLabel={null}
+      dateLabel={todayLabel()}
+      notifications={notifications}
+      notificationsHref={notificationsHrefFor('account')}
       nav={customerNavigation()}
     >
       {children}

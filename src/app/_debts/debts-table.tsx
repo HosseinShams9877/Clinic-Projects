@@ -23,7 +23,6 @@
  */
 
 import { DEBTS_PAGE } from '@/app/catalog'
-import { DebtBucket } from '@/core/constants'
 import {
   dateToLocalDate,
   asLocalDate,
@@ -31,8 +30,7 @@ import {
   formatMoney,
   formatPhone,
 } from '@/core/localization'
-import { DEBT_BUCKET_LABELS, DEBT_BUCKET_ORDER } from '@/modules/debts'
-import type { DebtBuckets, DebtRow } from '@/modules/debts'
+import type { DebtRow } from '@/modules/debts'
 import { cx } from '@/core/lib'
 
 import { DebtRowActions, type PaymentOptions } from './debts-forms'
@@ -46,7 +44,7 @@ import { DebtRowActions, type PaymentOptions } from './debts-forms'
  * so the cell is only drawn when both are present.
  */
 export interface DebtsTableProps {
-  readonly buckets: DebtBuckets
+  readonly rows: readonly DebtRow[]
   /** Whether the desk's three row actions belong on the table. */
   readonly showActions?: boolean
   /** The payment form's two closed lists, which only the desk's table renders. */
@@ -54,38 +52,11 @@ export interface DebtsTableProps {
 }
 
 /**
- * The four buckets, as the three pages render them.
- *
- * The bucket a list holds is the list's own heading, and the heading is the module's
- * label for the bucket — the four names are the four the document names, and a fifth
- * list would need a fifth bucket the module does not have.
+ * The debts, as one flat table — the four severity buckets are a chip filter on the
+ * page now, not stacked sections, so the table renders whatever slice the page passes.
  */
-export function DebtsTable({ buckets, showActions, paymentOptions }: DebtsTableProps) {
-  const lists: Readonly<Record<DebtBucket, readonly DebtRow[]>> = {
-    [DebtBucket.Over30Days]: buckets.overdue30,
-    [DebtBucket.Over7Days]: buckets.overdue7,
-    [DebtBucket.PastDue]: buckets.overdue,
-    [DebtBucket.DueSoon]: buckets.dueSoon,
-  }
-
-  return (
-    <div className="flex flex-col gap-8">
-      {DEBT_BUCKET_ORDER.map((bucket) => (
-        <section key={bucket} className="flex flex-col gap-3">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
-            <BucketBadge bucket={bucket} />
-            {DEBT_BUCKET_LABELS[bucket]}
-            <span className="text-sm font-normal text-ink-3">({lists[bucket].length})</span>
-          </h2>
-          <BucketTable
-            rows={lists[bucket]}
-            showActions={showActions}
-            paymentOptions={paymentOptions}
-          />
-        </section>
-      ))}
-    </div>
-  )
+export function DebtsTable({ rows, showActions, paymentOptions }: DebtsTableProps) {
+  return <BucketTable rows={rows} showActions={showActions} paymentOptions={paymentOptions} />
 }
 
 /** One bucket's rows, or its own empty sentence when there are none. */
@@ -188,25 +159,6 @@ function customerName(row: DebtRow): string {
   return row.customerLastName === null
     ? row.customerFirstName
     : `${row.customerFirstName} ${row.customerLastName}`
-}
-
-/** One bucket, as the severity chip the heading renders. */
-function BucketBadge({ bucket }: { readonly bucket: DebtBucket }) {
-  return (
-    <span
-      className={cx(
-        'inline-flex size-2 rounded-pill',
-        bucket === DebtBucket.Over30Days
-          ? 'bg-danger'
-          : bucket === DebtBucket.Over7Days
-            ? 'bg-brand-500'
-            : bucket === DebtBucket.PastDue
-              ? 'bg-warning'
-              : 'bg-ink-3',
-      )}
-      aria-hidden="true"
-    />
-  )
 }
 
 /** One column header, with the alignment the design system's tables keep. */

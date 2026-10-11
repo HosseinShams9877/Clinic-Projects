@@ -42,17 +42,21 @@ import {
 import {
   dateToLocalDate,
   formatDate,
+  formatPercent,
   toPersianDigits,
 } from '@/core/localization'
 import { cx } from '@/core/lib'
+import { Icon } from '@/core/components/icons'
+import type { IconName } from '@/core/components/icons'
 
-import { LEADS_PAGE } from '@/app/catalog'
+import { LEADS_PAGE, RECEPTION_LEADS } from '@/app/catalog'
 import { loadLeadsCartable } from '@/app/_customers/page-data'
 import {
   LeadRowActions,
   NewLeadDialog,
 } from '@/app/_customers/lead-forms'
 import { requireStaffPanel } from '@/app/_shell/session'
+import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 
 export const metadata: Metadata = { title: LEADS_PAGE.title }
 
@@ -81,6 +85,16 @@ export default async function LeadsPage({
     loadLeadsCartable({ tx, ctx: session.permissions, status }),
   )
 
+  const page = pageFromParam(params.page)
+  const { slice, totalPages } = paginate(data.rows, page)
+  const hrefFor = (next: number): string => {
+    const sp = new URLSearchParams()
+    if (status !== undefined && status !== '') sp.set(STATUS_PARAM, status)
+    if (next > 1) sp.set('page', String(next))
+    const qs = sp.toString()
+    return qs === '' ? BASE_PATH : `${BASE_PATH}?${qs}`
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 panel:flex-row panel:items-end panel:justify-between">
@@ -103,7 +117,7 @@ export default async function LeadsPage({
         <div className="overflow-x-auto rounded-lg border border-line bg-surface">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-line bg-surface-2 text-ink-3">
+              <tr className="border-b border-line-2 bg-surface-2 text-ink-3">
                 <Th>{LEADS_PAGE.columns.name}</Th>
                 <Th>{LEADS_PAGE.columns.mobile}</Th>
                 <Th>{LEADS_PAGE.columns.source}</Th>
@@ -114,7 +128,7 @@ export default async function LeadsPage({
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((row) => (
+              {slice.map((row) => (
                 <tr key={row.id} className="border-b border-line align-top last:border-b-0">
                   <td className="px-4 py-3 font-semibold text-ink">{leadName(row)}</td>
                   <td className="px-4 py-3 text-ink-2 tabular-nums" dir="ltr">
@@ -145,13 +159,15 @@ export default async function LeadsPage({
           </table>
         </div>
       )}
+
+      <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
     </div>
   )
 }
 
 /* ── The KPI row ───────────────────────────────────────────────────────────── */
 
-/** The four counts, as the cartable's own cards render them. */
+/** The four KPI tiles, derived from the lead counts over the whole cartable. */
 function CountsRow({
   counts,
 }: {
@@ -162,37 +178,39 @@ function CountsRow({
     readonly lostCount: number
   }
 }) {
+  const total = counts.newCount + counts.followingCount + counts.convertedCount + counts.lostCount
+  const rate = total === 0 ? 0 : counts.convertedCount / total
   return (
     <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
-      <CountCard label={LEADS_PAGE.counts.new} value={counts.newCount} tone="warn" />
-      <CountCard label={LEADS_PAGE.counts.following} value={counts.followingCount} />
-      <CountCard label={LEADS_PAGE.counts.converted} value={counts.convertedCount} tone="ok" />
-      <CountCard label={LEADS_PAGE.counts.lost} value={counts.lostCount} tone="muted" />
+      <CountCard label={RECEPTION_LEADS.kpi.unanswered} value={toPersianDigits(counts.newCount)} icon="phone" tone="bg-warn-bg text-warn" />
+      <CountCard label={RECEPTION_LEADS.kpi.conversionRate} value={formatPercent(rate)} icon="success" tone="bg-ok-bg text-ok" />
+      <CountCard label={RECEPTION_LEADS.kpi.total} value={toPersianDigits(total)} icon="customers" tone="bg-info-bg text-info" />
+      <CountCard label={RECEPTION_LEADS.kpi.following} value={toPersianDigits(counts.followingCount)} icon="message" tone="bg-brand-50 text-brand" />
     </div>
   )
 }
 
-/** One count, as a card with the tone the state's own weight carries. */
+/** One count, as an icon tile matching the cycles/debts KPI style. */
 function CountCard({
   label,
   value,
+  icon,
   tone,
 }: {
   readonly label: string
-  readonly value: number
-  readonly tone?: 'ok' | 'warn' | 'muted'
+  readonly value: string
+  readonly icon: IconName
+  readonly tone: string
 }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-line bg-surface p-4">
-      <span
-        className={cx(
-          'text-xs font-medium',
-          tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : tone === 'muted' ? 'text-ink-3' : 'text-ink-2',
-        )}
-      >
-        {label}
+    <div className="flex items-center gap-3 rounded-md border border-line bg-surface px-4 py-3">
+      <span className={cx('grid size-10 shrink-0 place-items-center rounded-md', tone)}>
+        <Icon name={icon} size="card" />
       </span>
-      <span className="text-2xl font-bold tabular-nums text-ink">{toPersianDigits(value)}</span>
+      <span className="flex flex-col">
+        <span className="text-xs text-ink-3">{label}</span>
+        <span className="text-xl font-bold tabular-nums text-ink">{value}</span>
+      </span>
     </div>
   )
 }
@@ -220,10 +238,10 @@ function ChipBar({ status }: { readonly status: string }) {
             href={href}
             aria-current={active ? 'page' : undefined}
             className={cx(
-              'rounded-pill px-4 py-2 text-sm font-semibold no-underline',
+              'shrink-0 rounded-xs border px-3 py-[6px] text-xs font-semibold no-underline',
               active
-                ? 'bg-brand text-surface'
-                : 'bg-surface-sunken text-ink-2 hover:bg-surface-2',
+                ? 'border-transparent bg-brand-50 text-brand-700'
+                : 'border-line-2 bg-surface text-ink-2 hover:bg-surface-2',
             )}
           >
             {chip.label}

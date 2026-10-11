@@ -19,13 +19,17 @@ import type { Metadata } from 'next'
 
 import { prisma, runInTenantScope } from '@/core/db'
 import { realClock } from '@/core/lib/clock'
+import { fromUtcInstant, todayLocalDate } from '@/core/localization'
 
 import { CYCLES_PAGE } from '@/app/catalog'
 import { CyclesTable } from '@/app/_cycles/cycles-table'
 import { contactList, readUtcOffsetMinutes } from '@/modules/cycles'
+import { clinicDay } from '@/modules/appointments'
+import { todaysReminders } from '@/modules/notifications'
 import { requireStaffPanel } from '@/app/_shell/session'
 
 import { CyclesChips, CyclesKpi, type CyclesCounts, type CyclesFilter } from './_components/cycles-board'
+import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 
 export const metadata: Metadata = { title: CYCLES_PAGE.reception.title }
 
@@ -50,33 +54,42 @@ export default async function ReceptionCyclesPage({
 }) {
   const session = await requireStaffPanel('reception')
   const now = realClock()
+  const today = todayLocalDate(now)
   const active = filterFromParam((await searchParams).filter)
 
-  const { rows, entries, offset } = await runInTenantScope(session.permissions, prisma(), async (tx) => {
-    const [list, offset] = await Promise.all([
-      contactList({ tx, ctx: session.permissions, now }),
-      readUtcOffsetMinutes(tx, session.tenantId),
-    ])
-    return {
-      rows: list,
-      offset,
-      // The desk's table keys its actions by the entry, which carries the mobile the row
-      // dials and the due day the desk reads.
-      entries: Object.fromEntries(list.map((entry) => [entry.id, entry])),
-    }
-  })
+  const { rows, entries, offset, sessionsToday, autoSms } = await runInTenantScope(
+    session.permissions,
+    prisma(),
+    async (tx) => {
+      const [list, offset, dayAppointments, reminders] = await Promise.all([
+        contactList({ tx, ctx: session.permissions, now }),
+        readUtcOffsetMinutes(tx, session.tenantId),
+        clinicDay({ tx, ctx: session.permissions, clinicId: session.permissions.clinicId, localDate: today }),
+        todaysReminders(tx, session.tenantId, now),
+      ])
+      return {
+        rows: list,
+        offset,
+        entries: Object.fromEntries(list.map((entry) => [entry.id, entry])),
+        sessionsToday: dayAppointments.filter((row) => row.status === 'COMPLETED' || row.status === 'ARRIVED').length,
+        autoSms: reminders.filter((row) => row.kind !== null).length,
+      }
+    },
+  )
 
-  // The KPI and chip counts are computed from the real rows, so a tile cannot disagree
-  // with the table: overdue = a scheduled contact whose day has passed, not-contacted =
-  // never called, scheduled = has a next contact booked.
+  // The KPI and chip counts are computed from the real rows: overdue = a scheduled
+  // contact whose day has passed, today-contact = one due today, not-contacted = never
+  // called. Sessions-today and auto-SMS come from the day's appointments and the ledger.
   const isOverdue = (row: (typeof rows)[number]) =>
     row.nextContactAt !== null && row.nextContactAt.getTime() < now.getTime()
   const isNotContacted = (row: (typeof rows)[number]) => row.lastContactAt === null
+  const isTodayContact = (row: (typeof rows)[number]) =>
+    row.nextContactAt !== null && fromUtcInstant(row.nextContactAt, offset).localDate === today
   const counts: CyclesCounts = {
-    total: rows.length,
     overdue: rows.filter(isOverdue).length,
-    notContacted: rows.filter(isNotContacted).length,
-    scheduled: rows.filter((row) => row.nextContactAt !== null).length,
+    todayContact: rows.filter(isTodayContact).length,
+    sessionsToday,
+    autoSms,
   }
 
   const visible =
@@ -86,6 +99,16 @@ export default async function ReceptionCyclesPage({
         ? rows.filter(isNotContacted)
         : rows
 
+  const page = pageFromParam((await searchParams).page)
+  const { slice, totalPages } = paginate(visible, page)
+  const hrefFor = (next: number): string => {
+    const sp = new URLSearchParams()
+    if (active !== 'all') sp.set('filter', active)
+    if (next > 1) sp.set('page', String(next))
+    const qs = sp.toString()
+    return qs === '' ? BASE_PATH : `${BASE_PATH}?${qs}`
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
@@ -94,15 +117,17 @@ export default async function ReceptionCyclesPage({
       </div>
 
       <CyclesKpi counts={counts} />
-      <CyclesChips active={active} counts={counts} basePath={BASE_PATH} />
+      <CyclesChips active={active} basePath={BASE_PATH} />
 
       <CyclesTable
-        rows={visible}
+        rows={slice}
         contactEntries={entries}
         utcOffsetMinutes={offset}
         showDeskActions
         emptyMessage={CYCLES_PAGE.empty.list}
       />
+
+      <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
     </div>
   )
 }

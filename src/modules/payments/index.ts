@@ -75,3 +75,5 @@ export {
   recordPaymentSchema,
   type RecordPaymentForm,
 } from './validation/record-payment'
+
+export { paymentsThisMonth } from './lib/aggregate'

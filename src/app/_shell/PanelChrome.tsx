@@ -9,6 +9,9 @@ import { cx } from '@/core/lib'
 
 import { NAV_LABELS, SHELL_ARIA } from '@/app/catalog'
 
+import { TOPBAR } from './catalog'
+import { NotificationBell, type NotificationItem } from './NotificationBell'
+import { TopbarSearch } from './TopbarSearch'
 import { signOut } from './actions'
 import type { NavItem, Panel } from './navigation'
 import { panelPath } from './navigation'
@@ -18,10 +21,16 @@ export interface PanelChromeProps {
   readonly panelName: string
   readonly nav: readonly NavItem[]
   readonly roleLabel: string | null
+  /** The long Jalali date the topbar chip shows, computed by the shell. */
+  readonly dateLabel: string
+  /** The day's notifications for the bell, read once by the shell. */
+  readonly notifications: readonly NotificationItem[]
+  /** Where «همه اعلان‌ها» leads. */
+  readonly notificationsHref: string
   readonly children: React.ReactNode
 }
 
-export function PanelChrome({ panel, panelName, nav, roleLabel, children }: PanelChromeProps) {
+export function PanelChrome({ panel, panelName, nav, roleLabel, dateLabel, notifications, notificationsHref, children }: PanelChromeProps) {
   const pathname = usePathname()
 
   // The drawer belongs to the route it was opened on, so a navigation closes it by
@@ -129,18 +138,52 @@ export function PanelChrome({ panel, panelName, nav, roleLabel, children }: Pane
           >
             <Icon name="menu" size="nav" />
           </button>
-          <h2 className="min-w-0 text-lg font-bold tracking-[var(--ls-heading)] text-ink">
-            {panelName}
-          </h2>
-          <div className="ms-auto flex items-center gap-3">
+
+          {panel === 'account' ? (
+            <label className="flex min-w-0 max-w-md flex-1 items-center gap-2 rounded-pill bg-surface-sunken px-4 py-2 text-ink-2">
+              <Icon name="search" size="compact" />
+              <input
+                type="search"
+                className="min-w-0 flex-1 border-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-3"
+                placeholder={TOPBAR.searchPlaceholder}
+                aria-label={TOPBAR.searchLabel}
+              />
+            </label>
+          ) : (
+            <TopbarSearch
+              panel={panel}
+              basePath={`/${panel}/customers`}
+              detailPath={panel === 'reception' ? '/reception/customers' : null}
+            />
+          )}
+
+          <div className="ms-auto flex items-center gap-2">
+            <span className="flex items-center gap-2 rounded-pill bg-surface-2 px-3 py-1 text-sm text-ink-2 max-panel:hidden">
+              <Icon name="calendar" size="compact" />
+              <span className="whitespace-nowrap tabular-nums">{dateLabel}</span>
+            </span>
+
+            <button
+              type="button"
+              className={cx(
+                'grid size-[38px] shrink-0 place-items-center rounded-sm border-none bg-transparent text-ink-2 max-panel:hidden',
+                '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
+                'hover:bg-surface-sunken hover:text-ink',
+              )}
+              aria-label={TOPBAR.messagesLabel}
+            >
+              <Icon name="message" size="nav" />
+            </button>
+
+            <NotificationBell items={notifications} allHref={notificationsHref} />
+
             {roleLabel === null ? null : (
-              <span className="flex items-center gap-2 rounded-pill bg-surface-sunken px-3 py-1 text-ink-2">
+              <span className="flex items-center gap-2 rounded-pill bg-surface-sunken px-2 py-1 text-ink-2">
                 <span className="grid size-[26px] shrink-0 place-items-center rounded-pill bg-brand-50 text-brand">
                   <Icon name="customer" size="compact" />
                 </span>
-                <span className="whitespace-nowrap text-sm font-semibold max-panel:hidden">
-                  {roleLabel}
-                </span>
+                <span className="whitespace-nowrap text-sm font-semibold max-panel:hidden">{roleLabel}</span>
+                <Icon name="chevronDown" size="compact" />
               </span>
             )}
           </div>

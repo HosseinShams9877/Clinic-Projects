@@ -7,6 +7,17 @@
  * `manage_users`, and the two modules it composes are the two that own what it renders
  * — `staff` for the rows and `roles-permissions` for the matrix's own rules.
  *
+ * ## What the demo holds that this page does not
+ *
+ * The demo's row carries a «بازنشانی رمز» button. No action resets a password — the
+ * staff module's writes are the invite, the overrides, the role and the two states, and
+ * a reset is a credential write the product holds nowhere — so the button is not
+ * rendered rather than rendered as a control that writes nothing. The demo's third
+ * status («مرخصی») names a state no membership column holds: a leave is a request the
+ * doctor makes and the manager approves, and a request the table renders is the fact,
+ * so the status column reads the membership's own two states and the leave table holds
+ * the rest.
+ *
  * ## Why the page renders the 16×3 matrix as a read (DoD 5, DoD 6)
  *
  * `04-roles-permissions.md` §2's matrix is a table of three columns and sixteen rows,
@@ -15,6 +26,11 @@
  * and the manager column's badge is the lock's first enforcement. What the page *edits*
  * is a membership's own overrides, in the modal the row opens (`04-roles-permissions.md`
  * §2.2), because the overrides are stored per membership and not per role.
+ *
+ * The demo's own «ذخیره» in the matrix's head is the demo's reading of the matrix as an
+ * editor, and the page holds no such button: the three columns are the defaults the
+ * module owns, and the one save the surface has is the modal's own, on the membership
+ * the manager chose.
  *
  * ## Why the audit trail is on the same page as the matrix (DoD 7)
  *
@@ -35,20 +51,24 @@
 import type { Metadata } from 'next'
 
 import { prisma, runInTenantScope } from '@/core/db'
-import { LeaveRequestStatus, PERMISSIONS, Role, isMember } from '@/core/constants'
+import { LeaveRequestStatus, PERMISSIONS, Permission, Role, isMember } from '@/core/constants'
 import {
   PERMISSION_LABELS,
   ROLE_LABELS,
   dateToLocalDate,
   formatDate,
+  toPersianDigits,
   type LocalDate,
 } from '@/core/localization'
 import { Icon } from '@/core/components/icons'
 import { cx } from '@/core/lib'
 
 import { STAFF_PAGE } from '@/app/catalog'
+import { ADMIN_STAFF } from '@/app/admin/catalog'
+import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import {
   loadStaffPage,
+  permissionCount,
   permissionGrid,
   type StaffPageData,
 } from '@/app/_staff/page-data'
@@ -59,31 +79,61 @@ import {
 } from '@/app/_staff/staff-forms'
 import { requireStaffPanel } from '@/app/_shell/session'
 import { ROLE_DEFAULTS } from '@/modules/roles-permissions'
-import { LEAVE_STATUS_LABELS } from '@/modules/staff'
+import { LEAVE_STATUS_LABELS, type StaffRow } from '@/modules/staff'
 
 export const metadata: Metadata = { title: STAFF_PAGE.title }
 
-/** The three tables, read in one transaction. */
-export default async function StaffPage() {
+/** The page's own route, as the pagination links to. */
+const BASE_PATH = '/admin/staff'
+
+/** The href for a page of the staff list, which is the list's only filter. */
+function pageHrefFor(next: number): string {
+  return next > 1 ? `${BASE_PATH}?page=${String(next)}` : BASE_PATH
+}
+
+/** The search params every page in the product reads, as the framework hands them. */
+type PageSearchParams = Promise<{ readonly [key: string]: string | string[] | undefined }>
+
+/**
+ * «کارکنان و دسترسی» — the list, the matrix, the leaves and the trail.
+ */
+export default async function StaffPage({ searchParams }: { readonly searchParams: PageSearchParams }) {
   const session = await requireStaffPanel('admin')
+  const params = await searchParams
+  const page = pageFromParam(params.page)
 
   const data = await runInTenantScope(session.permissions, prisma(), (tx) =>
     loadStaffPage({ tx, ctx: session.permissions }),
   )
 
+  const { slice, totalPages } = paginate(data.staff, page)
+  const roleCount = new Set(data.staff.map((row) => row.role)).size
+
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-3 panel:flex-row panel:items-end panel:justify-between">
-        <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold text-ink">{STAFF_PAGE.title}</h1>
-          <p className="text-sm text-ink-2">{STAFF_PAGE.lead}</p>
+          <p className="text-sm text-ink-2">
+            {`${toPersianDigits(data.staff.length)} ${ADMIN_STAFF.subUsers} · ${toPersianDigits(
+              roleCount,
+            )} ${ADMIN_STAFF.subRoles}`}
+          </p>
         </div>
         <NewStaffDialog />
       </div>
 
-      <RoleMatrix />
+      <div
+        role="status"
+        className="flex items-start gap-3 rounded-md bg-info-bg px-4 py-3 text-sm text-info [border:1px_solid_var(--info)]"
+      >
+        <Icon name="info" size="card" />
+        <span>{ADMIN_STAFF.alert}</span>
+      </div>
 
-      <StaffList data={data} />
+      <StaffList data={data} slice={slice} totalPages={totalPages} page={page} />
+
+      <RoleMatrix />
 
       <LeaveTable data={data} />
 
@@ -104,15 +154,18 @@ export default async function StaffPage() {
  */
 function RoleMatrix() {
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
-      <h2 className="text-base font-bold text-ink">{STAFF_PAGE.matrix.title}</h2>
-      <p className="text-sm text-ink-2">{STAFF_PAGE.matrix.lead}</p>
+    <section className="flex flex-col rounded-lg border border-line bg-surface">
+      <div className="border-b border-line px-4 py-3">
+        <h2 className="text-base font-bold text-ink">{STAFF_PAGE.matrix.title}</h2>
+        <p className="text-sm text-ink-2">{STAFF_PAGE.matrix.lead}</p>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">{STAFF_PAGE.matrix.title}</caption>
           <thead>
-            <tr className="border-b border-line text-ink-3">
+            <tr className="border-b border-line bg-surface-2 text-ink-3">
               <Th>{STAFF_PAGE.columns.permissions}</Th>
+              <Th>{ADMIN_STAFF.matrixDescription}</Th>
               {Object.values(Role).map((role) => (
                 <Th key={role} className="text-center">
                   {ROLE_LABELS[role]}
@@ -122,25 +175,28 @@ function RoleMatrix() {
           </thead>
           <tbody>
             {PERMISSION_LABELS_MATRIX.map((row) => (
-              <tr key={row.permission} className="border-b border-line last:border-b-0">
-                <td className="px-3 py-2 font-semibold text-ink">{row.label}</td>
+              <tr key={row.permission} className="border-b border-line align-top last:border-b-0">
+                <td className="px-4 py-3 font-semibold text-ink">{row.label}</td>
+                <td className="px-4 py-3 text-xs text-ink-3">
+                  {ADMIN_STAFF.permissionDescriptions[row.permission]}
+                </td>
                 {row.manager ? (
-                  <td className="px-3 py-2 text-center">
-                    <span className="inline-flex rounded-pill bg-neutral-bg px-2 py-1 text-xs font-semibold text-ink-3">
+                  <td className="px-4 py-3 text-center">
+                    <span className="inline-flex rounded-pill bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-700">
                       {STAFF_PAGE.matrix.managerLocked}
                     </span>
                   </td>
                 ) : (
-                  <td className="px-3 py-2 text-center text-ink-3">—</td>
+                  <td className="px-4 py-3 text-center text-ink-3">—</td>
                 )}
-                <td className="px-3 py-2 text-center">{row.doctor ? <Tick /> : <Dash />}</td>
-                <td className="px-3 py-2 text-center">{row.secretary ? <Tick /> : <Dash />}</td>
+                <td className="px-4 py-3 text-center">{row.doctor ? <Tick /> : <Dash />}</td>
+                <td className="px-4 py-3 text-center">{row.secretary ? <Tick /> : <Dash />}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-ink-3">{STAFF_PAGE.matrix.hint}</p>
+      <p className="border-t border-line px-4 py-3 text-xs text-ink-3">{STAFF_PAGE.matrix.hint}</p>
     </section>
   )
 }
@@ -157,7 +213,7 @@ const SECRETARY_DEFAULTS = new Set(ROLE_DEFAULTS[Role.Secretary])
  * never restates which permission a role holds.
  */
 const PERMISSION_LABELS_MATRIX: readonly {
-  readonly permission: string
+  readonly permission: Permission
   readonly label: string
   readonly manager: boolean
   readonly doctor: boolean
@@ -172,8 +228,18 @@ const PERMISSION_LABELS_MATRIX: readonly {
 
 /* ── The staff list ───────────────────────────────────────────────────────── */
 
-/** The tenant's memberships, as the page's own table renders them. */
-function StaffList({ data }: { readonly data: StaffPageData }) {
+/** The staff list, as the page's own first table renders it. */
+function StaffList({
+  data,
+  slice,
+  totalPages,
+  page,
+}: {
+  readonly data: StaffPageData
+  readonly slice: readonly StaffRow[]
+  readonly totalPages: number
+  readonly page: number
+}) {
   if (data.staff.length === 0) {
     return (
       <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">
@@ -183,9 +249,11 @@ function StaffList({ data }: { readonly data: StaffPageData }) {
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-base font-bold text-ink">{STAFF_PAGE.columns.name}</h2>
-      <div className="overflow-x-auto rounded-lg border border-line bg-surface">
+    <section className="flex flex-col rounded-lg border border-line bg-surface">
+      <div className="border-b border-line px-4 py-3">
+        <h2 className="text-base font-bold text-ink">{STAFF_PAGE.columns.name}</h2>
+      </div>
+      <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">{STAFF_PAGE.title}</caption>
           <thead>
@@ -194,19 +262,35 @@ function StaffList({ data }: { readonly data: StaffPageData }) {
               <Th>{STAFF_PAGE.columns.mobile}</Th>
               <Th>{STAFF_PAGE.columns.role}</Th>
               <Th>{STAFF_PAGE.columns.status}</Th>
+              <Th>{STAFF_PAGE.columns.permissions}</Th>
               <Th>{STAFF_PAGE.columns.actions}</Th>
             </tr>
           </thead>
           <tbody>
-            {data.staff.map((row) => (
+            {slice.map((row) => (
               <tr key={row.id} className="border-b border-line align-top last:border-b-0">
-                <td className="px-4 py-3 font-semibold text-ink">{staffName(row)}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="grid size-9 shrink-0 place-items-center rounded-pill bg-brand-50 text-sm font-bold text-brand-700"
+                    >
+                      {row.user.firstName.slice(0, 1)}
+                    </span>
+                    <span className="font-semibold text-ink">{staffName(row)}</span>
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-ink-2 tabular-nums" dir="ltr">
                   {row.user.mobile}
                 </td>
-                <td className="px-4 py-3 text-ink-2">{roleLabel(row.role)}</td>
+                <td className="px-4 py-3">
+                  <RoleBadge role={row.role} />
+                </td>
                 <td className="px-4 py-3">
                   <ActiveBadge active={row.isActive} />
+                </td>
+                <td className="px-4 py-3 text-xs text-ink-3">
+                  {permissionText(row)}
                 </td>
                 <td className="px-4 py-3">
                   <StaffRowActions membership={row} grid={permissionGrid(row)} />
@@ -216,7 +300,49 @@ function StaffList({ data }: { readonly data: StaffPageData }) {
           </tbody>
         </table>
       </div>
+      <div className="flex flex-col gap-3 border-t border-line px-4 py-3 panel:flex-row panel:items-center panel:justify-between">
+        <p className="text-xs text-ink-3 tabular-nums">
+          {`${ADMIN_STAFF.showingPrefix}${toPersianDigits(
+            slice.length,
+          )}${ADMIN_STAFF.showingSuffix}`}
+        </p>
+        <Pagination page={page} totalPages={totalPages} hrefFor={pageHrefFor} />
+      </div>
     </section>
+  )
+}
+
+/**
+ * One membership's effective permission count, as the demo's own column renders it.
+ *
+ * The manager column is locked, so the count is the full set and not a fraction of it —
+ * the same fact the matrix renders as «همیشه» on all sixteen rows. The count comes from
+ * the module's own `effectivePermissions` through the page's helper, so the column and
+ * the modal's header are one number.
+ */
+function permissionText(row: StaffRow): string {
+  const count = permissionCount(row)
+  if (count === PERMISSIONS.length) return ADMIN_STAFF.permissionFull
+  return `${toPersianDigits(count)}${ADMIN_STAFF.permissionOf}${toPersianDigits(PERMISSIONS.length)}`
+}
+
+/**
+ * One membership's role, as the badge the role column renders.
+ *
+ * The manager is the one role the matrix locks, so the badge is the brand tone the
+ * matrix's own column carries; the other two are the neutral badge a default renders as.
+ */
+function RoleBadge({ role }: { readonly role: string }) {
+  const isManagerRole = isMember(Role, role) && role === Role.Manager
+  return (
+    <span
+      className={cx(
+        'inline-flex rounded-pill px-2 py-1 text-xs font-semibold',
+        isManagerRole ? 'bg-brand-50 text-brand-700' : 'bg-neutral-bg text-ink-3',
+      )}
+    >
+      {roleLabel(role)}
+    </span>
   )
 }
 

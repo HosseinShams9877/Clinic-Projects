@@ -44,7 +44,15 @@ import type { CustomersMessageKey } from '../catalog'
 /** The most a list page reads in one go; a clinic's customer file is not a page. */
 const LIST_LIMIT = 100
 
-/** The columns the list pages render. */
+/**
+ * The columns the list pages render.
+ *
+ * The five the manager's own file adds — `birthDate`, `acquisitionSource`, the two
+ * money totals and the WhatsApp consent — are here and not in a second `select`
+ * because the file is one read and the two pages that render it are two scopes of it;
+ * a desk that does not show the columns still carries the fields, which is cheaper
+ * than a second query the manager's page would have had to open on its own.
+ */
 const LIST_SELECT = {
   id: true,
   firstName: true,
@@ -56,9 +64,20 @@ const LIST_SELECT = {
   lastVisitAt: true,
   completedSessions: true,
   isActive: true,
+  birthDate: true,
+  acquisitionSource: true,
+  chargedTotal: true,
+  paidTotal: true,
+  consentWhatsApp: true,
 } as const
 
-/** One customer row, as the list pages render it. */
+/**
+ * One customer row, as the list pages render it.
+ *
+ * The five fields the manager's file renders are additive: a page that does not show
+ * them ignores them, and the profile spreads the same row and re-declares the three
+ * it renders beside (`CustomerProfile extends CustomerListRow`).
+ */
 export interface CustomerListRow {
   readonly id: string
   readonly firstName: string
@@ -70,6 +89,15 @@ export interface CustomerListRow {
   readonly lastVisitAt: Date | null
   readonly completedSessions: number
   readonly isActive: boolean
+  /** The Jalali-ISO `LocalDate` the profile holds, or `null` when it was never taken. */
+  readonly birthDate: string | null
+  readonly acquisitionSource: string | null
+  /** The rial the customer has been charged, the column the manager's balance cell reads. */
+  readonly chargedTotal: bigint
+  /** The rial the customer has paid, which the balance cell subtracts from the charged. */
+  readonly paidTotal: bigint
+  /** Whether the customer consented to WhatsApp, which the file's «پیام» cell answers. */
+  readonly consentWhatsApp: boolean
 }
 
 /**
@@ -344,6 +372,11 @@ function asListRow(row: ListSelectRow): CustomerListRow {
     lastVisitAt: row.lastVisitAt,
     completedSessions: row.completedSessions,
     isActive: row.isActive,
+    birthDate: row.birthDate,
+    acquisitionSource: row.acquisitionSource,
+    chargedTotal: row.chargedTotal,
+    paidTotal: row.paidTotal,
+    consentWhatsApp: row.consentWhatsApp,
   }
 }
 
@@ -359,4 +392,9 @@ type ListSelectRow = {
   readonly lastVisitAt: Date | null
   readonly completedSessions: number
   readonly isActive: boolean
+  readonly birthDate: string | null
+  readonly acquisitionSource: string | null
+  readonly chargedTotal: bigint
+  readonly paidTotal: bigint
+  readonly consentWhatsApp: boolean
 }

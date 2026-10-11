@@ -80,7 +80,7 @@ export function CustomersTable({
       <table className="w-full border-collapse text-sm">
         <caption className="sr-only">{CUSTOMERS_PAGE.reception.title}</caption>
         <thead>
-          <tr className="border-b border-line bg-surface-2 text-ink-3">
+          <tr className="border-b border-line-2 bg-surface-2 text-ink-3">
             <Th>{CUSTOMERS_PAGE.columns.name}</Th>
             <Th>{CUSTOMERS_PAGE.columns.mobile}</Th>
             <Th>{CUSTOMERS_PAGE.columns.lifecycle}</Th>

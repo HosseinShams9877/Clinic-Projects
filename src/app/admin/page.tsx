@@ -17,6 +17,9 @@ import type { Metadata } from 'next'
 import { prisma, runInTenantScope } from '@/core/db'
 import { formatNumber, fromUtcInstant } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
+import { cx } from '@/core/lib'
+import { Icon } from '@/core/components/icons'
+import type { IconName } from '@/core/components/icons'
 
 import { PANEL_HOMES, PANEL_SCOPE } from '@/app/catalog'
 import { requireStaffPanel } from '@/app/_shell/session'
@@ -44,39 +47,54 @@ export default async function AdminHomePage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold text-ink">{DASHBOARD_FIELDS.today}</h2>
         <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
-          <CountCard label={DASHBOARD_FIELDS.todayTotal} value={home.today.total} />
-          <CountCard label={DASHBOARD_FIELDS.completed} value={home.today.completed} />
-          <CountCard label={DASHBOARD_FIELDS.noShows} value={home.today.noShows} />
-          <CountCard label={DASHBOARD_FIELDS.awaitingArrival} value={home.today.awaitingArrival} />
+          <CountCard label={DASHBOARD_FIELDS.todayTotal} value={home.today.total} icon="appointment" tone="bg-info-bg text-info" />
+          <CountCard label={DASHBOARD_FIELDS.completed} value={home.today.completed} icon="success" tone="bg-ok-bg text-ok" />
+          <CountCard label={DASHBOARD_FIELDS.noShows} value={home.today.noShows} icon="error" tone="bg-danger-bg text-danger" />
+          <CountCard label={DASHBOARD_FIELDS.awaitingArrival} value={home.today.awaitingArrival} icon="clock" tone="bg-warn-bg text-warn" />
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold text-ink">{DASHBOARD_FIELDS.month}</h2>
         <div className="grid grid-cols-2 gap-3 panel:grid-cols-3">
-          <CountCard label={DASHBOARD_FIELDS.newCustomers} value={home.month.newCustomers} />
-          <CountCard label={DASHBOARD_FIELDS.cyclesCompleted} value={home.month.cyclesCompleted} />
-          <CountCard label={DASHBOARD_FIELDS.cyclesAbandoned} value={home.month.cyclesAbandoned} />
+          <CountCard label={DASHBOARD_FIELDS.newCustomers} value={home.month.newCustomers} icon="customer" tone="bg-brand-50 text-brand" />
+          <CountCard label={DASHBOARD_FIELDS.cyclesCompleted} value={home.month.cyclesCompleted} icon="treatment" tone="bg-ok-bg text-ok" />
+          <CountCard label={DASHBOARD_FIELDS.cyclesAbandoned} value={home.month.cyclesAbandoned} icon="blocked" tone="bg-neutral-bg text-ink-3" />
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold text-ink">{DASHBOARD_FIELDS.overdueLead}</h2>
         <div className="grid grid-cols-2 gap-3">
-          <CountCard label={DASHBOARD_FIELDS.overdueCycles} value={home.overdueCycles} />
-          <CountCard label={DASHBOARD_FIELDS.dormantCustomers} value={home.dormantCustomers} />
+          <CountCard label={DASHBOARD_FIELDS.overdueCycles} value={home.overdueCycles} icon="alert" tone="bg-danger-bg text-danger" />
+          <CountCard label={DASHBOARD_FIELDS.dormantCustomers} value={home.dormantCustomers} icon="phone" tone="bg-warn-bg text-warn" />
         </div>
       </section>
     </div>
   )
 }
 
-/** One count, as the home's grid renders it: a label and the number it names. */
-function CountCard({ label, value }: { readonly label: string; readonly value: number }) {
+/** One count, as the demo's KPI tile: a colored icon square, the label, and the number. */
+function CountCard({
+  label,
+  value,
+  icon,
+  tone,
+}: {
+  readonly label: string
+  readonly value: number
+  readonly icon: IconName
+  readonly tone: string
+}) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-line bg-surface px-4 py-3">
-      <span className="text-xs text-ink-3">{label}</span>
-      <span className="text-2xl font-bold text-ink">{formatNumber(value)}</span>
+    <div className="flex items-center gap-3 rounded-md border border-line bg-surface px-4 py-3">
+      <span className={cx('grid size-10 shrink-0 place-items-center rounded-md', tone)}>
+        <Icon name={icon} size="card" />
+      </span>
+      <span className="flex flex-col">
+        <span className="text-xs text-ink-3">{label}</span>
+        <span className="text-xl font-bold text-ink tabular-nums">{formatNumber(value)}</span>
+      </span>
     </div>
   )
 }

@@ -55,7 +55,12 @@ import {
   type CampaignProposal,
   interpretCampaignBrief,
 } from '@/modules/campaign-assistant'
-import { type AudienceGroupRow, listAudienceGroups } from '@/modules/audience-groups'
+import {
+  type AudienceGroupRow,
+  evaluateGroup,
+  listAudienceGroups,
+  loadAudienceGroup,
+} from '@/modules/audience-groups'
 
 /** The manager panel the seven actions run under. */
 const CAMPAIGNS_PANEL: Panel = 'admin'
@@ -163,6 +168,79 @@ export async function previewAudienceCountAction(
   } catch (error) {
     return { ok: false, message: moduleFailureMessage(error) }
   }
+}
+
+/* ── The assistant's sample ───────────────────────────────────────────────── */
+
+/** The audience's own face, as the assistant's output panel renders it. */
+export interface AudienceSample {
+  /** The whole audience's size, which is the count the panel names beside the names. */
+  readonly count: number
+  /** Up to five of the audience's customers, in the evaluation's own order. */
+  readonly names: readonly string[]
+}
+
+/** How many names the panel reads, because five is the panel the demo renders. */
+const SAMPLE_SIZE = 5
+
+/**
+ * The audience behind the assistant's proposal — who it reaches, and how many of them.
+ *
+ * The same evaluation the dispatch runs, capped at the five names the panel shows, so a
+ * manager reads the people a campaign is about and not only its count. The count is the
+ * whole audience and the names are its first five, so the two never disagree about the
+ * one group they describe.
+ */
+export async function previewAudienceSampleAction(
+  audienceGroupId: string,
+): Promise<{ readonly ok: true; readonly sample: AudienceSample } | FormFailure> {
+  const session = await resolveStaffPanel(CAMPAIGNS_PANEL)
+  try {
+    const sample = await runInTenantScope(session.permissions, prisma(), async (tx) => {
+      const group = await loadAudienceGroup(tx, session.permissions.tenantId, audienceGroupId)
+      const customerIds = group.isActive
+        ? await evaluateGroup({
+            tx,
+            tenantId: session.permissions.tenantId,
+            predicate: group.predicate,
+            now: realClock(),
+          })
+        : []
+      return Object.freeze({
+        count: customerIds.length,
+        names: await customerNames(tx, session.permissions.tenantId, customerIds.slice(0, SAMPLE_SIZE)),
+      })
+    })
+    return { ok: true, sample }
+  } catch (error) {
+    return { ok: false, message: moduleFailureMessage(error) }
+  }
+}
+
+/**
+ * The customers the sample names, in the order the evaluation returned them.
+ *
+ * An id the row no longer holds is a customer removed between the evaluation and the
+ * read, and the panel drops it rather than naming someone who is gone.
+ */
+async function customerNames(
+  tx: TransactionClient,
+  tenantId: string,
+  ids: readonly string[],
+): Promise<readonly string[]> {
+  if (ids.length === 0) return []
+  const rows = await tx.customer.findMany({
+    where: { id: { in: [...ids] }, tenantId },
+    select: { id: true, firstName: true, lastName: true },
+  })
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  return ids
+    .map((id) => {
+      const row = byId.get(id)
+      if (row === undefined) return null
+      return row.lastName === null ? row.firstName : `${row.firstName} ${row.lastName}`
+    })
+    .filter((name): name is string => name !== null)
 }
 
 /* ── The builder's one write ──────────────────────────────────────────────── */

@@ -89,19 +89,24 @@ export default async function AdminAppointmentsPage({
         day={typeof params.day === 'string' ? params.day : null}
       />
 
-      <div className="flex flex-col gap-4">
-        <DayNav localDate={localDate} basePath={BASE_PATH} />
-        <DayGrid
-          localDate={localDate}
-          doctors={data.doctors}
-          windows={data.windows}
-          rows={rows}
-          services={data.services}
-          customers={data.customers}
-          panel="admin"
-          writable={false}
-        />
-      </div>
+      <section className="flex flex-col rounded-md border border-line bg-surface">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+          <DayNav localDate={localDate} basePath={BASE_PATH} />
+          <h2 className="font-bold text-ink">{APPOINTMENTS_PAGE.gridTitle}</h2>
+        </header>
+        <div className="overflow-x-auto p-4">
+          <DayGrid
+            localDate={localDate}
+            doctors={data.doctors}
+            windows={data.windows}
+            rows={rows}
+            services={data.services}
+            customers={data.customers}
+            panel="admin"
+            writable={false}
+          />
+        </div>
+      </section>
     </div>
   )
 }

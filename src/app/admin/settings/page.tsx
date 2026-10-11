@@ -14,13 +14,26 @@
  * second place the six are listed, and a tab the surface did not read is a tab the
  * switch would render empty. The five reads the surface does not use are cheap: they
  * are the tenant's own row and the two small tables that hang off it.
+ *
+ * ## What the demo holds that this page does not
+ *
+ * The demo's head carries one «ذخیره تغییرات» button for the whole page. There is no
+ * such save: each tab is its own `<form>` and its own action, because the six tabs
+ * write six different parts of the tenant's row and a single submit would be one
+ * action that reaches into all of them — which the settings module does not expose.
+ * So the save stays on each tab's own form, where the demo's own forms also keep a
+ * save, and the head holds no button that would write nothing. The demo's own tab
+ * order puts «کلینیک» last; the page keeps the module's order (`SETTINGS_TABS`),
+ * where identity is first, because the order is the constants' and not the page's.
  */
 
 import type { Metadata } from 'next'
+import Link from 'next/link'
 
 import { prisma, runInTenantScope } from '@/core/db'
 import { Permission, MODULES } from '@/core/constants'
 import { toPersianDigits } from '@/core/localization'
+import { cx } from '@/core/lib'
 
 import { requireStaffPanel } from '@/app/_shell/session'
 import {
@@ -76,20 +89,25 @@ export default async function SettingsPage({
         <p className="text-sm text-ink-2">{SETTINGS_FIELDS.lead}</p>
       </div>
 
-      <nav className="flex flex-wrap gap-2">
-        {SETTINGS_TABS.map((each) => (
-          <a
-            key={each}
-            href={`/admin/settings?tab=${each}`}
-            className={
-              each === tab
-                ? 'rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-page'
-                : 'rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-ink-2'
-            }
-          >
-            {SETTINGS_TAB_LABELS[each]}
-          </a>
-        ))}
+      <nav className="flex items-center gap-2 max-panel:flex-nowrap max-panel:overflow-x-auto panel:flex-wrap">
+        {SETTINGS_TABS.map((each) => {
+          const active = each === tab
+          return (
+            <Link
+              key={each}
+              href={`/admin/settings?tab=${each}`}
+              aria-current={active ? 'page' : undefined}
+              className={cx(
+                'shrink-0 rounded-xs border px-3 py-[6px] text-xs font-semibold no-underline',
+                active
+                  ? 'border-transparent bg-brand-50 text-brand-700'
+                  : 'border-line-2 bg-surface text-ink-2 hover:bg-surface-2',
+              )}
+            >
+              {SETTINGS_TAB_LABELS[each]}
+            </Link>
+          )
+        })}
       </nav>
 
       <p className="text-sm text-ink-3">{SETTINGS_TAB_LEADS[tab]}</p>

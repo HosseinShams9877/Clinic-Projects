@@ -48,9 +48,9 @@ export const RECEPTION_CYCLES = {
   /** The four KPI tiles above the contact-list table. */
   kpi: {
     overdue: 'عقب‌افتاده',
-    notContacted: 'تماس نگرفته',
-    scheduled: 'پیگیری دارد',
-    total: 'کل دوره‌ها',
+    todayContact: 'تماس امروز',
+    sessionsToday: 'جلسه ثبت‌شده امروز',
+    autoSms: 'پیامک خودکار رفته',
   },
   /** The chip filter above the table. */
   filter: {
@@ -63,10 +63,58 @@ export const RECEPTION_CYCLES = {
 /** The debts page's reception-specific copy — the four KPI tiles above the buckets. */
 export const RECEPTION_DEBTS = {
   kpi: {
-    total: 'مجموع بدهی',
-    overdue: 'عقب‌افتاده',
-    dueSoon: 'سررسید نزدیک',
-    debtors: 'تعداد بدهکار',
+    collected: 'وصول‌شده این ماه',
+    avgDelay: 'میانگین تأخیر',
+    overdue: 'سررسید گذشته',
+    total: 'مجموع مانده',
   },
+  /** The «میانگین تأخیر» unit, appended to the day count. */
+  days: 'روز',
+  /** The chip filter's «all» label; the bucket labels come from the module. */
+  filterAll: 'همه',
+  /** The «ثبت دریافت» (m-pay) form's merged fields. */
+  pay: {
+    remainingAfter: 'مانده پس از این',
+    newDueDate: 'اگر تسویه نشد، سررسید جدید',
+  },
+} as const
+
+/** The leads page's reception-specific copy — the four KPI tiles. */
+export const RECEPTION_LEADS = {
+  kpi: {
+    unanswered: 'بی‌پاسخ',
+    conversionRate: 'نرخ تبدیل',
+    total: 'کل لیدها',
+    following: 'در حال پیگیری',
+  },
+} as const
+
+/** The customers page's reception-specific copy — the lifecycle chips and the detail route. */
+export const RECEPTION_CUSTOMERS = {
+  /** The lifecycle chip filter above the directory table. */
+  filter: {
+    all: 'همه',
+    customer: 'مشتری',
+    lead: 'لید',
+  },
+  /** The read-only detail route's own copy. */
+  detail: {
+    back: 'بازگشت به فهرست مشتریان',
+  },
+  /** The «افزودن مشتری» dialog. */
+  add: {
+    trigger: 'افزودن مشتری',
+    title: 'افزودن مشتری',
+    firstName: 'نام',
+    lastName: 'نام خانوادگی',
+    mobile: 'شماره موبایل',
+    source: 'نحوه آشنایی',
+    sourcePlaceholder: 'انتخاب کنید',
+    submit: 'ثبت مشتری',
+    cancel: 'انصراف',
+    error: 'ثبت نشد. نام و شماره موبایل را بررسی کنید.',
+  },
+  /** The CSV export button. */
+  exportLabel: 'خروجی Excel',
 } as const
 

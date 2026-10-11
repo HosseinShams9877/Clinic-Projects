@@ -49,6 +49,7 @@ import {
 import type { TenantContext } from '@/core/tenant'
 import {
   createLead,
+  createOrFindCustomer,
   markLeadLost,
   recordConsent,
   recordFollowUp,
@@ -138,6 +139,43 @@ function revalidateCustomers(customerId?: string): void {
   revalidatePath('/admin/customers')
   revalidatePath('/doctor/customers')
   if (customerId !== undefined) revalidatePath(`/admin/customer/${customerId}`)
+}
+
+/**
+ * «ثبت مشتری» — a person the staff writes down, on any panel that holds the file.
+ *
+ * The dedupe is the module's: a mobile the file already holds is the person it
+ * already knows, and the sentence the caller reads comes back from the module's own
+ * key. The `panel` is the caller's, which is what keeps the manager's dialog from
+ * being callable with a desk that has no session at all.
+ */
+export async function addCustomerAction(
+  panel: Panel,
+  input: AddCustomerInput,
+): Promise<ActionResult> {
+  const result = await inTenantScope(panel, async ({ tx, ctx }) => {
+    await createOrFindCustomer({
+      tx,
+      ctx,
+      mobile: input.mobile,
+      firstName: input.firstName,
+      lastName: input.lastName === '' ? undefined : input.lastName,
+      acquisitionSource: input.acquisitionSource === '' ? undefined : input.acquisitionSource,
+    })
+    return SUCCESS
+  })
+
+  if (!('succeeded' in result)) return result
+  revalidateCustomers()
+  return { ok: true }
+}
+
+/** The four facts a add-customer dialog collects; the mobile is the person's key. */
+export interface AddCustomerInput {
+  readonly firstName: string
+  readonly lastName: string
+  readonly mobile: string
+  readonly acquisitionSource: string
 }
 
 /**
