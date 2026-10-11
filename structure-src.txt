@@ -1,0 +1,870 @@
+﻿Folder PATH listing
+Volume serial number is A228-F890
+D:\NEW FOLDER\CLINIC\SRC
++---app
+|   |   catalog.ts
+|   |   global-error.tsx
+|   |   globals.css
+|   |   layout.tsx
+|   |   page.tsx
+|   |   theme.ts
+|   |   
+|   +---(public)
+|   |   |   layout.tsx
+|   |   |   page.tsx
+|   |   |   
+|   |   +---about
+|   |   |       page.tsx
+|   |   |       
+|   |   +---booking
+|   |   |       page.tsx
+|   |   |       
+|   |   +---contact
+|   |   |       page.tsx
+|   |   |       
+|   |   +---doctors
+|   |   |       page.tsx
+|   |   |       
+|   |   +---panels
+|   |   |       page.tsx
+|   |   |       
+|   |   +---service
+|   |   |   \---[id]
+|   |   |           page.tsx
+|   |   |           
+|   |   \---services
+|   |           page.tsx
+|   |           
+|   +---account
+|   |   |   catalog.ts
+|   |   |   
+|   |   +---(panel)
+|   |   |   |   layout.tsx
+|   |   |   |   page.tsx
+|   |   |   |   
+|   |   |   +---appointments
+|   |   |   |       page.tsx
+|   |   |   |       
+|   |   |   +---care
+|   |   |   |       page.tsx
+|   |   |   |       
+|   |   |   +---payments
+|   |   |   |       page.tsx
+|   |   |   |       
+|   |   |   \---profile
+|   |   |           page.tsx
+|   |   |           
+|   |   +---login
+|   |   |       actions.ts
+|   |   |       page.tsx
+|   |   |       
+|   |   \---notifications
+|   |           page.tsx
+|   |           
+|   +---admin
+|   |   |   catalog.ts
+|   |   |   layout.tsx
+|   |   |   page.tsx
+|   |   |   
+|   |   +---appointments
+|   |   |       page.tsx
+|   |   |       
+|   |   +---campaigns
+|   |   |   |   page.tsx
+|   |   |   |   
+|   |   |   \---_components
+|   |   |           AudienceGroupsCard.tsx
+|   |   |           CampaignsKpi.tsx
+|   |   |           CampaignsTable.tsx
+|   |   |           CampaignWorkspace.tsx
+|   |   |           NewCampaignButton.tsx
+|   |   |           StatusChips.tsx
+|   |   |           
+|   |   +---customer
+|   |   |   \---[id]
+|   |   |           page.tsx
+|   |   |           
+|   |   +---customers
+|   |   |   |   page.tsx
+|   |   |   |   
+|   |   |   \---_components
+|   |   |           AddCustomerDialog.tsx
+|   |   |           ExportButton.tsx
+|   |   |           
+|   |   +---cycles
+|   |   |       page.tsx
+|   |   |       
+|   |   +---debts
+|   |   |   |   page.tsx
+|   |   |   |   
+|   |   |   \---_components
+|   |   |           BucketChips.tsx
+|   |   |           DebtRowView.tsx
+|   |   |           DebtSearchForm.tsx
+|   |   |           DebtsKpi.tsx
+|   |   |           DoctorCards.tsx
+|   |   |           DoctorFilter.tsx
+|   |   |           ExportButton.tsx
+|   |   |           helpers.ts
+|   |   |           
+|   |   +---notifications
+|   |   |       page.tsx
+|   |   |       
+|   |   +---reports
+|   |   |   |   page.tsx
+|   |   |   |   
+|   |   |   \---_components
+|   |   |           RangeSelect.tsx
+|   |   |           
+|   |   +---services
+|   |   |   |   page.tsx
+|   |   |   |   
+|   |   |   \---_components
+|   |   |           CategoryChips.tsx
+|   |   |           ServiceSearchForm.tsx
+|   |   |           
+|   |   +---settings
+|   |   |       page.tsx
+|   |   |       
+|   |   \---staff
+|   |           page.tsx
+|   |           
+|   +---doctor
+|   |   |   actions.ts
+|   |   |   catalog.ts
+|   |   |   layout.tsx
+|   |   |   page.tsx
+|   |   |   
+|   |   +---customers
+|   |   |       page.tsx
+|   |   |       
+|   |   +---cycles
+|   |   |       page.tsx
+|   |   |       
+|   |   +---debts
+|   |   |       page.tsx
+|   |   |       
+|   |   +---notifications
+|   |   |       page.tsx
+|   |   |       
+|   |   \---_components
+|   |           LeaveForm.tsx
+|   |           
+|   +---fonts
+|   |       AUTHORS.txt
+|   |       OFL.txt
+|   |       Vazirmatn-Bold.woff2
+|   |       Vazirmatn-ExtraBold.woff2
+|   |       Vazirmatn-Medium.woff2
+|   |       Vazirmatn-Regular.woff2
+|   |       Vazirmatn-SemiBold.woff2
+|   |       
+|   +---login
+|   |       actions.ts
+|   |       page.tsx
+|   |       
+|   +---reception
+|   |   |   catalog.ts
+|   |   |   layout.tsx
+|   |   |   page.tsx
+|   |   |   
+|   |   +---appointments
+|   |   |       page.tsx
+|   |   |       
+|   |   +---customers
+|   |   |   |   actions.ts
+|   |   |   |   page.tsx
+|   |   |   |   
+|   |   |   +---[id]
+|   |   |   |       page.tsx
+|   |   |   |       
+|   |   |   \---_components
+|   |   |           AddCustomerDialog.tsx
+|   |   |           ExportButton.tsx
+|   |   |           
+|   |   +---cycles
+|   |   |   |   page.tsx
+|   |   |   |   
+|   |   |   \---_components
+|   |   |           cycles-board.tsx
+|   |   |           
+|   |   +---debts
+|   |   |   |   page.tsx
+|   |   |   |   
+|   |   |   \---_components
+|   |   |           debts-kpi.tsx
+|   |   |           
+|   |   +---desk
+|   |   |   |   page.tsx
+|   |   |   |   
+|   |   |   \---_components
+|   |   |           free-slots-card.tsx
+|   |   |           kpi-row.tsx
+|   |   |           page-header.tsx
+|   |   |           task-cartable.tsx
+|   |   |           work-card.tsx
+|   |   |           
+|   |   +---leads
+|   |   |       page.tsx
+|   |   |       
+|   |   \---notifications
+|   |           page.tsx
+|   |           
+|   +---_account
+|   |       actions.ts
+|   |       appointment-actions.tsx
+|   |       profile-forms.tsx
+|   |       
+|   +---_appointments
+|   |       actions.ts
+|   |       block-dialog.tsx
+|   |       booking-dialog.tsx
+|   |       catalog.ts
+|   |       day-alert.tsx
+|   |       day-grid.tsx
+|   |       day-picker.tsx
+|   |       edit-dialog.tsx
+|   |       filter-bar.tsx
+|   |       options.ts
+|   |       page-data.ts
+|   |       reminders-panel.tsx
+|   |       row-actions.tsx
+|   |       support.ts
+|   |       view-tabs.tsx
+|   |       week-grid.tsx
+|   |       
+|   +---_campaigns
+|   |       actions.ts
+|   |       campaign-builder.tsx
+|   |       
+|   +---_components
+|   |       catalog.ts
+|   |       Pagination.tsx
+|   |       ProgressBar.tsx
+|   |       
+|   +---_customers
+|   |       actions.ts
+|   |       customers-search.tsx
+|   |       customers-table.tsx
+|   |       lead-forms.tsx
+|   |       page-data.ts
+|   |       profile-forms.tsx
+|   |       
+|   +---_cycles
+|   |       actions.ts
+|   |       cycle-forms.tsx
+|   |       cycles-table.tsx
+|   |       
+|   +---_debts
+|   |       actions.ts
+|   |       debts-forms.tsx
+|   |       debts-table.tsx
+|   |       
+|   +---_login
+|   |       customer-login.tsx
+|   |       deliver-code.ts
+|   |       login-support.ts
+|   |       request.ts
+|   |       staff-login.tsx
+|   |       
+|   +---_public
+|   |       booking-action.ts
+|   |       booking-wizard.tsx
+|   |       consultation-action.ts
+|   |       consultation-form.tsx
+|   |       footer.tsx
+|   |       header.tsx
+|   |       
+|   +---_services
+|   |       actions.ts
+|   |       page-data.ts
+|   |       service-forms.tsx
+|   |       
+|   +---_settings
+|   |       actions.ts
+|   |       settings-forms.tsx
+|   |       
+|   +---_shared
+|   |       module-failure.ts
+|   |       
+|   +---_shell
+|   |       actions.ts
+|   |       catalog.ts
+|   |       navigation.ts
+|   |       notification-actions.ts
+|   |       notification-state.ts
+|   |       NotificationBell.tsx
+|   |       notifications.ts
+|   |       NotificationsView.tsx
+|   |       panel-metadata.ts
+|   |       PanelChrome.tsx
+|   |       PanelShell.tsx
+|   |       session.ts
+|   |       tenant.ts
+|   |       TopbarSearch.tsx
+|   |       
+|   \---_staff
+|           actions.ts
+|           page-data.ts
+|           staff-forms.tsx
+|           
++---core
+|   +---components
+|   |   +---button
+|   |   |   |   Button.tsx
+|   |   |   |   index.ts
+|   |   |   |   
+|   |   |   \---tests
+|   |   |           Button.test.tsx
+|   |   |           
+|   |   +---combobox
+|   |   |       Combobox.tsx
+|   |   |       index.ts
+|   |   |       
+|   |   +---date-picker
+|   |   |       index.ts
+|   |   |       JalaliDatePicker.tsx
+|   |   |       
+|   |   +---form
+|   |   |   |   control-classes.ts
+|   |   |   |   field-context.ts
+|   |   |   |   Field.tsx
+|   |   |   |   Form.tsx
+|   |   |   |   FormError.tsx
+|   |   |   |   index.ts
+|   |   |   |   SubmitButton.tsx
+|   |   |   |   TextArea.tsx
+|   |   |   |   TextInput.tsx
+|   |   |   |   
+|   |   |   \---tests
+|   |   |           Form.test.tsx
+|   |   |           
+|   |   +---icons
+|   |   |   |   Icon.tsx
+|   |   |   |   icons.ts
+|   |   |   |   index.ts
+|   |   |   |   
+|   |   |   \---tests
+|   |   |           Icon.test.tsx
+|   |   |           
+|   |   \---popover
+|   |           index.ts
+|   |           Popover.tsx
+|   |           
+|   +---config
+|   |   |   datasource.ts
+|   |   |   env.ts
+|   |   |   index.ts
+|   |   |   
+|   |   \---tests
+|   |           env.test.ts
+|   |           
+|   +---constants
+|   |       enums.ts
+|   |       index.ts
+|   |       modules.ts
+|   |       numbers.ts
+|   |       
+|   +---db
+|   |   |   client.ts
+|   |   |   context.ts
+|   |   |   extension.ts
+|   |   |   index.ts
+|   |   |   scope.ts
+|   |   |   tenant-models.ts
+|   |   |   
+|   |   \---tests
+|   |           client.test.ts
+|   |           context.test.ts
+|   |           database.ts
+|   |           extension.test.ts
+|   |           scope.test.ts
+|   |           tenant-models.test.ts
+|   |           
+|   +---lib
+|   |   |   clock.ts
+|   |   |   cx.ts
+|   |   |   index.ts
+|   |   |   
+|   |   \---tests
+|   |           cx.test.ts
+|   |           
+|   +---localization
+|   |   |   calendar.ts
+|   |   |   digits.ts
+|   |   |   format.ts
+|   |   |   index.ts
+|   |   |   jalali.ts
+|   |   |   message.ts
+|   |   |   normalize.ts
+|   |   |   types.ts
+|   |   |   
+|   |   +---catalog
+|   |   |       common.ts
+|   |   |       controls.ts
+|   |   |       enums.ts
+|   |   |       index.ts
+|   |   |       seed.ts
+|   |   |       
+|   |   \---tests
+|   |           calendar.test.ts
+|   |           catalog.test.ts
+|   |           digits.test.ts
+|   |           format.test.ts
+|   |           jalali.test.ts
+|   |           message.test.ts
+|   |           normalize.test.ts
+|   |           
+|   +---query
+|   |   |   client.ts
+|   |   |   index.ts
+|   |   |   invalidate.ts
+|   |   |   keys.ts
+|   |   |   optimistic.ts
+|   |   |   provider.tsx
+|   |   |   
+|   |   \---tests
+|   |           client.test.ts
+|   |           invalidate.test.ts
+|   |           keys.test.ts
+|   |           optimistic.test.ts
+|   |           provider.test.tsx
+|   |           
+|   +---tenant
+|   |   |   index.ts
+|   |   |   types.ts
+|   |   |   
+|   |   +---lib
+|   |   |       overrides.ts
+|   |   |       
+|   |   \---tests
+|   |           overrides.test.ts
+|   |           
+|   \---types
+|       |   brand.ts
+|       |   errors.ts
+|       |   index.ts
+|       |   
+|       \---tests
+|               brand.test.ts
+|               errors.test.ts
+|               
+|   \---prisma
+|       |   browser.ts
+|       |   client.ts
+|       |   commonInputTypes.ts
+|       |   enums.ts
+|       |   models.ts
+|       |   
+|       +---internal
+|       |       class.ts
+|       |       prismaNamespace.ts
+|       |       prismaNamespaceBrowser.ts
+|       |       
+|       \---models
+|               Appointment.ts
+|               AudienceGroup.ts
+|               AuditLog.ts
+|               BeforeAfterImage.ts
+|               Campaign.ts
+|               Clinic.ts
+|               ClinicShift.ts
+|               ConsentRecord.ts
+|               Customer.ts
+|               DoctorWorkingHours.ts
+|               Holiday.ts
+|               JobQueue.ts
+|               LeaveRequest.ts
+|               LicenseKey.ts
+|               Membership.ts
+|               MessageSend.ts
+|               MessageTemplate.ts
+|               NotificationRead.ts
+|               OtpChallenge.ts
+|               Payment.ts
+|               Service.ts
+|               ServiceDoctor.ts
+|               Session.ts
+|               Tenant.ts
+|               TenantSettings.ts
+|               TreatmentCycle.ts
+|               User.ts
+|               
++---modules
+|   +---appointments
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       book.ts
+|   |   |       job.ts
+|   |   |       lifecycle.ts
+|   |   |       own-panel.ts
+|   |   |       queries.ts
+|   |   |       settings.ts
+|   |   |       slots.ts
+|   |   |       status.ts
+|   |   |       transition.ts
+|   |   |       working-hours.ts
+|   |   |       
+|   |   +---tests
+|   |   |       booking.test.ts
+|   |   |       lifecycle.test.ts
+|   |   |       own-panel.test.ts
+|   |   |       slots.test.ts
+|   |   |       status.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---audience-groups
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       evaluators.ts
+|   |   |       job.ts
+|   |   |       predicate.ts
+|   |   |       queries.ts
+|   |   |       refresh.ts
+|   |   |       
+|   |   +---tests
+|   |   |       evaluation.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---auth
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       login.ts
+|   |   |       otp.ts
+|   |   |       password.ts
+|   |   |       session.ts
+|   |   |       
+|   |   +---tests
+|   |   |       login.test.ts
+|   |   |       password.test.ts
+|   |   |       session.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---campaign-assistant
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       interpreter.ts
+|   |   |       
+|   |   +---tests
+|   |   |       no-clinical-data.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---campaigns
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       attribution.ts
+|   |   |       dispatch.ts
+|   |   |       job.ts
+|   |   |       manage.ts
+|   |   |       queries.ts
+|   |   |       
+|   |   +---tests
+|   |   |       approval-gate.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---customers
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       dedupe.ts
+|   |   |       leads.ts
+|   |   |       own-panel.ts
+|   |   |       profile.ts
+|   |   |       queries.ts
+|   |   |       
+|   |   +---tests
+|   |   |       dedupe.test.ts
+|   |   |       doctor-scope.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---cycles
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       closure.ts
+|   |   |       contact-list.ts
+|   |   |       creation.ts
+|   |   |       job.ts
+|   |   |       next-due.ts
+|   |   |       queries.ts
+|   |   |       settings.ts
+|   |   |       status.ts
+|   |   |       sweep.ts
+|   |   |       
+|   |   +---tests
+|   |   |       contact-list.test.ts
+|   |   |       creation.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---dashboard
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   \---lib
+|   |           manager-home.ts
+|   |           
+|   +---debts
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       buckets.ts
+|   |   |       follow-up.ts
+|   |   |       queries.ts
+|   |   |       settings.ts
+|   |   |       
+|   |   +---tests
+|   |   |       buckets.test.ts
+|   |   |       no-delete-path.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---license
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   types.ts
+|   |   |   
+|   |   +---lib
+|   |   |       keys.ts
+|   |   |       
+|   |   \---tests
+|   |           keys.test.ts
+|   |           
+|   +---messages
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       campaign-delivery.ts
+|   |   |       dispatch.ts
+|   |   |       gateway.ts
+|   |   |       job.ts
+|   |   |       ledger.ts
+|   |   |       settings.ts
+|   |   |       templates.ts
+|   |   |       window.ts
+|   |   |       
+|   |   +---tests
+|   |   |       consent.test.ts
+|   |   |       window.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---notifications
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       consent.ts
+|   |   |       today.ts
+|   |   |       triggers.ts
+|   |   |       
+|   |   +---tests
+|   |   |       triggers.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---payments
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       aggregate.ts
+|   |   |       balance.ts
+|   |   |       cache.ts
+|   |   |       discount.ts
+|   |   |       job.ts
+|   |   |       queries.ts
+|   |   |       reconcile.ts
+|   |   |       record.ts
+|   |   |       settings.ts
+|   |   |       
+|   |   +---tests
+|   |   |       balance.test.ts
+|   |   |       schema-shape.test.ts
+|   |   |       
+|   |   +---types
+|   |   |       index.ts
+|   |   |       
+|   |   \---validation
+|   |           record-payment.ts
+|   |           
+|   +---public-site
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       reads.ts
+|   |   |       
+|   |   \---tests
+|   |           public-site.test.ts
+|   |           reads.test.ts
+|   |           
+|   +---registry
+|   |   |   declaration.ts
+|   |   |   index.ts
+|   |   |   registry.ts
+|   |   |   resolve.ts
+|   |   |   selection.ts
+|   |   |   types.ts
+|   |   |   
+|   |   \---tests
+|   |       |   registry.test.ts
+|   |       |   
+|   |       \---fixtures
+|   |           \---roles-permissions
+|   |               \---overrides
+|   |                   +---misdeclared
+|   |                   |       index.ts
+|   |                   |       module.ts
+|   |                   |       
+|   |                   \---test-override
+|   |                           index.ts
+|   |                           module.ts
+|   |                           
+|   +---reports
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   types.ts
+|   |   |   
+|   |   +---lib
+|   |   |       curve.ts
+|   |   |       doctors.ts
+|   |   |       range.ts
+|   |   |       retention.ts
+|   |   |       
+|   |   \---tests
+|   |           no-financial-surface.test.ts
+|   |           reports-compute.test.ts
+|   |           
+|   +---roles-permissions
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       manager-lock.ts
+|   |   |       matrix.ts
+|   |   |       self-edit.ts
+|   |   |       toggles.ts
+|   |   |       
+|   |   +---tests
+|   |   |       escalation.test.ts
+|   |   |       manager-lock.test.ts
+|   |   |       matrix.test.ts
+|   |   |       toggles.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---services
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       manage.ts
+|   |   |       queries.ts
+|   |   |       
+|   |   +---tests
+|   |   |       deactivation.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   +---settings
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   types.ts
+|   |   |   
+|   |   +---lib
+|   |   |       overrides.ts
+|   |   |       read.ts
+|   |   |       toggles.ts
+|   |   |       write.ts
+|   |   |       
+|   |   +---tests
+|   |   |       read-write.test.ts
+|   |   |       toggles-enforced.test.ts
+|   |   |       
+|   |   \---validation
+|   |           schema.ts
+|   |           
+|   +---staff
+|   |   |   catalog.ts
+|   |   |   index.ts
+|   |   |   
+|   |   +---lib
+|   |   |       audit.ts
+|   |   |       leave.ts
+|   |   |       memberships.ts
+|   |   |       
+|   |   +---tests
+|   |   |       permissions.test.ts
+|   |   |       
+|   |   \---types
+|   |           index.ts
+|   |           
+|   \---tenant-management
+|       |   catalog.ts
+|       |   index.ts
+|       |   types.ts
+|       |   
+|       +---lib
+|       |       provision.ts
+|       |       queries.ts
+|       |       
+|       \---tests
+|               provision.test.ts
+|               
++---scenarios
+|   \---tests
+|           scenarios.test.ts
+|           
+\---worker
+    |   health.ts
+    |   logger.ts
+    |   loop.ts
+    |   main.ts
+    |   queue.ts
+    |   registry.ts
+    |   runner.ts
+    |   status.ts
+    |   
+    \---tests
+            fixtures.ts
+            health.test.ts
+            logger.test.ts
+            loop.test.ts
+            queue.test.ts
+            registry.test.ts
+            runner.test.ts
+            status.test.ts
+            

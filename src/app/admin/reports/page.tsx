@@ -84,6 +84,7 @@ import {
   RANGE_THIS_MONTH,
   RangeSelect,
 } from './_components/RangeSelect'
+import { RangeForm } from './_components/RangeForm'
 import {
   DOCTOR_FIELDS,
   LAST_VISIT_BUCKETS,
@@ -194,7 +195,7 @@ export default async function ReportsPage({ searchParams }: { readonly searchPar
 
       <ReportTiles reports={reports} />
 
-      <CustomRangeForm from={reports.range.from} to={reports.range.to} />
+      <RangeForm from={reports.range.from} to={reports.range.to} basePath={BASE_PATH} />
 
       <div className="grid grid-cols-1 gap-6 panel:grid-cols-2">
         <DropOffCard points={reports.dropOffCurve.points} />
@@ -364,54 +365,6 @@ function ReportTiles({
         </div>
       ))}
     </div>
-  )
-}
-
-/* ── The custom range the presets do not name ──────────────────────────────── */
-
-/**
- * «بازه دلخواه» — the two date fields, as a GET form the page re-reads.
- *
- * The form's own sentence is the range the seven reports were computed over, so a
- * manager who changes one end sees which span the figure on the tile answers. The two
- * fields submit as `from` and `to`, which the range resolver reads before any preset.
- */
-function CustomRangeForm({ from, to }: { readonly from: string; readonly to: string }) {
-  return (
-    <form
-      action={BASE_PATH}
-      className="flex flex-col gap-3 rounded-lg border border-line bg-surface px-4 py-3 panel:flex-row panel:items-end panel:justify-start"
-    >
-      <div className="flex flex-col gap-1 text-sm">
-        <span className="text-xs font-semibold text-ink-3">{REPORT_FIELDS.rangeFrom}</span>
-        <input
-          name="from"
-          defaultValue={from}
-          dir="ltr"
-          className="rounded-sm border border-line-2 bg-surface px-3 py-[11px] text-sm text-ink tabular-nums"
-        />
-      </div>
-      <div className="flex flex-col gap-1 text-sm">
-        <span className="text-xs font-semibold text-ink-3">{REPORT_FIELDS.rangeTo}</span>
-        <input
-          name="to"
-          defaultValue={to}
-          dir="ltr"
-          className="rounded-sm border border-line-2 bg-surface px-3 py-[11px] text-sm text-ink tabular-nums"
-        />
-      </div>
-      <button
-        type="submit"
-        className="rounded-sm bg-ink px-4 py-[11px] text-sm font-medium text-ink-inverse"
-      >
-        {REPORT_FIELDS.apply}
-      </button>
-      <p className="text-xs text-ink-3">
-        {`${ADMIN_REPORTS.customRangeHint} · ${formatDate(asLocalDate(from), 'long')}${
-          ADMIN_REPORTS.spanJoin
-        }${formatDate(asLocalDate(to), 'long')}`}
-      </p>
-    </form>
   )
 }
 
