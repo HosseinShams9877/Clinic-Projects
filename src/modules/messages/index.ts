@@ -46,13 +46,14 @@ export type {
   SendSettings,
 } from './types'
 export type { MessageGateway, MessagesModule } from './types'
-
 export {
   CHANNEL_LABELS,
   DEFAULT_TEMPLATES,
   MESSAGES,
   SEND_STATUS_LABELS,
   SUPPRESSED_REASON_LABELS,
+  TEMPLATE_EDITOR_PREVIEW_LABEL,
+  TEMPLATE_EDITOR_SAMPLES,
   TEMPLATE_PLACEHOLDERS,
 } from './catalog'
 

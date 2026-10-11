@@ -25,6 +25,14 @@
  * save, and the head holds no button that would write nothing. The demo's own tab
  * order puts «کلینیک» last; the page keeps the module's order (`SETTINGS_TABS`),
  * where identity is first, because the order is the constants' and not the page's.
+ *
+ * ## Why `TEMPLATE_PLACEHOLDERS` is read here and not in the form
+ *
+ * `MessagesForm` is `'use client'`, and importing `@/modules/messages` from a client
+ * file would pull the module's whole transitive graph — its ledger and dispatch
+ * reach `node:async_hooks` — into the browser bundle, which Turbopack refuses. The
+ * page is a Server Component, so it reads the module's own allow-list here and hands
+ * it down as plain data. The client only renders.
  */
 
 import type { Metadata } from 'next'
@@ -62,7 +70,7 @@ import {
   readSettingsSurface,
 } from '@/modules/settings'
 import { SETTINGS_TABS, SettingsTab } from '@/modules/settings'
-import { CHANNEL_LABELS } from '@/modules/messages'
+import { CHANNEL_LABELS, TEMPLATE_PLACEHOLDERS } from '@/modules/messages'
 import { requirePermission } from '@/modules/roles-permissions'
 
 export const metadata: Metadata = { title: SETTINGS_FIELDS.title }
@@ -170,6 +178,7 @@ export default async function SettingsPage({
           labels={MESSAGES_FIELDS}
           kindLabels={AUTOMATIC_KIND_LABELS}
           channelLabels={CHANNEL_LABELS}
+          placeholders={TEMPLATE_PLACEHOLDERS}
         />
       ) : null}
 

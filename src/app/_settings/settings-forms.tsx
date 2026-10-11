@@ -20,6 +20,23 @@
  * The eight are enforced server-side, so the checkbox shows the value the row holds
  * until the write landed; a flip that happened before the server agreed would be a
  * toggle the manager believes is set while the write path still refuses it.
+ *
+ * ## Why the message templates use `TemplateEditor`
+ *
+ * A template's text is not a plain field: the kind's own placeholders are a closed
+ * set, and a manager who types `{amount}` into a booking-confirmation template writes
+ * a message the validator refuses. `TemplateEditor` renders the placeholders the kind
+ * allows as chips, inserts them into the textarea at the caret, and shows a live
+ * preview of the substituted sentence — so what the manager reads and what the
+ * validator accepts are the same set.
+ *
+ * ## Why `placeholders` arrives as a prop and not from the module
+ *
+ * This file is `'use client'`. Importing `@/modules/messages` from here would pull
+ * the module's whole transitive graph — its ledger and dispatch reach
+ * `node:async_hooks` — into the browser bundle, which Turbopack refuses. The page
+ * (a Server Component) reads `TEMPLATE_PLACEHOLDERS` and hands it down as plain
+ * data; the client only renders.
  */
 
 'use client'
@@ -29,6 +46,7 @@ import { useActionState } from 'react'
 import { Button } from '@/core/components/button'
 import { CONTROL_CLASSES } from '@/core/components/form/control-classes'
 
+import { TemplateEditor } from './template-editor'
 import {
   addHolidayAction,
   addOverrideAction,
@@ -435,6 +453,7 @@ export function MessagesForm({
   labels,
   kindLabels,
   channelLabels,
+  placeholders,
 }: {
   readonly templates: ReadonlyArray<{
     readonly kind: string
@@ -448,6 +467,11 @@ export function MessagesForm({
   readonly labels: FieldLabels<typeof MESSAGES_FIELDS>
   readonly kindLabels: Readonly<Record<string, string>>
   readonly channelLabels: Readonly<Record<string, string>>
+  /**
+   * The allow-list per kind, read on the page (a Server Component) and handed down
+   * as plain data. See the file's own header for why it is not read here.
+   */
+  readonly placeholders: Readonly<Record<string, readonly string[]>>
 }) {
   const [result, action] = useActionState(saveMessagesAction, { ok: true, message: null })
 
@@ -482,20 +506,15 @@ export function MessagesForm({
 
       <div className="flex flex-col gap-3">
         {templates.map((template) => (
-          <label
+          <TemplateEditor
             key={`${template.kind}-${template.channel}`}
-            className="flex flex-col gap-1 text-sm"
-          >
-            <span
-              className={LABEL_CLASS}
-            >{`${kindLabels[template.kind] ?? template.kind} — ${channelLabels[template.channel] ?? template.channel}`}</span>
-            <textarea
-              name={`template:${template.kind}:${template.channel}`}
-              defaultValue={template.text}
-              rows={2}
-              className={FIELD_CLASS}
-            />
-          </label>
+            name={`template:${template.kind}:${template.channel}`}
+            label={`${kindLabels[template.kind] ?? template.kind} — ${
+              channelLabels[template.channel] ?? template.channel
+            }`}
+            defaultValue={template.text}
+            placeholders={placeholders[template.kind] ?? []}
+          />
         ))}
       </div>
 

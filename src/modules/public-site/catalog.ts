@@ -14,7 +14,6 @@
  * string** with `{placeholder}`s, and `renderMessage` fills them where they render.
  */
 
-import { toPersianDigits } from '@/core/localization'
 
 /** One item in the header's horizontal menu and the footer's link list. */
 export interface PublicNavLink {

@@ -128,3 +128,28 @@ export const SUPPRESSED_REASON_LABELS: Readonly<Record<string, string>> = {
   SEND_WINDOW: 'خارج از ساعت ارسال',
   TEMPLATE_MISSING: 'متن پیام ثبت نشده است',
 }
+
+/**
+ * The sample values the template editor's preview substitutes for each placeholder,
+ * and the label above the preview line.
+ *
+ * The samples are short Persian words so the preview reads as a real sentence — a
+ * manager sees the shape of the message they are writing. `amount` and
+ * `sessionNumber` are numbers because their Persian-digit conversion is part of what
+ * the preview shows.
+ *
+ * Lives in the catalog because the editor is a settings-surface affordance and this
+ * module owns the templates it edits — the same reason `TEMPLATE_PLACEHOLDERS` and
+ * `DEFAULT_TEMPLATES` do.
+ */
+export const TEMPLATE_EDITOR_SAMPLES: Readonly<Record<string, string | number>> = {
+  name: 'علی',
+  date: '۱۴۰۵/۰۷/۰۱',
+  time: '۱۰:۳۰',
+  serviceName: 'فیشیال تخصصی',
+  sessionNumber: 3,
+  amount: 500000,
+}
+
+/** The label above the preview line. */
+export const TEMPLATE_EDITOR_PREVIEW_LABEL = 'پیش‌نمایش: '
