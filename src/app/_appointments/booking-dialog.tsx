@@ -17,6 +17,17 @@
  * renders them as read-only facts with a lock badge: the day strip and the time
  * input are shown selected and disabled, and the "next" gate already passes. The
  * desk changes the slot by returning to the grid, not by editing the step.
+ *
+ * ## The time step offers slots, not free text
+ *
+ * The step-2 time field is not a `<input type="time">`: the desk picks from the
+ * times the day actually holds, not from the times the clock can express. The
+ * `freeSlotsByDoctorId` map the page read carries those times, keyed by doctor and
+ * sorted ascending; the step renders them as the same kind of button the day strip
+ * is made of, and a slot already held by a booking or a block is not in the list
+ * because the map is computed from the day's own rows. A locked slot skips the
+ * picker and shows the day and the time as read-only facts, because the grid
+ * already answered that question.
  */
 
 'use client'
@@ -47,7 +58,7 @@ import {
 import { weekDays } from '@/modules/appointments'
 
 import { BOOKING_POPUP } from '@/app/catalog'
-import { LOCKED_SLOT } from './catalog'
+import { LOCKED_SLOT, SLOT_PICKER } from './catalog'
 import {
   createBookingAction,
   quickBookAction,
@@ -98,6 +109,12 @@ export interface BookingDialogProps {
   readonly allowedServiceIds?: readonly string[]
   readonly workingWeekdays?: readonly number[]
   readonly doctorsByServiceId?: Readonly<Record<string, readonly DoctorOption[]>>
+  /**
+   * The free slots of the day, keyed by doctor id, as stored `HH:mm` strings. The
+   * time step offers exactly these; a day with none left renders the picker's own
+   * empty sentence rather than a free-text field.
+   */
+  readonly freeSlotsByDoctorId?: Readonly<Record<string, readonly string[]>>
   /**
    * The doctor's own slot step for the day, when they have one. `null` is the
    * default and the dialog behaves exactly as before the override existed.
@@ -167,6 +184,7 @@ export function BookingDialog(props: BookingDialogProps) {
   const weekdays = offeredWeekdaysOf(props)
   const doctorChoices = doctorsForChosenService(props, values.serviceId)
   const lockedSlot = props.lockedSlot ?? null
+  const freeSlots = freeSlotsFor(props, values.doctorId, values.localDate)
 
   async function submit() {
     if (values.doctorId === '') return
@@ -300,7 +318,11 @@ export function BookingDialog(props: BookingDialogProps) {
                       className={CONTROL_CLASSES}
                       value={values.doctorId}
                       onChange={(event) => {
-                        setValues({ ...values, doctorId: event.target.value })
+                        setValues({
+                          ...values,
+                          doctorId: event.target.value,
+                          localTime: '',
+                        })
                         setResult(null)
                       }}
                     >
@@ -324,24 +346,23 @@ export function BookingDialog(props: BookingDialogProps) {
                         day={day}
                         selected={day === values.localDate}
                         disabled={lockedSlot !== null}
-                        onSelect={() => setValues({ ...values, localDate: day })}
+                        onSelect={() =>
+                          setValues({ ...values, localDate: day, localTime: '' })
+                        }
                       />
                     ))}
                   </div>
                 </fieldset>
-                <Field label={BOOKING_POPUP.fields.localTime} required>
-                  <div className="flex items-center gap-2">
-                    <TextInput
-                      type="time"
-                      value={values.localTime}
-                      readOnly={lockedSlot !== null}
-                      disabled={lockedSlot !== null}
-                      onChange={(event) => {
-                        setValues({ ...values, localTime: event.target.value })
-                        setResult(null)
-                      }}
-                    />
-                    {lockedSlot === null ? null : (
+
+                {lockedSlot !== null ? (
+                  <Field label={BOOKING_POPUP.fields.localTime} required>
+                    <div className="flex items-center gap-2">
+                      <TextInput
+                        type="time"
+                        value={values.localTime}
+                        readOnly
+                        disabled
+                      />
                       <span
                         className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-brand-50 px-2 py-[3px] text-[11px] font-semibold text-brand-700"
                         title={LOCKED_SLOT.hint}
@@ -349,12 +370,36 @@ export function BookingDialog(props: BookingDialogProps) {
                         <Icon name="lock" size="compact" />
                         {LOCKED_SLOT.badge}
                       </span>
-                    )}
-                  </div>
-                </Field>
-                {lockedSlot === null ? null : (
-                  <p className="text-xs text-ink-3">{LOCKED_SLOT.hint}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-ink-3">{LOCKED_SLOT.hint}</p>
+                  </Field>
+                ) : values.doctorId === '' ? (
+                  <p className="text-xs text-ink-3">{SLOT_PICKER.doctorFirst}</p>
+                ) : freeSlots.length === 0 ? (
+                  <p className="flex items-center gap-1 text-sm text-warn" role="status">
+                    <Icon name="warning" size="compact" />
+                    {SLOT_PICKER.empty}
+                  </p>
+                ) : (
+                  <fieldset className="flex flex-col gap-2">
+                    <legend className="text-sm font-semibold text-ink-2">
+                      {SLOT_PICKER.label}
+                    </legend>
+                    <div className="grid grid-cols-3 gap-2 panel:grid-cols-5">
+                      {freeSlots.map((slot) => (
+                        <SlotButton
+                          key={slot}
+                          time={slot}
+                          selected={slot === values.localTime}
+                          onSelect={() =>
+                            setValues({ ...values, localTime: slot })
+                          }
+                        />
+                      ))}
+                    </div>
+                  </fieldset>
                 )}
+
                 {service === undefined ? null : (
                   <p className="text-xs text-ink-3">
                     {service.name} — {BOOKING_POPUP.duration} {formatNumber(service.durationMinutes)}
@@ -486,6 +531,25 @@ function doctorNameOf(
   return props.doctorName ?? ''
 }
 
+/**
+ * The free slots the time step offers, for the doctor and day the popup is on.
+ *
+ * The map is keyed by doctor and by the date the value carries (the page read is
+ * for one day, and a popup cannot ask for a different day's slots without a new
+ * server round trip), so the lookup is the two keys the caller already has. A
+ * missing doctor, a missing day, or a doctor with no slots left all produce the
+ * same empty list, which the step renders as the picker's own empty sentence.
+ */
+function freeSlotsFor(
+  props: BookingDialogProps,
+  doctorId: string,
+  localDate: LocalDate,
+): readonly string[] {
+  if (doctorId === '') return []
+  if (localDate !== props.localDate && props.lockedSlot === undefined) return []
+  return props.freeSlotsByDoctorId?.[doctorId] ?? []
+}
+
 /* ── The step's own helpers ───────────────────────────────────────────────── */
 
 function stepNames(): readonly string[] {
@@ -580,6 +644,36 @@ function DayButton({
       )}
     >
       {`${weekdayName(jalaliWeekday(day))} ${toPersianDigits(jalaliParts(day).day)}`}
+    </button>
+  )
+}
+
+/**
+ * One free time, as a button — the same control the day strip is made of, so the
+ * desk reads "a slot" the same way in both halves of the step.
+ */
+function SlotButton({
+  time,
+  selected,
+  onSelect,
+}: {
+  readonly time: string
+  readonly selected: boolean
+  readonly onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={cx(
+        'rounded-xs border px-2 py-2 text-xs tabular-nums',
+        selected
+          ? 'border-brand bg-brand-50 font-semibold text-brand-700'
+          : 'border-line-2 bg-surface text-ink-2 hover:bg-surface-2',
+      )}
+    >
+      {formatTime(time as LocalTime)}
     </button>
   )
 }

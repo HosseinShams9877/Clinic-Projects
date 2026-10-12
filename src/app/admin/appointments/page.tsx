@@ -92,6 +92,7 @@ export default async function AdminAppointmentsPage({
           services={data.services}
           customers={data.customers}
           doctorsByServiceId={data.doctorsByServiceId}
+          freeSlotsByDoctorId={data.freeSlotsByDoctorId}
         />
       </div>
 

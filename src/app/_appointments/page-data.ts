@@ -9,7 +9,7 @@
  * which doctors a day holds.
  */
 
-import { fromUtcInstant, formatTime, jalaliWeekday, type LocalDate } from '@/core/localization'
+import { fromUtcInstant, formatTime, jalaliWeekday, timeToMinutes, asLocalTime, type LocalDate } from '@/core/localization'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 
@@ -43,6 +43,9 @@ export type DayRows = Awaited<ReturnType<typeof clinicDay>>
 /** The columns a day grid renders, as the module's own query answers them. */
 export type DayDoctors = Awaited<ReturnType<typeof doctorsOnDay>>
 
+/** The default slot step, in minutes, when a doctor has no override. */
+const DEFAULT_SLOT_MINUTES = 30
+
 /**
  * One day's complete grid: its columns, its rows, the doctors' windows, and the
  * popup's options.
@@ -61,6 +64,14 @@ export interface DayGridData {
   readonly workingDaysByDoctorId: Readonly<Record<string, readonly number[]>>
   /** The doctors who offer each service, keyed by service id. */
   readonly doctorsByServiceId: Readonly<Record<string, readonly DoctorColumn[]>>
+  /**
+   * The free slots of the day, keyed by `doctorId`, as stored `HH:mm` strings —
+   * the times the doctor is working, at their own step, and no appointment or
+   * block already holds. This is what the popup's time step offers: a booking is
+   * made against a slot the grid can show, never against a time that only exists
+   * in the popup's own head.
+   */
+  readonly freeSlotsByDoctorId: Readonly<Record<string, readonly string[]>>
 }
 
 /**
@@ -168,6 +179,8 @@ export async function loadDayGrid(args: {
     loadPopupOptions({ tx: args.tx, ctx: args.ctx }),
   ])
 
+  const allRows = [...rows, ...unrecorded]
+
   const [servicesByDoctorId, workingDaysByDoctorId, doctorsByServiceId, slotMinutesByDoctorId] =
     await Promise.all([
       loadServicesByDoctor({
@@ -193,16 +206,23 @@ export async function loadDayGrid(args: {
       }),
     ])
 
+  const freeSlotsByDoctorId = buildFreeSlots({
+    windows,
+    rows: allRows,
+    slotMinutesByDoctorId,
+  })
+
   return {
     doctors,
     windows,
-    rows: [...rows, ...unrecorded],
+    rows: allRows,
     services: options.services,
     customers: options.customers,
     slotMinutesByDoctorId,
     servicesByDoctorId,
     workingDaysByDoctorId,
     doctorsByServiceId,
+    freeSlotsByDoctorId,
   }
 }
 
@@ -260,6 +280,71 @@ export async function loadAppointmentsPage(args: {
   })
 
   return { day, week, cartable, reminders }
+}
+
+/* ── The free-slot map ─────────────────────────────────────────────────────── */
+
+/**
+ * The times each doctor on the day is free to be booked at.
+ *
+ * The rules are the ones the grid is drawn with, kept in one place so the popup's
+ * time step and the grid's own cells cannot disagree about what a slot is:
+ *
+ * 1. The candidate starts are the doctor's own range starts stepped by their own
+ *    `slotMinutes` (default 30) — the same walk `generateSlots` in the module
+ *    performs, done here over the window the page already read rather than a second
+ *    query.
+ * 2. A candidate whose slot would overrun the range's end is dropped, which is the
+ *    same rule `slotsInRange` states.
+ * 3. A candidate that any row already holds (a booking, a block, a `slotBlock`) is
+ *    dropped, including a *partial* overlap — the slot is at the step's own start,
+ *    so a row starting at the same minute is the row that holds it, and a row
+ *    starting earlier is checked by its own duration.
+ * 4. A candidate whose minute is inside a previous slot's span is dropped by the
+ *    step walk itself, because the walk advances by the step.
+ *
+ * The output is keyed by doctor and sorted ascending, and it is what the popup's
+ * time step renders as its options.
+ */
+function buildFreeSlots(args: {
+  readonly windows: readonly DoctorDayWindow[]
+  readonly rows: DayGridData['rows']
+  readonly slotMinutesByDoctorId: Readonly<Record<string, number | null>>
+}): Readonly<Record<string, readonly string[]>> {
+  const map: Record<string, readonly string[]> = {}
+
+  for (const window of args.windows) {
+    const step = args.slotMinutesByDoctorId[window.id] ?? DEFAULT_SLOT_MINUTES
+    const doctorRows = args.rows.filter((row) => row.doctorId === window.id)
+
+    // The occupied ranges of this doctor's day, as [start, end) minutes.
+    const occupied = doctorRows.map((row) => {
+      const start = timeToMinutes(asLocalTime(row.localTime))
+      const end = start + Math.max(row.durationMinutes, step)
+      return { start, end }
+    })
+
+    const free: string[] = []
+    for (const range of window.ranges) {
+      let cursor = range.startMinute
+      while (cursor + step <= range.endMinute) {
+        const candidate = { start: cursor, end: cursor + step }
+        const taken = occupied.some(
+          (busy) => busy.start < candidate.end && busy.end > candidate.start,
+        )
+        if (!taken) {
+          const hours = Math.floor(cursor / 60)
+          const minutes = cursor % 60
+          free.push(`${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`)
+        }
+        cursor += step
+      }
+    }
+
+    map[window.id] = free
+  }
+
+  return map
 }
 
 /* ── The filter maps ───────────────────────────────────────────────────────── */

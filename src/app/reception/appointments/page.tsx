@@ -118,6 +118,8 @@ export default async function ReceptionAppointmentsPage({
               defaultTime={firstFree.time}
               services={data.day.services}
               customers={data.day.customers}
+              doctorsByServiceId={data.day.doctorsByServiceId}
+              freeSlotsByDoctorId={data.day.freeSlotsByDoctorId}
             />
           )}
           <BookingDialog
@@ -131,6 +133,7 @@ export default async function ReceptionAppointmentsPage({
             services={data.day.services}
             customers={data.day.customers}
             doctorsByServiceId={data.day.doctorsByServiceId}
+            freeSlotsByDoctorId={data.day.freeSlotsByDoctorId}
           />
         </div>
       </div>

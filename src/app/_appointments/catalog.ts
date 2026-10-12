@@ -72,3 +72,16 @@ export const LOCKED_SLOT = {
   badge: 'از جدول',
   hint: 'تاریخ و ساعت از روی جدول انتخاب شده و قابل تغییر نیست. برای تغییر، این پنجره را ببندید و روی خانه دیگری بزنید.',
 } as const
+
+/**
+ * The booking popup's free-slot grid — the step-2 time picker that offers the
+ * doctor's own free slots as buttons rather than a free-text time field. Every
+ * label here is the picker's own, and the "no slots" sentence is what the desk
+ * reads when the day has none left.
+ */
+export const SLOT_PICKER = {
+  label: 'ساعت‌های آزاد',
+  empty: 'برای این پزشک در این روز ساعت آزادی نمانده است. روز یا پزشک دیگری را انتخاب کنید.',
+  loading: 'در حال خواندن ساعت‌های آزاد…',
+  doctorFirst: 'ابتدا پزشک و روز را انتخاب کنید تا ساعت‌های آزاد نمایش داده شود.',
+} as const
