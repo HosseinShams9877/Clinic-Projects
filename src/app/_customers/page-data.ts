@@ -25,6 +25,15 @@
  * modules' rows; reading them in the same transaction is what keeps the two from
  * being a profile rendered against a membership that just changed.
  *
+ * ## Why there are two doctor-name reads and not one
+ *
+ * `loadDoctorNames` keys by **membership id**, because `Customer.primaryDoctorId`
+ * points at a `Membership`. `loadDoctorNamesByUserId` keys by **user id**, because
+ * `Appointment.doctorId` (which `DebtRow.doctorId` and `CycleRow.doctorId` carry)
+ * points at a `User`. The two ids are one person described by two tables, and a
+ * lookup that used the wrong one returns `{}` for every id — which is why the debts
+ * page's doctor column read «پزشک» before the second read existed.
+ *
  * ## What is deliberately not here
  *
  * A row. Nothing here writes, because a page is a read and a write is an action
@@ -109,7 +118,10 @@ export async function loadLeadsCartable(args: {
   ])
 
   return {
-    rows: args.status === undefined || args.status === '' ? rows : rows.filter((row) => row.leadStatus === args.status),
+    rows:
+      args.status === undefined || args.status === ''
+        ? rows
+        : rows.filter((row) => row.leadStatus === args.status),
     counts,
   }
 }
@@ -144,7 +156,12 @@ export async function loadCustomerProfile(args: {
 }
 
 /**
- * The doctor names the two customer surfaces render, keyed by membership id.
+ * The doctor names the customer surfaces render, keyed by **membership** id.
+ *
+ * `Customer.primaryDoctorId` points at a `Membership`, so the id a customer row
+ * carries is a membership id and the lookup is against `membership`. A row that
+ * carries a `User.id` instead (`Appointment.doctorId`, and through it `DebtRow` and
+ * `CycleRow`) uses `loadDoctorNamesByUserId` below.
  *
  * Read once for a whole list so a file of a hundred customers is one query for its
  * doctor column and not a hundred; the ids the column holds are the memberships the
@@ -164,7 +181,38 @@ export async function loadDoctorNames(
   const names: Record<string, string> = {}
   for (const row of rows) {
     if (row.tenantId !== tenantId) continue
-    names[row.id] = row.user.lastName === null ? row.user.firstName : `${row.user.firstName} ${row.user.lastName}`
+    names[row.id] =
+      row.user.lastName === null ? row.user.firstName : `${row.user.firstName} ${row.user.lastName}`
+  }
+  return names
+}
+
+/**
+ * The doctor names the debts and cycles surfaces render, keyed by **user** id.
+ *
+ * `loadDoctorNames` keys by membership id, which is what `Customer.primaryDoctorId`
+ * holds. `DebtRow.doctorId` and `CycleRow.doctorId` are different: they come from
+ * `Appointment.doctorId`, which is a `User.id` and not a `Membership.id`. The two
+ * ids are one person described by two tables, and a lookup that used the wrong one
+ * returned `{}` for every id — which is why the debts page's doctor column read
+ * «پزشک» before this read existed.
+ *
+ * Read once for a whole list, and scoped to the tenant: the ids the column holds are
+ * the users the tenant has, so the read is bounded by the staff the tenant employs.
+ */
+export async function loadDoctorNamesByUserId(
+  tx: TransactionClient,
+  tenantId: string,
+  ids: readonly string[],
+): Promise<Readonly<Record<string, string>>> {
+  if (ids.length === 0) return {}
+  const rows = await tx.user.findMany({
+    where: { id: { in: [...ids] }, tenantId },
+    select: { id: true, firstName: true, lastName: true },
+  })
+  const names: Record<string, string> = {}
+  for (const row of rows) {
+    names[row.id] = row.lastName === null ? row.firstName : `${row.firstName} ${row.lastName}`
   }
   return names
 }
@@ -203,7 +251,9 @@ async function membershipName(
     select: { tenantId: true, user: { select: { firstName: true, lastName: true } } },
   })
   if (row === null || row.tenantId !== tenantId) return null
-  return row.user.lastName === null ? row.user.firstName : `${row.user.firstName} ${row.user.lastName}`
+  return row.user.lastName === null
+    ? row.user.firstName
+    : `${row.user.firstName} ${row.user.lastName}`
 }
 
 /** One clinic's name, or `null` when the row is not the caller's tenant's. */

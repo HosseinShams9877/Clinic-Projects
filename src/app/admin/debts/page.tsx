@@ -39,7 +39,7 @@ import { Icon } from '@/core/components/icons'
 
 import { ADMIN_DEBTS } from '@/app/admin/catalog'
 import { DEBTS_PAGE } from '@/app/catalog'
-import { loadDoctorNames } from '@/app/_customers/page-data'
+import { loadDoctorNamesByUserId } from '@/app/_customers/page-data'
 import { clinicDebts, readDebtSettings } from '@/modules/debts'
 import { listServices } from '@/modules/services'
 import { paymentsThisMonth } from '@/modules/payments'
@@ -47,7 +47,7 @@ import { Pagination, paginate, pageFromParam } from '@/app/_components/Paginatio
 import { requireStaffPanel } from '@/app/_shell/session'
 
 import { BucketChips } from './_components/BucketChips'
-import { DebtRowView, Th } from './_components/DebtRowView'
+import { DEBT_COLUMNS, DebtRowView, Th } from './_components/DebtRowView'
 import { DebtSearchForm, DEBT_QUERY_PARAM } from './_components/DebtSearchForm'
 import { DebtsKpi } from './_components/DebtsKpi'
 import { DoctorCards } from './_components/DoctorCards'
@@ -104,7 +104,7 @@ export default async function AdminDebtsPage({
       buckets,
       collectedRial,
       serviceNames: Object.fromEntries(services.map((service) => [service.id, service.name])),
-      doctorNames: await loadDoctorNames(
+      doctorNames: await loadDoctorNamesByUserId(
         tx,
         session.tenantId,
         rows.map((row) => row.doctorId),
@@ -196,18 +196,20 @@ export default async function AdminDebtsPage({
           <p className="px-4 py-8 text-center text-sm text-ink-3">{ADMIN_DEBTS.empty}</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full min-w-[1040px] table-fixed border-collapse text-sm">
               <caption className="sr-only">{DEBTS_PAGE.admin.title}</caption>
+              <colgroup>
+                {DEBT_COLUMNS.map((column) => (
+                  <col key={column.key} className={column.width} />
+                ))}
+              </colgroup>
               <thead>
                 <tr className="border-b border-line-2 bg-surface-2 text-ink-3">
-                  <Th>{ADMIN_DEBTS.columns.customer}</Th>
-                  <Th>{ADMIN_DEBTS.columns.service}</Th>
-                  <Th>{ADMIN_DEBTS.columns.doctor}</Th>
-                  <Th className="text-end">{ADMIN_DEBTS.columns.balance}</Th>
-                  <Th>{ADMIN_DEBTS.columns.due}</Th>
-                  <Th>{ADMIN_DEBTS.columns.status}</Th>
-                  <Th>{ADMIN_DEBTS.columns.followUp}</Th>
-                  <Th>{ADMIN_DEBTS.columns.action}</Th>
+                  {DEBT_COLUMNS.map((column) => (
+                    <Th key={column.key} align={column.align}>
+                      {ADMIN_DEBTS.columns[column.key]}
+                    </Th>
+                  ))}
                 </tr>
               </thead>
               <tbody>

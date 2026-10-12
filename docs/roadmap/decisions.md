@@ -41,7 +41,7 @@ break links every time. One file per decision never needs splitting again.
 | [`0019`](adr/0019-module-override-mechanism-for-per-tenant-customization.md) | Module override mechanism for per-tenant customization | Accepted |
 | [`0020`](adr/0020-tanstack-query-for-client-side-data-fetching-alongside-server-components.md) | TanStack Query for client-side data fetching alongside Server Components | Accepted |
 | [`0021`](adr/0021-headless-primitives-only-no-styled-component-library.md) | Headless primitives only; no styled component library | Accepted |
-| [`0022`](adr/0022-date-fns-jalali-for-calendar-arithmetic-owning-the-display-layer.md) | `date-fns-jalali` for calendar arithmetic; owning the display layer | Accepted — supersedes ADR-0010 |
+| [`0023`](adr/0023-a-manager-may-approve-their-own-campaign.md) | A manager may approve their own campaign | Accepted — supersedes the approver-may-not-be-creator clause of rule 4 |
 
 ---
 
