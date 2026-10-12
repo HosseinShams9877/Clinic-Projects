@@ -27,6 +27,14 @@
  * `formatMoney`, because a formatter in a query would be a second formatter a report
  * could not reuse, and a number rendered as Persian digits in the database layer is a
  * number the arithmetic can no longer read.
+ *
+ * ## The shift-range override
+ *
+ * `DoctorShiftRange` is the per-doctor, per-weekday override of `DoctorWorkingHours`.
+ * When a doctor has rows in it for a weekday, `doctorsOnDay` and `doctorWindowsOnDay`
+ * read *those* and not the default row: the doctor is a column, and the column's
+ * working ranges are the override's ranges. A weekday with no override rows is the
+ * default behaviour, exactly as before.
  */
 
 import type { Prisma } from '@/generated/prisma/client'
@@ -54,12 +62,6 @@ const APPOINTMENT_INCLUDE = {
 
 /**
  * The row the queries produce, stated structurally rather than as a Prisma payload.
- *
- * `Prisma.AppointmentGetPayload` would name the same fields, but the payload type is
- * the *generated* client's answer, and a row the query hands to `asRow` is the
- * client's too — the two agree today. Stating the shape structurally keeps the grid's
- * own vocabulary in the module that owns the grid, and it is what an override's
- * storage would satisfy as long as it answers the same questions.
  */
 interface AppointmentWithRelations {
   readonly id: string
@@ -80,16 +82,11 @@ interface AppointmentWithRelations {
   readonly priceAtBooking: bigint
   readonly depositAmount: bigint
   readonly cancelReason: string | null
-  /** How the appointment was booked (`AppointmentSource`), or `null` for legacy rows. */
   readonly source: string | null
 }
 
 /**
  * The statuses a grid renders as a live cell — the alarm excluded by construction.
- *
- * A plain array and not `as const`: Prisma's `in:` filter takes a mutable `string[]`,
- * and the values are the constants' own, so the set stays tied to `AppointmentStatus`
- * without the tuple's `readonly` getting in the way.
  */
 const GRID_STATUSES: string[] = [
   AppointmentStatus.Booked,
@@ -117,18 +114,11 @@ export interface AppointmentRow {
   readonly priceAtBooking: bigint
   readonly depositAmount: bigint
   readonly cancelReason: string | null
-  /** How the appointment was booked (`AppointmentSource`), or `null` for legacy rows. */
   readonly source: string | null
 }
 
 /**
  * A Persian person's full name, joined the way the product writes it.
- *
- * The `customers` module owns the canonical composition in Phase 3; this is the
- * scheduling grid's own need, and duplicating the join until then is the honest
- * alternative to importing a module that does not exist. A space rather than a ZWNJ,
- * because the two parts are already separate words and a ZWNJ joins the halves of one
- * compound.
  */
 function personName(firstName: string, lastName: string | null): string {
   return lastName === null ? firstName : `${firstName} ${lastName}`
@@ -158,15 +148,7 @@ function asRow(raw: AppointmentWithRelations): AppointmentRow {
 }
 
 /**
- * «برنامه من» — one doctor's own day, the most-executed query in the product
- * (`03-data-model.md` §2.2).
- *
- * `doctorId` is not filtered against the caller's own id here. The check that makes a
- * doctor see only their own schedule is `view_own_schedule`, and it is applied by the
- * page that knows which doctor the caller is; this function is the query, and the
- * query answers the question it is asked. The two are separate for the reason
- * `04-roles-permissions.md` §3.2 gives — the same module function is called by a page
- * and by the worker, and the permission is the caller's to establish.
+ * «برنامه من» — one doctor's own day, the most-executed query in the product.
  */
 export async function doctorDay(args: {
   readonly tx: TransactionClient
@@ -190,13 +172,6 @@ export async function doctorDay(args: {
 
 /**
  * The clinic-wide day grid — the reception desk and the manager's oversight page.
- *
- * `clinicId` narrows the grid to the branch the caller's membership resolved to; a
- * membership scoped to no clinic sees every branch of the tenant, which is
- * `02-architecture.md` §3.1's "unscoped, not all branches".
- *
- * Ordered by doctor and then time, so the grid's columns are stable from one render to
- * the next and a receptionist's eye stays on the same column.
  */
 export async function clinicDay(args: {
   readonly tx: TransactionClient
@@ -218,13 +193,6 @@ export async function clinicDay(args: {
   return rows.map((row) => asRow(row))
 }
 
-/**
- * The clinic's doctors who work on a day, as the grid's column headers render them.
- *
- * The columns are the doctors with hours on that weekday; a doctor who does not work
- * the day is not a column, which is what keeps the grid from offering a whole empty
- * column of «خارج از برنامه» cells.
- */
 /** A grid column header: the doctor's id for the cell's query, their name for the header. */
 export interface DoctorColumn {
   readonly id: string
@@ -234,69 +202,90 @@ export interface DoctorColumn {
 /**
  * The clinic's doctors who work on a day, as the grid's column headers render them.
  *
- * The columns are the doctors with hours on that weekday; a doctor who does not work
- * the day is not a column, which is what keeps the grid from offering a whole empty
- * column of «خارج از برنامه» cells.
+ * Reads `DoctorShiftRange` for the weekday and merges those doctors in: a doctor who
+ * has only override rows (and no `DoctorWorkingHours` row) is still a column, because
+ * the override is what their schedule is. A doctor with neither is not a column.
  */
 export async function doctorsOnDay(args: {
   readonly tx: TransactionClient
   readonly tenantId: string
   readonly weekday: number
 }): Promise<readonly DoctorColumn[]> {
-  const rows = await args.tx.doctorWorkingHours.findMany({
-    where: {
-      tenantId: args.tenantId,
-      weekday: args.weekday,
-      doctor: { memberships: { some: { tenantId: args.tenantId, isActive: true } } },
-    },
-    distinct: ['doctorId'],
-    select: {
-      doctorId: true,
-      doctor: { select: { id: true, firstName: true, lastName: true } },
-    },
-  })
+  const [hoursRows, rangeRows] = await Promise.all([
+    args.tx.doctorWorkingHours.findMany({
+      where: {
+        tenantId: args.tenantId,
+        weekday: args.weekday,
+        doctor: { memberships: { some: { tenantId: args.tenantId, isActive: true } } },
+      },
+      distinct: ['doctorId'],
+      select: {
+        doctorId: true,
+        doctor: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    args.tx.doctorShiftRange.findMany({
+      where: {
+        tenantId: args.tenantId,
+        weekday: args.weekday,
+        doctor: { memberships: { some: { tenantId: args.tenantId, isActive: true } } },
+      },
+      distinct: ['doctorId'],
+      select: {
+        doctorId: true,
+        doctor: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+  ])
 
-  return rows.map((row) => ({
-    id: row.doctor.id,
-    name: personName(row.doctor.firstName, row.doctor.lastName),
-  }))
+  const byId = new Map<string, DoctorColumn>()
+  for (const row of hoursRows) {
+    byId.set(row.doctor.id, {
+      id: row.doctor.id,
+      name: personName(row.doctor.firstName, row.doctor.lastName),
+    })
+  }
+  for (const row of rangeRows) {
+    byId.set(row.doctor.id, {
+      id: row.doctor.id,
+      name: personName(row.doctor.firstName, row.doctor.lastName),
+    })
+  }
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /**
  * One doctor's working window on a weekday, as the grid's hour axis reads it.
- *
- * The window is the intersection of the clinic's shift and the doctor's hours — the
- * same intersection `workingRange` computes for the slot generator and the booking
- * path — expressed in minutes since midnight. The grid uses it to decide, for a given
- * time cell, whether the doctor is on the schedule (an empty «+» the desk can book) or
- * off it (a struck «خارج از برنامه» cell), which is the one fact `DoctorColumn` does
- * not carry.
  */
 export interface DoctorDayWindow {
   readonly id: string
   readonly name: string
-  /** Minutes since midnight the doctor's working window opens (spanning min across shifts). */
+  /** Minutes since midnight the doctor's working window opens (spanning min across ranges). */
   readonly startMinute: number
   /** Minutes since midnight the window closes (spanning max; half-open). */
   readonly endMinute: number
   /**
-   * The individual working ranges, one per shift the doctor holds that weekday. A doctor
-   * with a split day (morning + evening) has two, and the gap between them is a break the
-   * grid draws rather than bookable time. `startMinute`/`endMinute` remain the spanning
-   * envelope so existing readers that want one window keep working.
+   * The individual working ranges, one per shift the doctor holds that weekday.
    */
   readonly ranges: readonly { readonly startMinute: number; readonly endMinute: number }[]
+  /**
+   * The doctor's own slot step for the weekday, or `null` when they have no override.
+   *
+   * `null` is the default: the grid's own `AXIS_STEP`. A number is the doctor's own
+   * override and the grid's row axis uses it for this column.
+   */
+  readonly slotMinutes: number | null
 }
 
 /**
  * The working window of each doctor who works a weekday, for the grid's hour axis.
  *
- * Reads the clinic's shift and the doctors' hours exactly as the booking path's own
- * `loadSlotDay` does, and reuses `workingRange` so the window the grid draws is the
- * window a booking is checked against. A doctor whose hours do not overlap the shift
- * is dropped — they are not a column, which is also what `doctorsOnDay` guarantees.
- * Split shifts (two rows for one doctor on one day) are merged into the spanning
- * window, because the axis is a single range per column.
+ * Reads `DoctorShiftRange` when the doctor has any rows for the weekday: the ranges
+ * are *those* (each intersected with the clinic's shift), the spanning envelope is the
+ * override's, and `slotMinutes` is the smallest step across the override's ranges — so
+ * a doctor who works 10–12 in 30-minute slots and 14–17 in 60-minute slots gets the
+ * finer axis, and the column can hold both. A doctor with no override rows falls back
+ * to `DoctorWorkingHours`, as before.
  */
 export async function doctorWindowsOnDay(args: {
   readonly tx: TransactionClient
@@ -304,7 +293,7 @@ export async function doctorWindowsOnDay(args: {
   readonly clinicId: string | null
   readonly weekday: number
 }): Promise<readonly DoctorDayWindow[]> {
-  const [shifts, hours] = await Promise.all([
+  const [shifts, hoursRows, rangeRows] = await Promise.all([
     args.tx.clinicShift.findMany({
       where: { tenantId: args.tenantId, clinicId: args.clinicId ?? undefined, weekday: args.weekday },
       select: { startTime: true, endTime: true },
@@ -321,13 +310,37 @@ export async function doctorWindowsOnDay(args: {
         doctor: { select: { id: true, firstName: true, lastName: true } },
       },
     }),
+    args.tx.doctorShiftRange.findMany({
+      where: {
+        tenantId: args.tenantId,
+        weekday: args.weekday,
+        doctor: { memberships: { some: { tenantId: args.tenantId, isActive: true } } },
+      },
+      select: {
+        startTime: true,
+        endTime: true,
+        slotMinutes: true,
+        doctor: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
   ])
 
   const shift = shifts[0] ?? null
   if (shift === null) return []
 
-  const byDoctor = new Map<string, { name: string; ranges: { startMinute: number; endMinute: number }[] }>()
-  for (const row of hours) {
+  const byDoctor = new Map<
+    string,
+    {
+      name: string
+      ranges: { startMinute: number; endMinute: number }[]
+      slotMinutes: number | null
+    }
+  >()
+
+  // The override wins: a doctor with `DoctorShiftRange` rows for the weekday has
+  // *those* as their schedule, and the default row is not read.
+  const doctorsWithOverride = new Set(rangeRows.map((row) => row.doctor.id))
+  for (const row of rangeRows) {
     const range = workingRange({ shift, hours: { startTime: row.startTime, endTime: row.endTime } })
     if (range === null) continue
     const existing = byDoctor.get(row.doctor.id)
@@ -336,6 +349,27 @@ export async function doctorWindowsOnDay(args: {
       byDoctor.set(row.doctor.id, {
         name: personName(row.doctor.firstName, row.doctor.lastName),
         ranges: [next],
+        slotMinutes: row.slotMinutes,
+      })
+    } else {
+      existing.ranges.push(next)
+      existing.slotMinutes =
+        existing.slotMinutes === null ? row.slotMinutes : Math.min(existing.slotMinutes, row.slotMinutes)
+    }
+  }
+
+  // The default row, for doctors who have no override for the weekday.
+  for (const row of hoursRows) {
+    if (doctorsWithOverride.has(row.doctor.id)) continue
+    const range = workingRange({ shift, hours: { startTime: row.startTime, endTime: row.endTime } })
+    if (range === null) continue
+    const existing = byDoctor.get(row.doctor.id)
+    const next = { startMinute: range.start, endMinute: range.end }
+    if (existing === undefined) {
+      byDoctor.set(row.doctor.id, {
+        name: personName(row.doctor.firstName, row.doctor.lastName),
+        ranges: [next],
+        slotMinutes: null,
       })
     } else {
       existing.ranges.push(next)
@@ -350,18 +384,13 @@ export async function doctorWindowsOnDay(args: {
       startMinute: Math.min(...ordered.map((r) => r.startMinute)),
       endMinute: Math.max(...ordered.map((r) => r.endMinute)),
       ranges: ordered,
+      slotMinutes: w.slotMinutes,
     }
   })
 }
 
 /**
  * The day's `RESULT_NOT_RECORDED` rows for one clinic — the alarm, scoped to a day.
- *
- * `clinicDay` excludes the alarm state by construction (it is not in `GRID_STATUSES`),
- * so a desk that wants to render the outstanding row *in the day's own grid* reads it
- * here and merges it. This is the only other function besides `unrecordedCartable` that
- * selects the state, and it is scoped to one `localDate` where the cartable spans every
- * open day — the grid wants today's, the cartable wants all of them.
  */
 export async function unrecordedOnDay(args: {
   readonly tx: TransactionClient
@@ -386,16 +415,6 @@ export async function unrecordedOnDay(args: {
 
 /**
  * The «نتیجه ثبت نشده» cartable — reception only.
- *
- * `03-data-model.md` §2.2: the alarm "surfaces **only** in the reception cartable —
- * never on the manager or doctor dashboard". This is the only function in the module
- * that selects `RESULT_NOT_RECORDED`, which is how that rule survives as code rather
- * than as a convention a later page breaks.
- *
- * The cartable also carries the day's expected and arrived, because the three are one
- * list to the desk: the alarm is "this person's outcome is missing", the expectation
- * is "this person is due today" and the arrival is "this person is here now", and a
- * receptionist works the list top to bottom rather than switching surfaces.
  */
 export async function unrecordedCartable(args: {
   readonly tx: TransactionClient
@@ -416,22 +435,13 @@ export async function unrecordedCartable(args: {
 
 /**
  * The week's days as the grid renders them, in the product's own week order.
- *
- * The week starts on شنبه (`07-localization.md` §6.4), so a week anchored on any
- * other day is the week *containing* that day, and the columns are the seven days
- * from the week's شنبه. Kept here so the pages that show a week all show the same
- * seven days for the same input.
  */
 export function weekDays(startOfWeek: LocalDate): readonly LocalDate[] {
   return jalaliWeek(startOfWeek)
 }
+
 /**
  * The doctors who offer a service, as the booking popup's own list.
- *
- * Reads the `service_doctors` join table — a service's doctors are the ones the
- * manager attached to it in the catalogue. Each `doctorId` is a **`User` id**
- * (`03-data-model.md` §2.3), which is the same id every other scheduling surface
- * carries.
  */
 export async function doctorsForService(args: {
   readonly tx: TransactionClient
@@ -455,11 +465,6 @@ export async function doctorsForService(args: {
 
 /**
  * The weekdays a doctor works, as the popup's week strip reads them.
- *
- * `weekday` is 0=شنبه … 6=جمعه (`06-constants.md`), and the returned list is the
- * subset the doctor has a `DoctorWorkingHours` row for. The popup's week strip renders
- * only these days, so a doctor who works Saturday, Monday and Wednesday is offered
- * those three and no others.
  */
 export async function workingWeekdaysForDoctor(args: {
   readonly tx: TransactionClient

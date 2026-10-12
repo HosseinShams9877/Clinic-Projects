@@ -7,23 +7,6 @@
  * offers. Those are one transaction's worth of queries, and writing them once is what
  * keeps the reception desk and the manager's oversight page from drifting apart on
  * which doctors a day holds.
- *
- * ## Why the doctor/service/weekday maps are read here
- *
- * The booking popup filters two things the grid does not carry: a doctor's own
- * services (through `service_doctors`) and a doctor's own working weekdays (through
- * `doctor_working_hours`). Reading them once for the whole grid, as plain maps, is
- * what keeps a day with N doctors from being N×2 extra queries — the page's reads
- * stay the reads, and the maps are looked up where the popup opens.
- *
- * ## What is deliberately not here
- *
- * A row. Nothing here writes, because a page is a read and a write is an action
- * (`row-actions.tsx` and `actions.ts`). The one thing that mutates on the way to
- * rendering is the lifecycle sweep, which the cartable runs because the alarm is
- * raised by the clock and not by a person — and the sweep is the module's own
- * idempotent function, called from the request path for the reason `lifecycle.ts`
- * states.
  */
 
 import { fromUtcInstant, formatTime, jalaliWeekday, type LocalDate } from '@/core/localization'
@@ -34,6 +17,7 @@ import {
   clinicDay,
   doctorsOnDay,
   doctorWindowsOnDay,
+  slotMinutesForDoctor,
   unrecordedCartable,
   unrecordedOnDay,
   weekDays,
@@ -62,20 +46,15 @@ export type DayDoctors = Awaited<ReturnType<typeof doctorsOnDay>>
 /**
  * One day's complete grid: its columns, its rows, the doctors' windows, and the
  * popup's options.
- *
- * The three filter maps are what the booking popup reads: `servicesByDoctorId` for a
- * `+` cell opened on a doctor's column, `workingDaysByDoctorId` for the week strip in
- * the same popup, and `doctorsByServiceId` for the header's «ثبت نوبت» button, which
- * has no doctor yet. Each is read once for the whole grid and looked up where the
- * popup opens.
  */
 export interface DayGridData {
   readonly doctors: DayDoctors
   readonly rows: DayRows
-  /** Each working doctor's hour window, for the grid's off-schedule vs free-slot axis. */
   readonly windows: readonly DoctorDayWindow[]
   readonly services: readonly ServiceOption[]
   readonly customers: readonly CustomerOption[]
+  /** The slot step for each doctor on the day, keyed by doctor id. */
+  readonly slotMinutesByDoctorId: Readonly<Record<string, number | null>>
   /** The service ids each doctor offers, keyed by doctor id. */
   readonly servicesByDoctorId: Readonly<Record<string, readonly string[]>>
   /** The weekdays each doctor works (0=شنبه … 6=جمعه), keyed by doctor id. */
@@ -86,37 +65,20 @@ export interface DayGridData {
 
 /**
  * One reminder card the side panel renders, flattened from the ledger row.
- *
- * The panel is a pure view, so the instant → clinic-local time conversion happens
- * here where the tenant's offset is in hand, and the automatic-message label is
- * resolved here against the `notifications` catalog rather than in the component.
  */
 export interface ReminderCard {
   readonly id: string
-  /** The clinic-local time the message was produced, Persian-digit formatted. */
   readonly time: string
-  /** The rendered message text, as the ledger stored it. */
   readonly text: string
-  /** The person the message was about. */
   readonly customerName: string
-  /** The category badge's label, or `null` for a hand-sent message. */
   readonly badge: string | null
-  /** The badge's colour tone. */
   readonly badgeTone: 'brand' | 'warn' | 'info' | 'neutral'
-  /** The reception page the reminder's follow-up lives on, keyed by kind. */
   readonly actionHref: string | null
-  /** The label of that follow-up link. */
   readonly actionLabel: string | null
 }
 
 /**
  * The badge, tone and follow-up a reminder shows, by the message's kind.
- *
- * The three queues the desk acts on — the treatment cycle, the balance, the lead
- * follow-up — get their own badge and page; everything else points at the customer's
- * own list, and a hand-sent message (no kind) gets no badge or action rather than a
- * guessed one. Labels come from the reception catalog and `NAV_LABELS`, never a
- * literal.
  */
 function reminderMeta(kind: string | null): {
   readonly badge: string
@@ -159,8 +121,7 @@ function reminderMeta(kind: string | null): {
 }
 
 /**
- * One day of the week view, carrying its own doctors because a weekday's columns are
- * the doctors who work that weekday and not the ones who work the anchor's.
+ * One day of the week view, carrying its own doctors.
  */
 export interface WeekDayData {
   readonly localDate: LocalDate
@@ -169,29 +130,18 @@ export interface WeekDayData {
 }
 
 /**
- * The day the page is showing, the week the week view holds, and the cartable — the
- * three things a tab asks for, read in one scope.
+ * The day the page is showing, the week the week view holds, and the cartable.
  */
 export interface AppointmentsPageData {
   readonly day: DayGridData
   readonly week: readonly WeekDayData[]
   readonly cartable: DayGridData['rows']
-  /** The desk's «یادآوری‌های امروز» feed, flattened for the side panel. */
   readonly reminders: readonly ReminderCard[]
 }
 
 /**
  * The day's own grid: the doctors who work it, the rows it holds, and the popup's
  * options.
- *
- * `clinicId` is the caller's own — the manager's oversight reads the same function and
- * passes the same value, which is what makes the two pages agree about which branch a
- * day belongs to.
- *
- * The three maps the popup filters on are read here in parallel with the row data:
- * `servicesByDoctorId` for the grid's `+` cells (only this doctor's services),
- * `workingDaysByDoctorId` for the week strip (only this doctor's days), and
- * `doctorsByServiceId` for the header's «ثبت نوبت» button (only this service's doctors).
  */
 export async function loadDayGrid(args: {
   readonly tx: TransactionClient
@@ -218,35 +168,38 @@ export async function loadDayGrid(args: {
     loadPopupOptions({ tx: args.tx, ctx: args.ctx }),
   ])
 
-  // The three filter maps. Read once for the whole grid, and inside the request's own
-  // scope so a service or a weekday cannot come from another tenant.
-  const [servicesByDoctorId, workingDaysByDoctorId, doctorsByServiceId] = await Promise.all([
-    loadServicesByDoctor({
-      tx: args.tx,
-      tenantId: args.ctx.tenantId,
-      doctorIds: doctors.map((d) => d.id),
-    }),
-    loadWorkingDaysByDoctor({
-      tx: args.tx,
-      tenantId: args.ctx.tenantId,
-      doctorIds: doctors.map((d) => d.id),
-    }),
-    loadDoctorsByService({
-      tx: args.tx,
-      tenantId: args.ctx.tenantId,
-      serviceIds: options.services.map((s) => s.id),
-    }),
-  ])
+  const [servicesByDoctorId, workingDaysByDoctorId, doctorsByServiceId, slotMinutesByDoctorId] =
+    await Promise.all([
+      loadServicesByDoctor({
+        tx: args.tx,
+        tenantId: args.ctx.tenantId,
+        doctorIds: doctors.map((d) => d.id),
+      }),
+      loadWorkingDaysByDoctor({
+        tx: args.tx,
+        tenantId: args.ctx.tenantId,
+        doctorIds: doctors.map((d) => d.id),
+      }),
+      loadDoctorsByService({
+        tx: args.tx,
+        tenantId: args.ctx.tenantId,
+        serviceIds: options.services.map((s) => s.id),
+      }),
+      loadSlotMinutesByDoctor({
+        tx: args.tx,
+        tenantId: args.ctx.tenantId,
+        weekday,
+        doctorIds: doctors.map((d) => d.id),
+      }),
+    ])
 
-  // The alarm state is excluded from `clinicDay` by construction; merged here so the
-  // day's own grid shows the outstanding row inline (the demo's dang cell) rather than
-  // only in the cartable tab.
   return {
     doctors,
     windows,
     rows: [...rows, ...unrecorded],
     services: options.services,
     customers: options.customers,
+    slotMinutesByDoctorId,
     servicesByDoctorId,
     workingDaysByDoctorId,
     doctorsByServiceId,
@@ -254,12 +207,7 @@ export async function loadDayGrid(args: {
 }
 
 /**
- * The week the week view shows: the seven days of the Jalali week the anchor is in,
- * each with its own doctors and rows.
- *
- * Read as one `Promise.all` because the seven days are seven independent reads, and
- * reading them in sequence would make the week view seven trips where the day view is
- * one.
+ * The week the week view shows: the seven days of the Jalali week the anchor is in.
  */
 export async function loadWeek(args: {
   readonly tx: TransactionClient
@@ -281,21 +229,13 @@ export async function loadWeek(args: {
 
 /**
  * Everything the reception page's three tabs render, in one scope.
- *
- * The day and the week are both read on every view because the tab bar links to both
- * and the navigation between them is a link, not a reload — a person on the week tab
- * is one tap from the day a row is on, and the data is already there. The cartable is
- * read alongside them for the same reason, and because the tab's own badge is the
- * cartable's length.
  */
 export async function loadAppointmentsPage(args: {
   readonly tx: TransactionClient
   readonly ctx: TenantContext
   readonly clinicId: string | null
   readonly localDate: LocalDate
-  /** The clock the reminder feed's day boundary is read against. */
   readonly now: Date
-  /** The tenant's UTC offset, for converting a send's instant to a clinic-local time. */
   readonly utcOffsetMinutes: number
 }): Promise<AppointmentsPageData> {
   const [day, week, cartable, reminderRows] = await Promise.all([
@@ -322,15 +262,8 @@ export async function loadAppointmentsPage(args: {
   return { day, week, cartable, reminders }
 }
 
-/* ── The three filter maps ─────────────────────────────────────────────────── */
+/* ── The filter maps ───────────────────────────────────────────────────────── */
 
-/**
- * Each doctor's own service ids, read as one `service_doctors` query.
- *
- * A doctor's services are the ones a manager attached to them in the catalogue; the
- * popup's «+» cell shows only these, so a service a doctor does not perform does not
- * appear in their column.
- */
 async function loadServicesByDoctor(args: {
   readonly tx: TransactionClient
   readonly tenantId: string
@@ -350,12 +283,6 @@ async function loadServicesByDoctor(args: {
   return map
 }
 
-/**
- * Each doctor's own working weekdays (0=شنبه … 6=جمعه), read as one query.
- *
- * The popup's week strip renders only the days a doctor works, so a doctor who works
- * Saturday, Monday and Wednesday is offered those three and no others.
- */
 async function loadWorkingDaysByDoctor(args: {
   readonly tx: TransactionClient
   readonly tenantId: string
@@ -377,13 +304,6 @@ async function loadWorkingDaysByDoctor(args: {
   return map
 }
 
-/**
- * Each service's own doctors, read as one `service_doctors` query.
- *
- * The header's «ثبت نوبت» button shows a service picker, and this map is what turns
- * a picked service into a list of doctors who offer it — the second step's doctor
- * select reads this and nothing else.
- */
 async function loadDoctorsByService(args: {
   readonly tx: TransactionClient
   readonly tenantId: string
@@ -408,5 +328,28 @@ async function loadDoctorsByService(args: {
     held.push({ id: row.doctor.id, name })
     map[row.serviceId] = held
   }
+  return map
+}
+
+async function loadSlotMinutesByDoctor(args: {
+  readonly tx: TransactionClient
+  readonly tenantId: string
+  readonly weekday: number
+  readonly doctorIds: readonly string[]
+}): Promise<Readonly<Record<string, number | null>>> {
+  if (args.doctorIds.length === 0) return {}
+  const pairs = await Promise.all(
+    args.doctorIds.map(async (doctorId) => [
+      doctorId,
+      await slotMinutesForDoctor({
+        tx: args.tx,
+        tenantId: args.tenantId,
+        doctorId,
+        weekday: args.weekday,
+      }),
+    ] as const),
+  )
+  const map: Record<string, number | null> = {}
+  for (const [doctorId, minutes] of pairs) map[doctorId] = minutes
   return map
 }

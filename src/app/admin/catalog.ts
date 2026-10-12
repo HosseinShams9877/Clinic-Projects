@@ -527,6 +527,20 @@ export const ADMIN_STAFF = {
     save: 'ذخیره ساعت کاری',
     cancel: 'انصراف',
     close: 'بستن',
+    /** The default week's own header, above the seven default rows. */
+    defaultTitle: 'ساعت کاری پیش‌فرض',
+    /** The doctor's own range set, below the default week. */
+    rangesTitle: 'بازه‌های سفارشی',
+    /** The sentence that says what a range is for, beside its heading. */
+    rangesHint: 'اگر بازه‌ای تعریف شود، جایگزین ساعت پیش‌فرض همان روز می‌شود.',
+    /** The empty state, while the doctor has no ranges. */
+    rangesEmpty: 'هنوز بازه سفارشی تعریف نشده — پیش‌فرض نیم‌ساعته فعال است.',
+    /** The label beside the range's own slot length field. */
+    slotMinutesLabel: 'مدت نوبت (دقیقه)',
+    /** The button that drops one range. */
+    removeRange: 'حذف بازه',
+    /** The prefix the seven add buttons carry, before the weekday name. */
+    addRange: 'افزودن بازه',
   },
 } as const
 

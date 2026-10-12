@@ -92,13 +92,11 @@ const LEAVE_PAGE_PARAM = 'leave'
 
 /**
  * One href for the page, keeping whichever of the two list pages the URL already names.
- *
- * The staff list and the leave list each paginate independently on the one page, so a
- * link that moved one must keep the other where it is — a shared `?page=` would move
- * both at once and the manager would lose their place in the table they were not
- * paging.
  */
-function listHrefFor(current: { readonly staff: number; readonly leave: number }, change: Partial<{ staff: number; leave: number }>): string {
+function listHrefFor(
+  current: { readonly staff: number; readonly leave: number },
+  change: Partial<{ staff: number; leave: number }>,
+): string {
   const next = { ...current, ...change }
   const sp = new URLSearchParams()
   if (next.staff > 1) sp.set(STAFF_PAGE_PARAM, String(next.staff))
@@ -178,10 +176,6 @@ export default async function StaffPage({ searchParams }: { readonly searchParam
 /**
  * The three role defaults over the sixteen permissions, as the spec's own matrix
  * renders them (`04-roles-permissions.md` §2).
- *
- * The manager column is the locked badge on all sixteen, the doctor and secretary
- * columns are the tick the default grants. Nothing here is a control, because the
- * defaults are the matrix's reference and the edits are a membership's own modal.
  */
 function RoleMatrix() {
   return (
@@ -238,10 +232,6 @@ const SECRETARY_DEFAULTS = new Set(ROLE_DEFAULTS[Role.Secretary])
 
 /**
  * The matrix's own sixteen rows, derived from the role defaults the module owns.
- *
- * The defaults are read from `ROLE_DEFAULTS` through the module's barrel, so the table
- * the manager reads and the `can()` the server reads are the same source; the page
- * never restates which permission a role holds.
  */
 const PERMISSION_LABELS_MATRIX: readonly {
   readonly permission: Permission
@@ -334,6 +324,11 @@ function StaffList({
                         ? { doctorId: row.userId, rows: data.doctorHours[row.userId] ?? [] }
                         : undefined
                     }
+                    shiftRanges={
+                      isMember(Role, row.role) && row.role === Role.Doctor
+                        ? { doctorId: row.userId, rows: data.doctorShiftRanges[row.userId] ?? [] }
+                        : undefined
+                    }
                   />
                 </td>
               </tr>
@@ -355,11 +350,6 @@ function StaffList({
 
 /**
  * One membership's effective permission count, as the demo's own column renders it.
- *
- * The manager column is locked, so the count is the full set and not a fraction of it —
- * the same fact the matrix renders as «همیشه» on all sixteen rows. The count comes from
- * the module's own `effectivePermissions` through the page's helper, so the column and
- * the modal's header are one number.
  */
 function permissionText(row: StaffRow): string {
   const count = permissionCount(row)
@@ -369,9 +359,6 @@ function permissionText(row: StaffRow): string {
 
 /**
  * One membership's role, as the badge the role column renders.
- *
- * The manager is the one role the matrix locks, so the badge is the brand tone the
- * matrix's own column carries; the other two are the neutral badge a default renders as.
  */
 function RoleBadge({ role }: { readonly role: string }) {
   const isManagerRole = isMember(Role, role) && role === Role.Manager
@@ -457,7 +444,6 @@ function LeaveTable({
   )
 }
 
-
 /* ── The audit trail ──────────────────────────────────────────────────────── */
 
 /** The twenty newest access changes, as the page's own third table renders them. */
@@ -506,10 +492,6 @@ function AuditTrail({ data }: { readonly data: StaffPageData }) {
 
 /**
  * One audit row's detail, as the compact JSON the operator reads.
- *
- * The column holds the before/after sets (DoD 7) and the trail is an operator's
- * surface, so the detail renders as the JSON it is rather than as a sentence the page
- * would have to keep in step with every action key.
  */
 function AuditDetail({ detail }: { readonly detail: unknown }) {
   if (detail === null || detail === undefined) return <span className="text-ink-3">—</span>

@@ -1,26 +1,5 @@
 /**
  * The week view — seven Jalali days, each a card of its own rows.
- *
- * `02-architecture.md` §9's `reception/appointments.html` carries the day and the week
- * side by side, and the week is not a wider grid: a seven-column grid at a desk's
- * width is seven columns too narrow to hold a name, and a horizontally scrolled week
- * loses the one thing a week is read for, which is the day a slot is on. The seven are
- * therefore cards in a wrap, each carrying the day's own rows the way the day grid's
- * stacked list does — the same rows, the same `RowActions`, one day per card.
- *
- * ## Why each card carries its own doctors
- *
- * A weekday's columns are the doctors who work *that* weekday, and the anchor's
- * doctors are the anchor's. The week's seven are read with a `doctorsOnDay` each
- * (`page-data.ts`), so a card's header names the doctors who work it and a card whose
- * weekday nobody works says so rather than rendering seven empty columns.
- *
- * ## Why the empty day is not rendered smaller
- *
- * A day with no rows is still a day of the week, and rendering it at the same size as
- * its neighbours is what keeps the seven readable as a week. The empty state is the
- * sentence the day grid uses, so the two views agree about what an empty day looks
- * like.
  */
 
 import {
@@ -43,16 +22,13 @@ import { RowActions } from './row-actions'
 
 /** The week grid's own props: the seven days and what the page may do with them. */
 export interface WeekGridProps {
-  /** The week's seven days, from `weekDays`, each with its own doctors and rows. */
   readonly days: readonly WeekDayData[]
-  /** The services the booking popup offers. */
   readonly services: BookingDialogProps['services']
-  /** The customers the booking popup searches. */
   readonly customers: BookingDialogProps['customers']
-  /** Which panel is rendering. */
   readonly panel: BookingDialogProps['panel']
-  /** Whether the caller may write. */
   readonly writable: boolean
+  /** The slot step for each doctor on the day, keyed by doctor id. */
+  readonly slotMinutesByDoctorId?: Readonly<Record<string, number | null>>
 }
 
 /** The week, as seven cards. */
@@ -67,6 +43,7 @@ export function WeekGrid(props: WeekGridProps) {
           customers={props.customers}
           panel={props.panel}
           writable={props.writable}
+          slotMinutesByDoctorId={props.slotMinutesByDoctorId}
         />
       ))}
     </div>
@@ -80,12 +57,14 @@ function WeekCard({
   customers,
   panel,
   writable,
+  slotMinutesByDoctorId,
 }: {
   readonly day: WeekDayData
   readonly services: WeekGridProps['services']
   readonly customers: WeekGridProps['customers']
   readonly panel: WeekGridProps['panel']
   readonly writable: boolean
+  readonly slotMinutesByDoctorId?: Readonly<Record<string, number | null>>
 }) {
   return (
     <section className="flex flex-col rounded-md border border-line bg-surface p-4">
@@ -135,6 +114,7 @@ function WeekCard({
               localDate={day.localDate as LocalDate}
               services={services}
               customers={customers}
+              slotMinutes={slotMinutesByDoctorId?.[doctor.id] ?? null}
             />
           ))}
         </div>
@@ -143,13 +123,6 @@ function WeekCard({
   )
 }
 
-/**
- * The row's one-line description for the week, which is the person's name and the
- * service rather than the block marker the day grid's cells carry.
- *
- * A week card is dense, and the block's own marker is already the day grid's way of
- * saying the hour is closed; the week says the same thing by naming nothing.
- */
 function weekRowDescription(row: WeekDayData['rows'][number]): string {
   if (row.customerName !== null) return row.customerName
   return row.serviceName ?? APPOINTMENTS_PAGE.controls.blockHours

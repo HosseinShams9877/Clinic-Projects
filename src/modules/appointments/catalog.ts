@@ -37,6 +37,7 @@ export type AppointmentsMessageKey =
   | 'appointment.depositRequired'
   | 'appointment.customerCancelWindowClosed'
   | 'appointment.invalidWorkingHours'
+  | 'appointment.shortenConfirmRequired'
 
 /**
  * The sentence for each key.
@@ -57,6 +58,8 @@ export const MESSAGES: Readonly<Record<AppointmentsMessageKey, string>> = {
   'appointment.quickBookDisabled': `ثبت سریع نوبت برای پزشک غیرفعال است. از مدیر کلینیک بخواهید آن را در تنظیمات فعال کند.`,
 
   'appointment.notFound': 'این نوبت پیدا نشد.',
+   'appointment.shortenConfirmRequired': 'مدت این خدمت از مدت نوبت این پزشک بیشتر است.',
+
 
   // A block that would cover a booking the clinic already has cannot be created;
   // the sentence names the conflict so the receptionist knows which row to look at.

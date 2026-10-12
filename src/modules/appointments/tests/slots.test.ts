@@ -1,27 +1,5 @@
 /**
  * Slot generation — DoD 2 and DoD 6, as properties of the arithmetic.
- *
- * `10-testing-strategy.md` §3.1 puts slot generation alongside the state machine as the
- * second thing a wrong answer is silent on, and the generator is pure for exactly that
- * reason: a year of days is the same function called 365 times with the weekday
- * rotated, and the invariant — no missing slot, no duplicated slot — is a property of
- * the arithmetic rather than of a database's contents.
- *
- * The table of cases is the one the module's own header states:
- *
- * | Case | Expectation |
- * |---|---|
- * | clinic closed on the weekday | no slots |
- * | doctor who does not work the weekday | no slots |
- * | doctor whose hours sit outside the shift | no slots — the intersection, not the union |
- * | a service whose duration overruns the range's end | the last slot ends at the end |
- * | a block covering a whole slot | that slot is unavailable and the others are not |
- * | a block covering half a slot | the slot stays available |
- * | a holiday with the toggle off | no slots |
- * | a holiday with the toggle on | the ordinary day |
- *
- * The database reads that produce the facts are separate functions and are covered by
- * the booking suite; nothing here touches one.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -60,6 +38,7 @@ function slotDay(patch: Partial<SlotDay> = {}): SlotDay {
     doctorId: 'doctor-a',
     localDate: ANCHOR,
     durationMinutes: THIRTY_MINUTES,
+    slotMinutes: null,
     blocks: [],
     isHoliday: false,
     ...FULL_DAY,
@@ -81,9 +60,6 @@ describe('workingRange', () => {
   })
 
   it('is null when the doctor hours sit entirely outside the shift', () => {
-    // The intersection and not the union: a doctor whose hours the clinic does not
-    // open is a doctor with no bookable time, and offering the doctor's own range
-    // would put a booking in a shut building.
     expect(
       workingRange({
         shift: { startTime: '09:00', endTime: '12:00' },
@@ -134,8 +110,6 @@ describe('generateSlots', () => {
   })
 
   it('removes exactly the slots a whole-duration block covers', () => {
-    // DoD 6: a closed hour removes the slots its range holds and nothing else. The
-    // block is ۱۰:۰۰ تا ۱۱:۰۰, so ۱۰:۰۰ and ۱۰:۳۰ are gone and ۰۹:۳۰ and ۱۱:۰۰ stay.
     const slots = generateSlots(
       slotDay({ blocks: blockRanges([{ localTime: '10:00', durationMinutes: 60 }]) }),
       DEFAULT_BOOKING_SETTINGS,
@@ -148,9 +122,6 @@ describe('generateSlots', () => {
   })
 
   it('keeps a slot a block only partly covers, because the part is still bookable', () => {
-    // A 30-minute slot at ۱۰:۳۰ overlapped by a ۱۰:۰۰ تا ۱۰:۴۵ block is a 15-minute
-    // appointment the doctor could have started, and the block does not cover its
-    // whole duration.
     const slots = generateSlots(
       slotDay({ blocks: blockRanges([{ localTime: '10:00', durationMinutes: 45 }]) }),
       DEFAULT_BOOKING_SETTINGS,
@@ -162,9 +133,6 @@ describe('generateSlots', () => {
   })
 
   it('removes the whole day when a block covers the whole working range', () => {
-    // «بستن یک روز» is «بستن یک ساعت» called once per working slot, and the same
-    // removal — here written as one block covering the range, which is what the
-    // per-slot rows sum to.
     const slots = generateSlots(
       slotDay({ blocks: blockRanges([{ localTime: '09:00', durationMinutes: 300 }]) }),
       DEFAULT_BOOKING_SETTINGS,
@@ -173,10 +141,6 @@ describe('generateSlots', () => {
   })
 
   it('ends the last slot at the range end when the duration does not divide it evenly', () => {
-    // A 45-minute service on a ۹ تا ۱۲ range yields ۹, ۹:۴۵, ۱۰:۳۰ and ۱۱:۱۵ — the
-    // last one ends at ۱۲:۰۰ exactly, and a ۱۱:۴۵ slot would overrun by 45 minutes.
-    // The generator's step is the duration, which is what keeps the day from
-    // overrunning.
     const slots = generateSlots(
       slotDay({
         shift: { startTime: '09:00', endTime: '12:00' },
@@ -201,9 +165,6 @@ describe('generateSlots', () => {
   })
 
   it('produces no missing and no duplicated slot across a full year', () => {
-    // DoD 2. A year of days with the weekday rotating through every one of the seven,
-    // and the invariant is a property of the arithmetic: each day's slots are the
-    // range cut by the step, so the count is the expected one and no time repeats.
     const range: Range = { start: 540, end: 840 }
     let cursor: LocalDate = ANCHOR
     let days = 0
@@ -256,7 +217,6 @@ describe('daySkeletons', () => {
     expect(days.map((day) => day.localDate)).toEqual([
       '1405-01-01', '1405-01-02', '1405-01-03', '1405-01-04', '1405-01-05', '1405-01-06', '1405-01-07',
     ])
-    // ۱۴۰۵-۰۱-۰۱ is a Saturday in the Jalali calendar, so the week walks ۰ through ۶.
     expect(days.map((day) => day.weekday)).toEqual([0, 1, 2, 3, 4, 5, 6])
     expect(days.every((day) => day.doctorId === 'doctor-a')).toBe(true)
   })

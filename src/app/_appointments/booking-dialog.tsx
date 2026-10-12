@@ -2,46 +2,13 @@
  * The booking popup — `02-architecture.md` §219's three-step booking popup, as the
  * reception desk and the doctor's quick-book both use it.
  *
- * The three steps are the ones `10-testing-strategy.md` line 308 names for the
- * public site — service → day and time → name and mobile — in the desk's own order.
- * The two surfaces share an engine and differ in who is typing: the public page
- * (Phase 8) asks a customer, this one asks the desk, and the desk's version already
- * knows the doctor and the day from the column it was opened from.
+ * ## The shorten-confirm, and why it is a dialog
  *
- * ## Why the steps are the module's own vocabulary
- *
- * Step one is the service, because a service is what carries the duration and the
- * price the module's `BookArgs` needs. Step two is the day and the time, offered as
- * the week the grid is already on — a Jalali week starting on شنبه. Step three is
- * the person, found by the mobile that is their identity.
- *
- * ## The three filters, and why they are props
- *
- * Three things a page that opens this popup may already know:
- *
- * - `allowedServiceIds`: the services the column's doctor offers. When given, step
- *   one's `<select>` shows only those — a service a doctor does not perform does not
- *   appear in their column's popup.
- * - `workingWeekdays`: the weekdays (0=شنبه … 6=جمعه) the column's doctor works. When
- *   given, step two's week strip renders only those days.
- * - `doctorsByServiceId`: the doctors who offer each service, for the header's
- *   «ثبت نوبت» button. When given, step two's doctor field becomes a `<select>`
- *   filtered by the chosen service instead of a read-only text input.
- *
- * Every one of them is optional; a caller that omits all three gets the pre-filter
- * popup the dialog had before, which is what the doctor's own quick-book still uses.
- *
- * ## Why the time is a free-form input and not a slot list
- *
- * The slot engine (`generateSlots`) speaks a `SlotDay` the desk has not assembled
- * yet. The popup offers the whole working day and lets the module be the authority on
- * what it accepts. A slot list lands with the public booking page.
- *
- * ## What is deliberately not here
- *
- * The price and the deposit. They are read from the service row inside the action's
- * transaction and never cross this boundary, because the `SECRETARY_EDIT_PRICE`
- * toggle is off by default.
+ * A service whose `durationMinutes` is longer than the doctor's own `slotMinutes`
+ * is a service the desk must confirm as a shorter booking: the doctor's own step is
+ * the fact the column's cell was drawn against, and a booking that quietly ran past
+ * it would be a slot the grid cannot show. The dialog is the one point in the flow
+ * where the desk says "yes, in less time" — a "no" leaves the booking un-written.
  */
 
 'use client'
@@ -78,6 +45,7 @@ import {
   type ActionResult,
   type BookingInput,
 } from './actions'
+import { ShortenDialog } from './shorten-dialog'
 
 /** One service the first step offers, as the page read it. */
 export interface ServiceOption {
@@ -102,51 +70,26 @@ export interface DoctorOption {
 
 /** The dialog's own props: the column it was opened from, and what it may book. */
 export interface BookingDialogProps {
-  /**
-   * Which doctor the booking is for, when the caller already knows it (a grid column).
-   * Optional: a caller that opens the popup without a doctor (the header's «ثبت نوبت»
-   * button, which lets the user pick from a service) omits it, and step two's doctor
-   * field becomes a `<select>` fed by `doctorsByServiceId`.
-   */
   readonly doctorId?: string
-  /** The doctor's name, when `doctorId` is given. */
   readonly doctorName?: string
-  /** The day the grid is showing, as the week strip's anchor. */
   readonly localDate: LocalDate
   readonly services: readonly ServiceOption[]
-  /** The customers the desk can pick, searched by mobile or name. */
   readonly customers: readonly CustomerOption[]
-  /** The button's own label — «نوبت جدید» at the desk, the doctor's shortcut at home. */
   readonly triggerLabel: string
-  /** Which action the confirm step calls. */
   readonly variant: 'book' | 'quickBook'
-  /** The panel the action resolves, which is the caller's own. */
   readonly panel: 'reception' | 'doctor' | 'admin'
-  /** A service preselected on open. Optional. */
   readonly defaultServiceId?: string
-  /** A time preselected on open, as a stored `HH:mm`. Optional. */
   readonly defaultTime?: string
-  /**
-   * The services the doctor offers. When given, step one's `<select>` shows only
-   * those. When omitted, every service in `services` is offered.
-   */
   readonly allowedServiceIds?: readonly string[]
-  /**
-   * The weekdays (0=شنبه … 6=جمعه) the doctor works. When given, step two's week
-   * strip renders only those days. When omitted, every day of the week is offered.
-   */
   readonly workingWeekdays?: readonly number[]
-  /**
-   * The doctors who offer each service, for a popup that has no preselected doctor.
-   * When given, step two's doctor field becomes a `<select>` filtered by the chosen
-   * service. When omitted, the field is a read-only text input.
-   */
   readonly doctorsByServiceId?: Readonly<Record<string, readonly DoctorOption[]>>
-  /** The trigger button's variant; defaults to the desk's soft chip. */
+  /**
+   * The doctor's own slot step for the day, when they have one. `null` is the
+   * default and the dialog behaves exactly as before the override existed.
+   */
+  readonly slotMinutes?: number | null
   readonly triggerVariant?: ButtonProps['variant']
-  /** The trigger button's size; defaults to small. */
   readonly triggerSize?: Exclude<ButtonSize, 'icon'>
-  /** The trigger's leading icon, or `null` for none; defaults to `appointment`. */
   readonly triggerIcon?: IconName | null
 }
 
@@ -175,6 +118,7 @@ export function BookingDialog(props: BookingDialogProps) {
   const [values, setValues] = useState<BookingValues>(emptyValues(props))
   const [result, setResult] = useState<ActionResult | null>(null)
   const [pending, setPending] = useState(false)
+  const [confirmShorten, setConfirmShorten] = useState(false)
   const titleId = useId()
 
   if (!open) {
@@ -187,6 +131,7 @@ export function BookingDialog(props: BookingDialogProps) {
           setStep(1)
           setResult(null)
           setValues(emptyValues(props))
+          setConfirmShorten(false)
           setOpen(true)
         }}
       >
@@ -201,6 +146,16 @@ export function BookingDialog(props: BookingDialogProps) {
   const doctorChoices = doctorsForChosenService(props, values.serviceId)
 
   async function submit() {
+    if (values.doctorId === '') return
+    const step = props.slotMinutes ?? service?.durationMinutes ?? 0
+    if (step > 0 && service !== undefined && service.durationMinutes > step) {
+      setConfirmShorten(true)
+      return
+    }
+    await runSubmit()
+  }
+
+  async function runSubmit() {
     if (values.doctorId === '') return
     setPending(true)
     const input: BookingInput = {
@@ -228,235 +183,235 @@ export function BookingDialog(props: BookingDialogProps) {
   const stepError = stepErrorMessage(step, values, props)
 
   return (
-    <Overlay onClose={() => setOpen(false)}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[680px]"
-      >
-        <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
-            {BOOKING_POPUP.titles[titleForStep(step)]}
-          </h2>
-          <Button
-            size="icon"
-            variant="ghost"
-            icon="close"
-            aria-label={BOOKING_POPUP.actions.close}
-            onClick={() => setOpen(false)}
-          />
-        </header>
+    <>
+      <Overlay onClose={() => setOpen(false)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[680px]"
+        >
+          <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
+            <h2 id={titleId} className="text-lg font-bold text-ink">
+              {BOOKING_POPUP.titles[titleForStep(step)]}
+            </h2>
+            <Button
+              size="icon"
+              variant="ghost"
+              icon="close"
+              aria-label={BOOKING_POPUP.actions.close}
+              onClick={() => setOpen(false)}
+            />
+          </header>
 
-        <ol className="flex flex-wrap items-center gap-2 p-5 pb-0" aria-hidden="true">
-          {stepNames().map((name, index) => {
-            const number = (index + 1) as Step
-            const reached = step >= number
-            const done = step > number
-            return (
-              <li key={name} className="flex items-center gap-2">
-                {index === 0 ? null : (
-                  <span className="h-[2px] w-[26px] rounded-[2px] bg-line-2" />
-                )}
-                <span
-                  className={cx(
-                    'flex items-center gap-2 text-sm',
-                    reached ? 'font-bold text-ink' : 'text-ink-3',
+          <ol className="flex flex-wrap items-center gap-2 p-5 pb-0" aria-hidden="true">
+            {stepNames().map((name, index) => {
+              const number = (index + 1) as Step
+              const reached = step >= number
+              const done = step > number
+              return (
+                <li key={name} className="flex items-center gap-2">
+                  {index === 0 ? null : (
+                    <span className="h-[2px] w-[26px] rounded-[2px] bg-line-2" />
                   )}
-                >
                   <span
                     className={cx(
-                      'grid size-7 shrink-0 place-items-center rounded-pill text-xs font-bold',
-                      done
-                        ? 'bg-ok-bg text-ok'
-                        : number === step
-                          ? 'bg-brand text-ink-inverse'
-                          : 'bg-surface-sunken text-ink-3',
+                      'flex items-center gap-2 text-sm',
+                      reached ? 'font-bold text-ink' : 'text-ink-3',
                     )}
                   >
-                    {formatNumber(number)}
+                    <span
+                      className={cx(
+                        'grid size-7 shrink-0 place-items-center rounded-pill text-xs font-bold',
+                        done
+                          ? 'bg-ok-bg text-ok'
+                          : number === step
+                            ? 'bg-brand text-ink-inverse'
+                            : 'bg-surface-sunken text-ink-3',
+                      )}
+                    >
+                      {formatNumber(number)}
+                    </span>
+                    {name}
                   </span>
-                  {name}
-                </span>
-              </li>
-            )
-          })}
-        </ol>
+                </li>
+              )
+            })}
+          </ol>
 
-        <div className="flex flex-col gap-4 p-5">
-          {step === 1 ? (
-            <Field label={BOOKING_POPUP.fields.service} required>
-              <select
-                className={CONTROL_CLASSES}
-                value={values.serviceId}
-                onChange={(event) => {
-                  setValues({ ...values, serviceId: event.target.value, doctorId: '' })
-                  setResult(null)
-                }}
-              >
-                <option value="">{BOOKING_POPUP.chooseService}</option>
-                {offeredServices.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          ) : null}
-
-          {step === 2 ? (
-            <>
-              {doctorChoices === null ? (
-                <Field label={BOOKING_POPUP.fields.doctor}>
-                  <input
-                    className={CONTROL_CLASSES}
-                    type="text"
-                    value={props.doctorName ?? ''}
-                    readOnly
-                  />
-                </Field>
-              ) : (
-                <Field label={BOOKING_POPUP.fields.doctor} required>
-                  <select
-                    className={CONTROL_CLASSES}
-                    value={values.doctorId}
-                    onChange={(event) => {
-                      setValues({ ...values, doctorId: event.target.value })
-                      setResult(null)
-                    }}
-                  >
-                    <option value="">{BOOKING_POPUP.chooseDoctor}</option>
-                    {doctorChoices.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
-              <fieldset className="flex flex-col gap-2">
-                <legend className="text-sm font-semibold text-ink-2">
-                  {BOOKING_POPUP.fields.localDate}
-                </legend>
-                <div className="grid grid-cols-4 gap-2 panel:grid-cols-7">
-                  {weekdays.map((day: LocalDate) => (
-                    <DayButton
-                      key={day}
-                      day={day}
-                      selected={day === values.localDate}
-                      onSelect={() => setValues({ ...values, localDate: day })}
-                    />
-                  ))}
-                </div>
-              </fieldset>
-              <Field label={BOOKING_POPUP.fields.localTime} required>
-                <TextInput
-                  type="time"
-                  value={values.localTime}
+          <div className="flex flex-col gap-4 p-5">
+            {step === 1 ? (
+              <Field label={BOOKING_POPUP.fields.service} required>
+                <select
+                  className={CONTROL_CLASSES}
+                  value={values.serviceId}
                   onChange={(event) => {
-                    setValues({ ...values, localTime: event.target.value })
+                    setValues({ ...values, serviceId: event.target.value, doctorId: '' })
                     setResult(null)
                   }}
-                />
+                >
+                  <option value="">{BOOKING_POPUP.chooseService}</option>
+                  {offeredServices.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
               </Field>
-              {service === undefined ? null : (
-                <p className="text-xs text-ink-3">
-                  {service.name} — {BOOKING_POPUP.duration} {formatNumber(service.durationMinutes)}
-                </p>
-              )}
-            </>
-          ) : null}
-
-          {step === 3 ? (
-            <>
-              <CustomerSearch
-                customers={props.customers}
-                selectedId={values.customerId}
-                mobile={values.mobile}
-                firstName={values.firstName}
-                lastName={values.lastName}
-                onChange={(patch) => setValues({ ...values, ...patch })}
-              />
-              <Summary
-                values={values}
-                service={service}
-                doctorName={doctorNameOf(props, values, doctorChoices)}
-              />
-            </>
-          ) : null}
-
-          {result !== null && !result.ok ? (
-            <p className="flex items-center gap-1 text-sm text-danger" role="alert">
-              <Icon name="error" size="compact" />
-              {result.message}
-            </p>
-          ) : null}
-
-          {stepError === null ? null : (
-            <p className="flex items-center gap-1 text-sm text-danger" role="alert">
-              <Icon name="error" size="compact" />
-              {stepError}
-            </p>
-          )}
-        </div>
-
-        <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
-          <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
-            {BOOKING_POPUP.actions.close}
-          </Button>
-          <div className="flex gap-2">
-            {step > 1 ? (
-              <Button
-                variant="neutral"
-                onClick={() => setStep((step - 1) as Step)}
-                disabled={pending}
-              >
-                {BOOKING_POPUP.actions.back}
-              </Button>
             ) : null}
-            {step < 3 ? (
-              <Button
-                variant="primary"
-                onClick={() => {
-                  if (stepErrorMessage(step, values, props) === null) setStep((step + 1) as Step)
-                }}
-              >
-                {BOOKING_POPUP.actions.next}
-              </Button>
-            ) : (
-              <Button variant="primary" loading={pending} onClick={() => void submit()}>
-                {BOOKING_POPUP.actions.confirm}
-              </Button>
+
+            {step === 2 ? (
+              <>
+                {doctorChoices === null ? (
+                  <Field label={BOOKING_POPUP.fields.doctor}>
+                    <input
+                      className={CONTROL_CLASSES}
+                      type="text"
+                      value={props.doctorName ?? ''}
+                      readOnly
+                    />
+                  </Field>
+                ) : (
+                  <Field label={BOOKING_POPUP.fields.doctor} required>
+                    <select
+                      className={CONTROL_CLASSES}
+                      value={values.doctorId}
+                      onChange={(event) => {
+                        setValues({ ...values, doctorId: event.target.value })
+                        setResult(null)
+                      }}
+                    >
+                      <option value="">{BOOKING_POPUP.chooseDoctor}</option>
+                      {doctorChoices.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                <fieldset className="flex flex-col gap-2">
+                  <legend className="text-sm font-semibold text-ink-2">
+                    {BOOKING_POPUP.fields.localDate}
+                  </legend>
+                  <div className="grid grid-cols-4 gap-2 panel:grid-cols-7">
+                    {weekdays.map((day: LocalDate) => (
+                      <DayButton
+                        key={day}
+                        day={day}
+                        selected={day === values.localDate}
+                        onSelect={() => setValues({ ...values, localDate: day })}
+                      />
+                    ))}
+                  </div>
+                </fieldset>
+                <Field label={BOOKING_POPUP.fields.localTime} required>
+                  <TextInput
+                    type="time"
+                    value={values.localTime}
+                    onChange={(event) => {
+                      setValues({ ...values, localTime: event.target.value })
+                      setResult(null)
+                    }}
+                  />
+                </Field>
+                {service === undefined ? null : (
+                  <p className="text-xs text-ink-3">
+                    {service.name} — {BOOKING_POPUP.duration} {formatNumber(service.durationMinutes)}
+                  </p>
+                )}
+              </>
+            ) : null}
+
+            {step === 3 ? (
+              <>
+                <CustomerSearch
+                  customers={props.customers}
+                  selectedId={values.customerId}
+                  mobile={values.mobile}
+                  firstName={values.firstName}
+                  lastName={values.lastName}
+                  onChange={(patch) => setValues({ ...values, ...patch })}
+                />
+                <Summary
+                  values={values}
+                  service={service}
+                  doctorName={doctorNameOf(props, values, doctorChoices)}
+                />
+              </>
+            ) : null}
+
+            {result !== null && !result.ok ? (
+              <p className="flex items-center gap-1 text-sm text-danger" role="alert">
+                <Icon name="error" size="compact" />
+                {result.message}
+              </p>
+            ) : null}
+
+            {stepError === null ? null : (
+              <p className="flex items-center gap-1 text-sm text-danger" role="alert">
+                <Icon name="error" size="compact" />
+                {stepError}
+              </p>
             )}
           </div>
-        </footer>
-      </div>
-    </Overlay>
+
+          <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+              {BOOKING_POPUP.actions.close}
+            </Button>
+            <div className="flex gap-2">
+              {step > 1 ? (
+                <Button
+                  variant="neutral"
+                  onClick={() => setStep((step - 1) as Step)}
+                  disabled={pending}
+                >
+                  {BOOKING_POPUP.actions.back}
+                </Button>
+              ) : null}
+              {step < 3 ? (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (stepErrorMessage(step, values, props) === null) setStep((step + 1) as Step)
+                  }}
+                >
+                  {BOOKING_POPUP.actions.next}
+                </Button>
+              ) : (
+                <Button variant="primary" loading={pending} onClick={() => void submit()}>
+                  {BOOKING_POPUP.actions.confirm}
+                </Button>
+              )}
+            </div>
+          </footer>
+        </div>
+      </Overlay>
+
+      {confirmShorten && service !== undefined ? (
+        <ShortenDialog
+          serviceMinutes={service.durationMinutes}
+          slotMinutes={props.slotMinutes ?? service.durationMinutes}
+          onConfirm={() => {
+            setConfirmShorten(false)
+            void runSubmit()
+          }}
+          onDismiss={() => setConfirmShorten(false)}
+        />
+      ) : null}
+    </>
   )
 }
 
 /* ── The three filters ─────────────────────────────────────────────────────── */
 
-/**
- * The services step one offers.
- *
- * With `allowedServiceIds` given, only those services appear — the services a
- * doctor's own column is bookable for. Without it, every service in `services` is
- * offered, which is the header's own popup.
- */
 function offeredServicesOf(props: BookingDialogProps): readonly ServiceOption[] {
   if (props.allowedServiceIds === undefined) return props.services
   const allowed = new Set(props.allowedServiceIds)
   return props.services.filter((option) => allowed.has(option.id))
 }
 
-/**
- * The days step two's week strip renders.
- *
- * With `workingWeekdays` given, only days whose `jalaliWeekday(day)` is in the list
- * appear — a doctor's working days. Without it, every day of the current Jalali week
- * is offered, which is the header's own popup and the doctor's home.
- */
 function offeredWeekdaysOf(props: BookingDialogProps): readonly LocalDate[] {
   const all = weekDays(props.localDate)
   if (props.workingWeekdays === undefined) return all
@@ -464,17 +419,6 @@ function offeredWeekdaysOf(props: BookingDialogProps): readonly LocalDate[] {
   return all.filter((day) => allowed.has(jalaliWeekday(day)))
 }
 
-/**
- * The doctors step two's field offers, or `null` when the field is a read-only name.
- *
- * `null` has two cases and they are the same case to the renderer: no
- * `doctorsByServiceId` map was given (the doctor's own quick-book and any other
- * single-doctor caller), or `doctorId` was locked by the caller (a grid column). In
- * both the field shows the doctor's name and not a `<select>`. A map given with no
- * chosen service yet yields an empty list, and step two cannot be reached without a
- * service, so the field is only ever rendered with a chosen service and a populated
- * list.
- */
 function doctorsForChosenService(
   props: BookingDialogProps,
   serviceId: string,
@@ -490,7 +434,6 @@ function doctorsForChosenService(
   return props.doctorsByServiceId[serviceId] ?? []
 }
 
-/** The doctor's name for the summary, as the chosen or locked doctor. */
 function doctorNameOf(
   props: BookingDialogProps,
   values: BookingValues,
@@ -505,19 +448,16 @@ function doctorNameOf(
 
 /* ── The step's own helpers ───────────────────────────────────────────────── */
 
-/** The three steps' names, in order, for the progress strip. */
 function stepNames(): readonly string[] {
   return [BOOKING_POPUP.steps.service, BOOKING_POPUP.steps.time, BOOKING_POPUP.steps.customer]
 }
 
-/** The key the step's title is keyed by. */
 function titleForStep(step: Step): 'service' | 'time' | 'customer' {
   if (step === 1) return 'service'
   if (step === 2) return 'time'
   return 'customer'
 }
 
-/** The empty state a fresh popup and a reopened one both start from. */
 function emptyValues(props: BookingDialogProps): BookingValues {
   return {
     serviceId: props.defaultServiceId ?? '',
@@ -531,13 +471,6 @@ function emptyValues(props: BookingDialogProps): BookingValues {
   }
 }
 
-/**
- * The sentence for a step that is not finished, or `null` when it is.
- *
- * The steps gate themselves rather than letting the server refuse them, because the
- * server's refusal would be a sentence about a row that was never written and the
- * person's own answer is "you have not chosen a service yet".
- */
 function stepErrorMessage(
   step: Step,
   values: BookingValues,
@@ -557,13 +490,6 @@ function stepErrorMessage(
   return null
 }
 
-/**
- * The overlay — a dimmed backdrop that closes on a click outside and on Escape.
- *
- * Clicks inside the panel do not close, because the panel is where the form is;
- * `stopPropagation` on the panel's own handler keeps the backdrop's handler from
- * being the one that answers it.
- */
 function Overlay({
   children,
   onClose,
@@ -587,7 +513,6 @@ function Overlay({
   )
 }
 
-/** One day of the Jalali week strip. */
 function DayButton({
   day,
   selected,
@@ -614,7 +539,6 @@ function DayButton({
   )
 }
 
-/** The third step's customer search, with the new-customer branch. */
 function CustomerSearch({
   customers,
   selectedId,
@@ -709,7 +633,6 @@ function CustomerSearch({
   )
 }
 
-/** The summary the third step shows before the row is written. */
 function Summary({
   values,
   service,
@@ -728,7 +651,6 @@ function Summary({
   )
 }
 
-/** One row of the summary. */
 function SummaryRow({ label, value }: { readonly label: string; readonly value: string }) {
   return (
     <>
@@ -738,24 +660,14 @@ function SummaryRow({ label, value }: { readonly label: string; readonly value: 
   )
 }
 
-/** The time the summary shows, as the grid renders it. */
 function summaryTime(values: BookingValues): string {
   return `${formatDate(values.localDate, 'short')} ${formatTime(values.localTime as LocalTime)}`
 }
 
-/** A customer's full name, joined the way the product writes it. */
 function customerName(option: CustomerOption): string {
   return option.lastName === null ? option.firstName : `${option.firstName} ${option.lastName}`
 }
 
-/**
- * The customers a search matches, by mobile first and then name.
- *
- * Mobile is compared after `normalizeMobile`, because the two are stored normalised
- * and a typed space or a Persian-zero would otherwise miss a row that is there. The
- * list is short — the page read the tenant's customers — and the search is client
- * side because the third step is one state of one form.
- */
 function searchCustomers(
   customers: readonly CustomerOption[],
   query: string,
@@ -767,7 +679,6 @@ function searchCustomers(
     .slice(0, 6)
 }
 
-/** Swallows a click so the backdrop does not close on a click inside the panel. */
 function stopPropagation(event: MouseEvent): void {
   event.stopPropagation()
 }

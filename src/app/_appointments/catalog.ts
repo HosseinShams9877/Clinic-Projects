@@ -40,3 +40,22 @@ export const BLOCK_POPUP = {
   cancel: 'انصراف',
   close: 'بستن',
 } as const
+/**
+ * The shorten-confirm dialog: the desk's answer to a service that runs longer than
+ * the doctor's own slot.
+ *
+ * The dialog is the *booking*'s confirm and not a validation: the service and the
+ * doctor are both valid, and what the dialog asks is whether the desk accepts a
+ * booking whose length is shorter than the service the customer asked for. A "no"
+ * is a different time or a different doctor, both of which the form behind it can
+ * take.
+ */
+export const SHORTEN_POPUP = {
+  title: 'مدت خدمت با نوبت این پزشک هم‌خوان نیست',
+  /** The sentence around the two numbers: the service's length and the doctor's step. */
+  bodyStart: 'این خدمت ',
+  bodyMiddle: ' دقیقه است، اما نوبت‌های این پزشک ',
+  bodyEnd: ' دقیقه‌ای است. آیا می‌خواهید با زمان کمتر ثبت شود؟',
+  confirm: 'بله، با زمان کمتر ثبت کن',
+  dismiss: 'نه، زمان دیگری انتخاب می‌کنم',
+} as const

@@ -1,45 +1,5 @@
 /**
  * The staff page's writers, as the manager panel renders them.
- *
- * The page is three tables and this file is the writer for all three: the invite
- * dialog, each membership's permission modal, and the leave table's two decisions.
- * They are one client component file because they are one page's own affordances, and
- * a failure an action returned lands on the row or the form that raised it.
- *
- * ## Why the manager's modal renders no checkboxes (DoD 6)
- *
- * The manager column is locked (`04-roles-permissions.md` §2.3), and the lock's first
- * enforcement is the UI: a manager's permissions render as the «همیشه» badge the
- * matrix holds, with no control to tap. The second enforcement is the module, which
- * refuses a revocation, and the third is the transaction's own invariant — the UI is
- * the first because a control that is not there cannot be submitted, but it is not the
- * only one, because a page that hid a button is not a rule (`04-roles-permissions.md`
- * §3's own alert on the page).
- *
- * ## Why the permission modal is per membership and not per role
- *
- * The overrides are stored per `Membership` and not per `Role` (`04-roles-permissions.md`
- * §2.2: "a visiting doctor who works at two tenants has different permissions at
- * each"), so the modal's own note says the change is for this one person, and the
- * count it renders is this one person's effective set — «۵ از ۱۶» and not the role's
- * default.
- *
- * ## Why the leave table's two buttons need no confirm
- *
- * An approval closes a request and the calendar opens; a rejection closes it and the
- * calendar does not. Neither is destructive — the row keeps both decisions in its own
- * columns, and the audit trail keeps the approver — so the two are one tap each, and a
- * manager who changes their mind makes the other decision on the same row.
- *
- * ## Why the modal's grid is controlled and the form's fields are not
- *
- * The checkboxes need the before-state to send a delta-free whole set: the modal sends
- * the two complete lists and the module reconciles, so the grid is state. The invite
- * form's fields are read off the submitted form instead, because a form's own value is
- * already the source of truth and a second one in state would be the one that drifts.
- * The role control is the one exception — it is a `Combobox`, whose value is the
- * option's id and not a form field, so the invite form holds its state beside the
- * other fields it reads off the form.
  */
 
 'use client'
@@ -65,14 +25,14 @@ import {
   deactivateMembershipAction,
   inviteStaffAction,
   rejectLeaveRequestAction,
-  setDoctorWorkingHoursAction,
+  setDoctorShiftRangesAction,
   updateMembershipPermissionsAction,
   type ActionResult,
   type InviteInput,
   type PermissionsInput,
 } from './actions'
 
-/** The three roles the invite form's select offers, from the constants' own set. */
+/** The three roles the invite form's select offers. */
 const ROLE_OPTIONS = Object.values(Role).map((value) => ({
   value,
   label: ROLE_LABELS[value],
@@ -80,17 +40,6 @@ const ROLE_OPTIONS = Object.values(Role).map((value) => ({
 
 /* ── The invite dialog ────────────────────────────────────────────────────── */
 
-/**
- * «دعوت کاربر» — the one create, opened from the page's own header.
- *
- * A mobile the list already holds comes back onto the form as the module's own
- * sentence, which points the manager at the existing row: the person is already on the
- * staff list, and the ordinary outcome of an invite is not a mistake.
- *
- * The role is controlled state and not a form field, because the control that picks it
- * is a `Combobox` — its value is an option's id, and the form reads the other four
- * fields off the submitted form. The two halves are one record at submit time.
- */
 export function NewStaffDialog() {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -196,14 +145,11 @@ export function NewStaffDialog() {
   )
 }
 
-/** The id the footer's submit button refers to, so the form and its button are one. */
 const INVITE_FORM_ID = 'invite-staff-form'
 
 /* ── The membership row's own actions ─────────────────────────────────────── */
 
-/** The row's own fields, as the permission modal reads them back. */
 export interface StaffRowActionsProps {
-  /** The membership the manager is acting on, as the page's own row holds it. */
   readonly membership: {
     readonly id: string
     readonly role: string
@@ -214,24 +160,23 @@ export interface StaffRowActionsProps {
       readonly lastName: string
     }
   }
-  /**
-   * The sixteen permissions as the modal renders them, derived by the page from the
-   * module's own `effectivePermissions` — the modal renders the formula's answer and
-   * not a second computation of it.
-   */
   readonly grid: readonly { readonly permission: Permission; readonly held: boolean; readonly locked: boolean }[]
-  /** The doctor's weekly hours, when the row is a doctor — opens the «ساعت کاری» form. */
   readonly workingHours?: {
     readonly doctorId: string
     readonly rows: readonly { readonly weekday: number; readonly startTime: string; readonly endTime: string }[]
   }
+  readonly shiftRanges?: {
+    readonly doctorId: string
+    readonly rows: readonly {
+      readonly weekday: number
+      readonly startTime: string
+      readonly endTime: string
+      readonly slotMinutes: number
+    }[]
+  }
 }
 
-/**
- * The things the manager does to a membership: open its permissions, change its role,
- * and switch it on or off.
- */
-export function StaffRowActions({ membership, grid, workingHours }: StaffRowActionsProps) {
+export function StaffRowActions({ membership, grid, workingHours, shiftRanges }: StaffRowActionsProps) {
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
   const [editing, setEditing] = useState(false)
@@ -320,6 +265,7 @@ export function StaffRowActions({ membership, grid, workingHours }: StaffRowActi
           doctorId={workingHours.doctorId}
           doctorName={`${membership.user.firstName} ${membership.user.lastName}`}
           initial={workingHours.rows}
+          initialRanges={shiftRanges?.rows ?? []}
           onClose={() => setHoursOpen(false)}
           onDone={(outcome) => {
             if (outcome.ok) {
@@ -336,10 +282,8 @@ export function StaffRowActions({ membership, grid, workingHours }: StaffRowActi
 
 /* ── The «ساعت کاری» modal ─────────────────────────────────────────────────── */
 
-/** The seven weekdays, شنبه-first, as the form's own rows. */
 const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const
 
-/** One weekday's editable state in the working-hours form. */
 interface DayState {
   readonly weekday: number
   readonly active: boolean
@@ -347,39 +291,85 @@ interface DayState {
   readonly endTime: string
 }
 
+interface RangeState {
+  readonly id: string
+  readonly weekday: number
+  readonly startTime: string
+  readonly endTime: string
+  readonly slotMinutes: string
+}
+
 /**
- * «ساعت کاری پزشک» — the doctor's weekly hours, one row per weekday.
+ * «ساعت کاری پزشک» — the doctor's weekly hours.
  *
- * A day's checkbox is whether the doctor works it; unchecking a day drops its row from
- * the write, which is how the module stores "does not work this day" (the absence of a
- * row). The two time fields are a day's window, sent only for the days left checked.
+ * The default `DoctorWorkingHours` set is the seven rows the top of the form holds.
+ * Below them, the doctor's own shift ranges (the override), one or more per weekday,
+ * each with its own slot length. A doctor with no ranges keeps the default; a doctor
+ * with ranges replaces the default for that weekday entirely.
  */
 function WorkingHoursModal({
   doctorId,
   doctorName,
   initial,
+  initialRanges,
   onClose,
   onDone,
 }: {
   readonly doctorId: string
   readonly doctorName: string
   readonly initial: readonly { readonly weekday: number; readonly startTime: string; readonly endTime: string }[]
+  readonly initialRanges: readonly {
+    readonly weekday: number
+    readonly startTime: string
+    readonly endTime: string
+    readonly slotMinutes: number
+  }[]
   readonly onClose: () => void
   readonly onDone: (outcome: ActionResult) => void
 }) {
   const [pending, startTransition] = useTransition()
   const titleId = useId()
   const [days, setDays] = useState<readonly DayState[]>(() => initialDays(initial))
+  const [ranges, setRanges] = useState<readonly RangeState[]>(() => initialRangesFrom(initialRanges))
 
   function patch(weekday: number, change: Partial<DayState>) {
     setDays((prev) => prev.map((day) => (day.weekday === weekday ? { ...day, ...change } : day)))
   }
 
+  function patchRange(id: string, change: Partial<RangeState>) {
+    setRanges((prev) => prev.map((range) => (range.id === id ? { ...range, ...change } : range)))
+  }
+
+  function addRange(weekday: number) {
+    setRanges((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        weekday,
+        startTime: '09:00',
+        endTime: '17:00',
+        slotMinutes: '30',
+      },
+    ])
+  }
+
+  function removeRange(id: string) {
+    setRanges((prev) => prev.filter((range) => range.id !== id))
+  }
+
   function submit() {
-    const rows = days
+    const dayRows = days
       .filter((day) => day.active)
       .map((day) => ({ weekday: day.weekday, startTime: day.startTime, endTime: day.endTime }))
-    startTransition(async () => onDone(await setDoctorWorkingHoursAction({ doctorId, rows })))
+    const rangeRows = ranges.map((range) => ({
+      weekday: range.weekday,
+      startTime: range.startTime,
+      endTime: range.endTime,
+      slotMinutes: Number.parseInt(range.slotMinutes, 10) || 30,
+    }))
+    startTransition(async () =>
+      onDone(await setDoctorShiftRangesAction({ doctorId, days: dayRows, ranges: rangeRows })),
+    )
   }
 
   return (
@@ -388,7 +378,7 @@ function WorkingHoursModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg"
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-2xl"
       >
         <header className="flex items-center justify-between gap-4 border-b border-line p-6">
           <h2 id={titleId} className="text-lg font-bold text-ink">
@@ -400,6 +390,7 @@ function WorkingHoursModal({
         <p className="px-6 pt-6 text-sm text-ink-2">{ADMIN_STAFF.workingHours.lead}</p>
 
         <div className="flex flex-col gap-2 p-6">
+          <h3 className="text-sm font-bold text-ink">{ADMIN_STAFF.workingHours.defaultTitle}</h3>
           {days.map((state) => (
             <div key={state.weekday} className="flex flex-wrap items-center gap-3 rounded-sm border border-line bg-surface-2 px-3 py-2">
               <label className="flex min-w-[96px] items-center gap-2">
@@ -433,6 +424,83 @@ function WorkingHoursModal({
           ))}
         </div>
 
+        <div className="flex flex-col gap-2 border-t border-line p-6">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-ink">{ADMIN_STAFF.workingHours.rangesTitle}</h3>
+            <span className="text-xs text-ink-3">{ADMIN_STAFF.workingHours.rangesHint}</span>
+          </div>
+
+          {ranges.length === 0 ? (
+            <p className="rounded-sm border border-dashed border-line-2 px-3 py-4 text-center text-xs text-ink-3">
+              {ADMIN_STAFF.workingHours.rangesEmpty}
+            </p>
+          ) : (
+            ranges.map((range) => (
+              <div key={range.id} className="flex flex-wrap items-center gap-3 rounded-sm border border-line bg-surface-2 px-3 py-2">
+                <select
+                  value={range.weekday}
+                  onChange={(event) => patchRange(range.id, { weekday: Number.parseInt(event.currentTarget.value, 10) })}
+                  className="rounded-xs border border-line-2 bg-surface px-2 py-1 text-sm text-ink"
+                >
+                  {WEEKDAYS.map((weekday) => (
+                    <option key={weekday} value={weekday}>
+                      {weekdayLabel(weekday)}
+                    </option>
+                  ))}
+                </select>
+                <span className="flex items-center gap-1 text-xs text-ink-3">
+                  {ADMIN_STAFF.workingHours.from}
+                  <input
+                    type="time"
+                    value={range.startTime}
+                    onChange={(event) => patchRange(range.id, { startTime: event.currentTarget.value })}
+                    className="rounded-xs border border-line-2 bg-surface px-2 py-1 text-ink tabular-nums"
+                  />
+                  {ADMIN_STAFF.workingHours.to}
+                  <input
+                    type="time"
+                    value={range.endTime}
+                    onChange={(event) => patchRange(range.id, { endTime: event.currentTarget.value })}
+                    className="rounded-xs border border-line-2 bg-surface px-2 py-1 text-ink tabular-nums"
+                  />
+                </span>
+                <span className="flex items-center gap-1 text-xs text-ink-3">
+                  {ADMIN_STAFF.workingHours.slotMinutesLabel}
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={range.slotMinutes}
+                    onChange={(event) => patchRange(range.id, { slotMinutes: event.currentTarget.value })}
+                    className="w-16 rounded-xs border border-line-2 bg-surface px-2 py-1 text-ink tabular-nums"
+                  />
+                </span>
+                <Button
+                  size="small"
+                  variant="ghost"
+                  leadingIcon="close"
+                  onClick={() => removeRange(range.id)}
+                  aria-label={ADMIN_STAFF.workingHours.removeRange}
+                >
+                  {ADMIN_STAFF.workingHours.removeRange}
+                </Button>
+              </div>
+            ))
+          )}
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            {WEEKDAYS.map((weekday) => (
+              <Button
+                key={weekday}
+                size="small"
+                variant="neutral"
+                onClick={() => addRange(weekday)}
+              >
+                {`${ADMIN_STAFF.workingHours.addRange} — ${weekdayLabel(weekday)}`}
+              </Button>
+            ))}
+          </div>
+        </div>
+
         <footer className="flex items-center justify-end gap-2 border-t border-line p-6">
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             {ADMIN_STAFF.workingHours.cancel}
@@ -446,13 +514,11 @@ function WorkingHoursModal({
   )
 }
 
-/** One weekday's own name, شنبه-first, via the localization helper's index. */
 function weekdayLabel(weekday: number): string {
   const names = [0, 1, 2, 3, 4, 5, 6].map((index) => weekdayName(index as Parameters<typeof weekdayName>[0]))
   return names[weekday] ?? ''
 }
 
-/** The seven weekdays' opening state, from the hours the doctor already holds. */
 function initialDays(
   initial: readonly { readonly weekday: number; readonly startTime: string; readonly endTime: string }[],
 ): readonly DayState[] {
@@ -465,16 +531,25 @@ function initialDays(
   })
 }
 
+function initialRangesFrom(
+  initial: readonly {
+    readonly weekday: number
+    readonly startTime: string
+    readonly endTime: string
+    readonly slotMinutes: number
+  }[],
+): readonly RangeState[] {
+  return initial.map((row) => ({
+    id: crypto.randomUUID(),
+    weekday: row.weekday,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    slotMinutes: String(row.slotMinutes),
+  }))
+}
+
 /* ── The permission modal ─────────────────────────────────────────────────── */
 
-/**
- * «ویرایش دسترسی‌ها» — the sixteen-permission grid for one membership (DoD 5).
- *
- * The grid is two states at once for a non-manager: the permissions the role already
- * grants are checked and the ones it does not are not, and a tap on either moves it
- * between the two lists the action sends. The manager column renders the grid as the
- * locked badge and no control at all, which is the lock's first enforcement.
- */
 function PermissionModal({
   membership,
   grid,
@@ -609,25 +684,15 @@ function PermissionModal({
   )
 }
 
-/** The id the permission modal's footer refers to. */
 const PERMISSIONS_FORM_ID = 'membership-permissions-form'
 
 /* ── The leave table's two decisions ───────────────────────────────────────── */
 
-/** One leave row's own props, as the table's last column renders them. */
 export interface LeaveRowActionsProps {
   readonly leaveRequestId: string
-  /** The request's state, which decides whether the two buttons belong. */
   readonly status: string
 }
 
-/**
- * The two things the manager does to a request, as the state permits them.
- *
- * A decided request is closed and renders nothing, because a third decision on a row
- * that already has one is not a correction — the module refuses it and the row should
- * not offer it.
- */
 export function LeaveRowActions({ leaveRequestId, status }: LeaveRowActionsProps) {
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
@@ -668,16 +733,8 @@ export function LeaveRowActions({ leaveRequestId, status }: LeaveRowActionsProps
 
 /* ── The pieces the forms share ───────────────────────────────────────────── */
 
-/** A form's own answer: its outcome and the sentence the outcome rendered. */
 type FormAnswer = { readonly ok: boolean; readonly message: string }
 
-/**
- * A form's answer: nothing while the form is clean, a sentence once the action returned.
- *
- * The tone is the outcome's own and not a guess from the text, because the staff
- * page's forms each have their own sentences and a comparison against them would be a
- * fourth place those sentences are spelled.
- */
 function FormAnswer({ answer }: { readonly answer: FormAnswer | null }) {
   if (answer === null) return null
   return (
@@ -692,7 +749,6 @@ function FormAnswer({ answer }: { readonly answer: FormAnswer | null }) {
   )
 }
 
-/** The dimmed backdrop a click outside and an Escape both close. */
 function Overlay({
   children,
   onClose,
@@ -713,7 +769,6 @@ function Overlay({
   )
 }
 
-/** One permission the modal's grid offers, as a checkbox the matrix's row holds. */
 function PermissionRow({
   label,
   checked,
@@ -736,7 +791,6 @@ function PermissionRow({
   )
 }
 
-/** One permission the manager column holds, as the locked badge the matrix renders. */
 function LockedRow({ label }: { readonly label: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-sm border border-line bg-surface-2 px-3 py-2">
@@ -748,7 +802,6 @@ function LockedRow({ label }: { readonly label: string }) {
   )
 }
 
-/** The role change's own button, which applies the new role and clears the overrides. */
 function ApplyRoleRow({ disabled, onApply }: { readonly disabled: boolean; readonly onApply: () => void }) {
   return (
     <div className="flex items-center gap-2">
@@ -759,13 +812,11 @@ function ApplyRoleRow({ disabled, onApply }: { readonly disabled: boolean; reado
   )
 }
 
-/** One field's value from a submitted form, or '' when the field was absent. */
 function asFormString(form: HTMLFormElement, name: string): string {
   const value = form.elements.namedItem(name)
   return value instanceof HTMLInputElement ? value.value : ''
 }
 
-/** Swallows a click so the backdrop does not close on a click inside the panel. */
 function stopPropagation(event: MouseEvent): void {
   event.stopPropagation()
 }

@@ -6,41 +6,18 @@
  *
  * 1. **`requirePermission(ctx, Permission.ManageAppointments)`** — DoD 3's
  *    "attempted by a role without `manage_appointments` is refused on the server".
- *    It is first because it is the cheapest refusal and the one the document is most
- *    explicit about («سطح دسترسی باید در سمت سرور بررسی شود، نه با پنهان کردن
- *    دکمه»). A permission failure must not read a row, because the row's existence
- *    is not the caller's to learn.
  * 2. **The domain rules** — the day is bookable, the slot is inside the doctor's
  *    hours, the service belongs to the clinic. These are `DomainError`, not
  *    `ValidationError`: the caller's input was fine and it is the world that refuses.
  * 3. **The unique index** — `appt_slot_unique` on `(tenantId, doctorId, slotKey)`.
- *    This is DoD 4's guard, and it is a *database* guard on purpose. Two concurrent
- *    requests both pass every check above — that is what "concurrent" means — and
- *    only the index can make one of them lose. An application-level "does a booking
- *    exist" read settles the race in favour of whichever request ran second, which
- *    is the double booking the guard exists to prevent.
  *
- * The two requests that race therefore both reach the write and one of them meets
- * `P2002`, which this module converts to the catalog's «این ساعت قبلاً رزرو شده
- * است» rather than rethrowing — because the sentence the user reads names the fix
- * (pick another time) and a raw Prisma code does not.
+ * ## The doctor's own shift ranges win when they exist
  *
- * ## `slotKey`, and why a cancelled row releases its slot
- *
- * `slotKey` holds the slot's UTC instant for a real booking and is `NULL` for a slot
- * block. NULL is not compared by a unique index on either engine, so an unlimited
- * number of blocks may share a slot and exactly one booking may hold it
- * (`prisma.schema`'s escape-hatch note). A cancellation and a reschedule both clear
- * `slotKey`, for the same reason: the row is closed, and a closed row still holding
- * the slot would make the time permanently unbookable — the slot would be taken by
- * an appointment nobody is coming to.
- *
- * ## Reschedule: the row is closed, not moved
- *
- * `RESCHEDULED` is terminal in the state machine, so a reschedule *creates* a new
- * `BOOKED` row and points the old one at it through `rescheduledToId`. The
- * alternative — updating the row's time — would destroy the fact that the customer
- * was ever booked for the first time, and that fact is what a no-show analysis counts.
+ * `DoctorWorkingHours` is the default week; `DoctorShiftRange` is the override. When
+ * the doctor has rows in the override table for a weekday, the day's bookable
+ * windows are the union of *those* ranges (not the default row), and the slot must
+ * fit inside one of them. A weekday with no override rows behaves exactly as before
+ * the override existed.
  */
 
 import {
@@ -91,19 +68,12 @@ export interface BookArgs {
   readonly doctorId: string
   readonly customerId: string
   readonly serviceId: string
-  /** The clinic-local Jalali day the slot is on. */
   readonly localDate: LocalDate
-  /** The clinic-local time the slot starts. */
   readonly localTime: LocalTime
-  /** The service's duration, snapshotted onto the row. */
   readonly durationMinutes: number
-  /** The price at booking, snapshotted (`03-data-model.md` §2.2). */
   readonly priceAtBooking: bigint
-  /** The deposit the booking captured, `0n` when none. */
   readonly depositAmount: bigint
-  /** How this booking reached the clinic. */
   readonly source: string
-  /** The cycle this session belongs to, when it is one. */
   readonly cycleId?: string
 }
 
@@ -116,17 +86,13 @@ export interface CreatedAppointment {
 }
 
 /**
- * The context the public site books under: a tenant, and a role none of the three staff
- * roles is, so the permission guard the desk's booking opens with is not this path's
- * guard — the principal is the site itself, and the gates are the day, the deposit and
- * the slot.
+ * The context the public site books under.
  */
 export interface PublicBookingContext {
   readonly tenantId: TenantId
   readonly clinicId: ClinicId | null
   readonly role: 'public'
   readonly userId: UserId
-  /** Empty by construction: the public site holds no role and no overrides. */
   readonly overrides: PermissionOverrides
 }
 
@@ -138,26 +104,6 @@ type AnyBookArgs = BookArgs | PublicBookArgs
 
 /**
  * Books an appointment.
- *
- * The same record shape for a doctor, a secretary and a manager (DoD 3) — the role
- * only decides whether the call is permitted, and once past `requirePermission`
- * every caller writes the same row. The role is therefore not a parameter of the
- * record, and a test that books the same slot three times with three contexts gets
- * three rows that differ only in their ids.
- *
- * The campaign attribution is the *caller's* to make, not this function's. It used to
- * run here, and that made this file import `@/modules/campaigns`, which imports
- * `@/modules/messages`, which reaches `@node-rs/argon2` — a Node-only module that
- * cannot be in the browser graph. `book.ts` is reachable from client components (the
- * booking dialog), so the static import broke `next build`. The attribution now runs
- * in the Server Action (`src/app/_appointments/actions.ts`), which is server-only and
- * may import whichever barrel it needs.
- *
- * @throws PermissionError — the caller holds no `manage_appointments`.
- * @throws DomainError, as `appointment.slotTaken` — the slot was booked between the
- *   grid and the write (DoD 4).
- * @throws DomainError, as `appointment.closed` — the doctor does not work this day,
- *   or the day is a holiday the clinic does not book.
  */
 export async function bookAppointment(args: BookArgs): Promise<CreatedAppointment> {
   requirePermission(args.ctx, 'manage_appointments')
@@ -169,31 +115,7 @@ export async function bookAppointment(args: BookArgs): Promise<CreatedAppointmen
 }
 
 /**
- * The public site's booking — `02-architecture.md` §9's `booking.html`.
- *
- * The same row, the same guards and the same sentences as the desk's booking, with one
- * difference and it is the only one: **there is no membership**. A visitor holds no
- * session, so there is no `manage_appointments` to require and no `userId` to record.
- * The permission check is replaced by the context the caller supplies, and the caller
- * is a Server Action that resolved the tenant from the host and named a principal the
- * permission primitive refuses — which is the honest answer to "may a stranger book",
- * and not a bypass of the check the desk's path keeps.
- *
- * The two domain gates the public site's own deliverable names are here, and they are
- * the same two the desk's path already had:
- *
- * - **Toggle 7** — a holiday is not bookable, through the same `loadSlotDay` the desk's
- *   grid consults, so a day the site offers and a day the desk shows cannot disagree.
- * - **Toggle 6** — a service with a deposit is refused when the toggle is off, because
- *   the public site cannot collect the money and a booking that skipped the deposit
- *   would be a deposit the clinic never received and a row that pretends it did.
- *
- * @throws DomainError, as `appointment.depositRequired` — toggle 6 is off and the
- *   service carries a deposit the public site cannot capture.
- * @throws DomainError, as `appointment.closed` — the doctor does not work this day, or
- *   the day is a holiday the clinic does not book.
- * @throws DomainError, as `appointment.slotTaken` — the slot was booked between the
- *   wizard and the write.
+ * The public site's booking.
  */
 export async function bookPublicAppointment(args: PublicBookArgs): Promise<CreatedAppointment> {
   const settings = await readBookingSettings(args.tx, args.ctx.tenantId)
@@ -214,11 +136,6 @@ export async function bookPublicAppointment(args: PublicBookArgs): Promise<Creat
 
 /**
  * The service's own deposit, read on the write path.
- *
- * Not the caller's `depositAmount`: that field is the snapshot a booking captures, and
- * the public site is a caller the clinic did not vet. A gate that trusted it would be a
- * gate a request that passed `0n` walked straight through, and the row would carry a
- * deposit the clinic never received. The service row is the gate's only source.
  */
 async function serviceDeposit(args: AnyBookArgs): Promise<bigint> {
   const service = await args.tx.service.findFirst({
@@ -230,15 +147,6 @@ async function serviceDeposit(args: AnyBookArgs): Promise<bigint> {
 
 /**
  * The doctor's quick-book shortcut (DoD 9).
- *
- * A doctor who books for themselves holds `manage_appointments` — the permission
- * check passes — but the *shortcut* is a separate toggle (toggle 1), and the
- * specification wants the shortcut refused server-side when the toggle is off rather
- * than merely hidden. The check therefore runs after the permission check and reads
- * the settings row the permission check cannot see, and the sentence it raises names
- * the manager, because the doctor cannot resolve this themselves.
- *
- * @throws DomainError, as `appointment.quickBookDisabled`.
  */
 export async function bookOwnAppointment(args: BookArgs): Promise<CreatedAppointment> {
   requirePermission(args.ctx, 'manage_appointments')
@@ -259,10 +167,6 @@ export async function bookOwnAppointment(args: BookArgs): Promise<CreatedAppoint
 
 /**
  * The domain rules a booking's slot has to satisfy, before any write is attempted.
- *
- * Checked *and* then left to the index: under two concurrent requests both pass
- * here, and the index is what makes one lose. Reordering these two would not close
- * the race; removing the index would.
  */
 async function assertSlotBookable(args: AnyBookArgs, settings: BookingSettings): Promise<void> {
   const day = await loadSlotDay(args, settings)
@@ -286,16 +190,17 @@ async function assertSlotBookable(args: AnyBookArgs, settings: BookingSettings):
  * One day's bookable facts: whether the doctor works the day at all, and whether the
  * requested time is free on it.
  *
- * The read is inside the caller's transaction, so the facts it returns are the facts
- * the booking commits against — which is also why the index is still needed: the
- * read is not a lock, and the interval between it and the write is the race.
+ * The doctor's own `DoctorShiftRange` rows win when they exist for the weekday: the
+ * slot must fit inside one of them, and the `DoctorWorkingHours` row is not read at
+ * all. When they do not exist, the default row is the day and the intersection with
+ * the clinic's shift is the window (the pre-override behaviour, exactly).
  */
 async function loadSlotDay(
   args: AnyBookArgs,
   settings: BookingSettings,
 ): Promise<{ readonly bookable: boolean; readonly slotAvailable: boolean }> {
   const weekday = jalaliWeekday(args.localDate)
-  const [shifts, workingHours, blocks, holiday] = await Promise.all([
+  const [shifts, workingHours, shiftRanges, blocks, holiday] = await Promise.all([
     args.tx.clinicShift.findMany({
       where: { tenantId: args.ctx.tenantId, clinicId: args.clinicId, weekday },
       select: { startTime: true, endTime: true },
@@ -303,6 +208,10 @@ async function loadSlotDay(
     args.tx.doctorWorkingHours.findMany({
       where: { tenantId: args.ctx.tenantId, doctorId: args.doctorId, weekday },
       select: { startTime: true, endTime: true },
+    }),
+    args.tx.doctorShiftRange.findMany({
+      where: { tenantId: args.ctx.tenantId, doctorId: args.doctorId, weekday },
+      select: { startTime: true, endTime: true, slotMinutes: true },
     }),
     args.tx.appointment.findMany({
       where: {
@@ -320,18 +229,35 @@ async function loadSlotDay(
   ])
 
   const shift = shifts[0] ?? null
-  const hours = workingHours[0] ?? null
-  if (shift === null || hours === null) {
+  if (shift === null) {
     return { bookable: false, slotAvailable: false }
   }
 
-  // The intersection, not the union: a doctor works inside the clinic's hours and
-  // never outside them (`DoctorWorkingHours` in `prisma/schema.prisma`).
-  const start = Math.max(minutesOf(shift.startTime), minutesOf(hours.startTime))
-  const end = Math.min(minutesOf(shift.endTime), minutesOf(hours.endTime))
   const slotStart = minutesOf(args.localTime)
-  if (slotStart < start || slotStart + args.durationMinutes > end) {
-    return { bookable: false, slotAvailable: false }
+  const slotEnd = slotStart + args.durationMinutes
+
+  if (shiftRanges.length > 0) {
+    // The override wins: the slot must fit inside one of the doctor's ranges (each
+    // intersected with the clinic's shift, because a doctor never works outside it).
+    const insideAnyRange = shiftRanges.some((range) => {
+      const rangeStart = Math.max(minutesOf(shift.startTime), minutesOf(range.startTime))
+      const rangeEnd = Math.min(minutesOf(shift.endTime), minutesOf(range.endTime))
+      return slotStart >= rangeStart && slotEnd <= rangeEnd
+    })
+    if (!insideAnyRange) {
+      return { bookable: false, slotAvailable: false }
+    }
+  } else {
+    // The default week: one row per weekday, intersected with the clinic's shift.
+    const hours = workingHours[0] ?? null
+    if (hours === null) {
+      return { bookable: false, slotAvailable: false }
+    }
+    const start = Math.max(minutesOf(shift.startTime), minutesOf(hours.startTime))
+    const end = Math.min(minutesOf(shift.endTime), minutesOf(hours.endTime))
+    if (slotStart < start || slotEnd > end) {
+      return { bookable: false, slotAvailable: false }
+    }
   }
 
   if (holiday !== null && !settings.bookingOnHolidays) {
@@ -340,7 +266,7 @@ async function loadSlotDay(
 
   const ranges: readonly Range[] = blockRanges(blocks)
   const covered = ranges.some(
-    (range) => range.start <= slotStart && range.end >= slotStart + args.durationMinutes,
+    (range) => range.start <= slotStart && range.end >= slotEnd,
   )
   return { bookable: true, slotAvailable: !covered }
 }
@@ -348,10 +274,6 @@ async function loadSlotDay(
 /**
  * Writes the booking row, converting a unique-index violation into the catalog's
  * sentence for the race the index settled.
- *
- * No campaign attribution runs here — see the note on `bookAppointment`. The caller
- * that owns the attribution is the Server Action, which is server-only; this file is
- * reachable from the browser and may not import a module that reaches argon2.
  */
 async function createBookingRow(
   args: AnyBookArgs,
@@ -397,20 +319,6 @@ async function createBookingRow(
 
 /**
  * «بستن یک ساعت» — closes one time range on one day for one doctor.
- *
- * A block is an appointment-shaped row (`prisma/schema.prisma`): no customer, no
- * service, `isSlotBlock = true` and a `NULL` `slotKey`, which is what keeps it from
- * colliding with the booking it exists to prevent. A block holds no lifecycle and is
- * never swept, so it carries a status no transition will ever be asked to permit;
- * `BOOKED` is what makes it occupy the slot in the grid like a booking does.
- *
- * `بستن یک روز` is this function called once per working slot of the day — the same
- * row shape, the same removal, and that is why the two are one code path in
- * `slots.ts` and one here.
- *
- * @throws DomainError, as `appointment.blockOverlapsBooking` — the range covers a
- *   booking the clinic already has. Closing it would not cancel the customer; it
- *   would leave an appointment on the grid whose slot no longer exists.
  */
 export async function blockHours(args: {
   readonly tx: TransactionClient
@@ -477,12 +385,6 @@ export async function blockHours(args: {
 
 /**
  * «جابه‌جایی نوبت» — closes the row and opens a new one that points back at it.
- *
- * The old row moves to `RESCHEDULED`, which is terminal, and the new row is a fresh
- * `BOOKED` on the target slot. The two are linked by `rescheduledToId`, which is
- * what makes «جابه‌جا شد» a fact that can be counted rather than inferred from two
- * rows' dates. The target slot goes through the same guard a first booking uses, so
- * a reschedule into a taken slot receives the same sentence.
  */
 export async function rescheduleAppointment(args: {
   readonly tx: TransactionClient
@@ -496,10 +398,6 @@ export async function rescheduleAppointment(args: {
   const current = await loadOwnAppointment(args.tx, args.ctx, args.appointmentId)
   assertTransition(asStatus(current.status), AppointmentStatus.Rescheduled)
 
-  // A reschedule copies the booking's facts onto the new row, and a row with no
-  // customer or no service is not a booking to copy — it is a slot block, which is
-  // not rescheduled but deleted. The sentence names neither, because the caller's
-  // action is the thing that was impossible.
   if (current.customerId === null || current.serviceId === null) {
     throw appointmentError(
       `Appointment ${current.id} holds no ${current.customerId === null ? 'customer' : 'service'}, so it cannot be rescheduled.`,
@@ -529,7 +427,6 @@ export async function rescheduleAppointment(args: {
     data: {
       status: AppointmentStatus.Rescheduled,
       rescheduledToId: created.id,
-      // The closed row releases its slot; see the file header.
       slotKey: null,
     },
   })
@@ -539,14 +436,6 @@ export async function rescheduleAppointment(args: {
 
 /**
  * «لغو نوبت» — closes the row with a reason, and applies the deposit policy.
- *
- * `TenantSettings.depositRefundPolicy` is the policy's authority. This function does
- * not interpret it — the `debts` module that actually moves the money is a later
- * phase, and interpreting a policy here would put half of the payment logic in the
- * scheduling module. What it does is record the state the policy reads from: the row
- * is cancelled at a known instant with a known reason, and its deposit columns are
- * exactly what they were, so a later refund is decided against the row and not
- * against the release's current default.
  */
 export async function cancelAppointment(args: {
   readonly tx: TransactionClient
@@ -566,7 +455,6 @@ export async function cancelAppointment(args: {
       status: AppointmentStatus.Cancelled,
       cancelledAt: args.now,
       cancelReason: args.reason ?? null,
-      // The closed row releases its slot; see the file header.
       slotKey: null,
     },
   })
@@ -574,32 +462,6 @@ export async function cancelAppointment(args: {
 
 /**
  * «ویرایش نوبت» — corrects a booking in place, keeping its own row.
- *
- * Where `rescheduleAppointment` is the customer-facing *move* that closes the old row
- * and opens a linked new one (so a no-show analysis still sees the first booking),
- * this is the manager's and secretary's *correction*: the same row's doctor, service,
- * duration, day and time are changed, its id is kept, and its cycle link and deposit
- * ride along. The two are different writes because they answer different questions —
- * "the patient asked to come another day" versus "the desk typed the wrong service".
- *
- * ## Why the price is re-snapshotted and not editable
- *
- * The price is always the chosen service's own catalogue price, re-read here when the
- * service changes. There is no price field a caller sends — so the `SECRETARY_EDIT_PRICE`
- * rule is honoured by construction: a secretary changing the service picks a different
- * catalogue price, which is the service's and not a manual override the rule governs,
- * and no path here lets any caller type an amount.
- *
- * The new slot goes through the same window guard a first booking uses, and the unique
- * index settles a move into a taken slot with the same «این ساعت قبلاً رزرو شده» the
- * booking path raises.
- *
- * @throws PermissionError — the caller holds no `manage_appointments`.
- * @throws DomainError, as `appointment.illegalTransition` — the row is a slot block or
- *   already terminal (cancelled, rescheduled, completed), none of which is a booking to
- *   correct.
- * @throws DomainError, as `appointment.closed` / `appointment.slotTaken` — the target
- *   slot is outside the doctor's hours or already held.
  */
 export async function updateAppointment(args: {
   readonly tx: TransactionClient
@@ -635,9 +497,6 @@ export async function updateAppointment(args: {
   const localDate = args.newLocalDate ?? (current.localDate as LocalDate)
   const localTime = args.newLocalTime ?? asLocalTime(current.localTime)
 
-  // The duration and the price follow the service: a corrected service is a corrected
-  // length and a corrected catalogue price, both read from the service row and never
-  // from the caller. An unchanged service keeps the row's own snapshot.
   const service = await args.tx.service.findFirst({
     where: { id: serviceId, tenantId: args.ctx.tenantId },
     select: { durationMinutes: true, price: true },
@@ -702,10 +561,6 @@ export async function updateAppointment(args: {
 
 /**
  * Loads one appointment as the caller's own tenant sees it.
- *
- * @throws NotFoundError — the row is outside the caller's tenant, which is the
- *   404-not-403 rule (`09-security.md` §6.3): confirming that another tenant holds an
- *   appointment with this id is a disclosure the refusal must not make.
  */
 async function loadOwnAppointment(
   tx: TransactionClient,
@@ -748,7 +603,6 @@ interface LoadedAppointment {
   readonly customerId: string | null
   readonly serviceId: string | null
   readonly cycleId: string | null
-  /** A plain `String` column (`03-data-model.md` §5); narrowed at the transition guard. */
   readonly status: string
   readonly localDate: string
   readonly localTime: string
@@ -768,14 +622,6 @@ function minutesOf(value: string): number {
 
 /**
  * The status column's value as the state machine's own union.
- *
- * The column is a plain `String` on both engines (`03-data-model.md` §5), so the
- * database cannot narrow it. The value came from `AppointmentStatus` when it was
- * written and this module is the only writer, but a row written by a release this
- * one does not know is still a possibility — and `assertTransition` answers it with
- * the illegal-transition refusal rather than with an undefined row of the transition
- * table, because `APPOINTMENT_TRANSITIONS` has no entry for a status it does not
- * know and the lookup yields `undefined`. That is the fail-closed answer.
  */
 function asStatus(value: string): AppointmentStatus {
   return value as AppointmentStatus
@@ -797,8 +643,7 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 /**
- * A `DomainError` carrying a catalog key, built once so every refusal in this file
- * reads the same and the six sentences stay in the catalog where §14 puts them.
+ * A `DomainError` carrying a catalog key.
  */
 function appointmentError(
   message: string,

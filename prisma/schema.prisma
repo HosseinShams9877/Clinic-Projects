@@ -50,7 +50,8 @@ generator client {
 }
 
 datasource db {
-   provider = "postgresql"
+  provider = "sqlite"
+  
 }
 
 // ── Tenancy ──────────────────────────────────────────────────────────────────
@@ -87,6 +88,7 @@ model Tenant {
   images         BeforeAfterImage[]
   shifts         ClinicShift[]
   workingHours   DoctorWorkingHours[]
+  shiftRanges    DoctorShiftRange[]
   holidays       Holiday[]
   leaveRequests  LeaveRequest[]
   jobs           JobQueue[]
@@ -209,6 +211,7 @@ model User {
   primaryFor         Customer[]        @relation("CustomerPrimaryDoctor")
   appointments       Appointment[]
   workingHours       DoctorWorkingHours[]
+  shiftRanges        DoctorShiftRange[]
   services           ServiceDoctor[]
   cycles             TreatmentCycle[]
   paymentsRecorded   Payment[]         @relation("PaymentRecorder")
@@ -654,6 +657,38 @@ model DoctorWorkingHours {
 
   @@index([tenantId, doctorId, weekday], map: "hours_tenant_doctor_weekday_idx")
   @@map("doctor_working_hours")
+}
+
+// Per-doctor shift ranges with their own slot granularity.
+//
+// `DoctorWorkingHours` above is the *default*: a doctor who sets nothing works the
+// hours it names with the module's own default slot length (30 minutes). This table
+// is the *override*: when a doctor has rows here for a weekday, they replace
+// `DoctorWorkingHours` for that weekday, and each range carries its own
+// `slotMinutes` — which is what lets a doctor work 10–12 in 30-minute slots and
+// 14–17 in 60-minute slots, with 12–14 simply absent as a break.
+//
+// A range here is a *bookable interval*, not a "working hours row": a doctor with a
+// two-hour lunch break is a doctor with two ranges on that weekday, not one range
+// with a gap. `startTime` and `endTime` are the same `HH:mm` strings the rest of
+// the schema stores; `slotMinutes` is the step the slot generator cuts the range to.
+model DoctorShiftRange {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  doctorId String
+  doctor   User   @relation(fields: [doctorId], references: [id])
+
+  weekday     Int
+  startTime   String
+  endTime     String
+  slotMinutes Int     @default(30)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, doctorId, weekday], map: "shift_range_tenant_doctor_weekday_idx")
+  @@map("doctor_shift_ranges")
 }
 
 // Official and clinic holidays. `localDate` is the Jalali date, so the lookup is

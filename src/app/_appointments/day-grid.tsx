@@ -1,28 +1,18 @@
 /**
- * The day grid — one column per doctor, one row per time, as
- * `02-architecture.md` §9's `reception/appointments.html` renders it.
+ * The day grid — one column per doctor, one row per time.
  *
- * The columns are the doctors who work the weekday (`doctorsOnDay`), and the rows are
- * the times the day's appointments actually hold. A full slot axis — every slot the
- * engine would offer, empty or not — is the public booking surface's grid, and it
- * needs a `SlotDay` per doctor per service; this grid is the desk's view of the rows
- * that exist, and its empty cells are where the popup is opened from.
+ * ## The per-doctor slot granularity
  *
- * ## Why there are two render paths and not one scrolled table
+ * The axis is the union of every doctor's own slot *starts*, at the doctor's own
+ * `slotMinutes`. A doctor with 30-minute slots contributes 9:00, 9:30, 10:00 …; a
+ * doctor with a 45-minute override contributes 10:00, 10:45 …; a doctor with a
+ * 120-minute override contributes 11:00 only. The rows are the union, and a slot's
+ * cell spans the rows between its start and the next start.
  *
- * A table with `overflow-x-auto` keeps its header and never overflows, but a desk's
- * four-doctor day at 320px wide is four columns a receptionist has to scroll through
- * blind — the row's time is the first column and the person's name is three swipes
- * away. Below the one breakpoint (`08-ui-design-system.md` §43's 1000px) the same
- * rows are a stacked list, one card per appointment, and above it they are the table.
- * The two read one source, so a row that is in one is in the other.
- *
- * ## Why the block rows are cells and not absences
- *
- * A slot block («بستن یک ساعت») is a row the calendar holds: it has a time and a
- * duration, and it is what keeps the slot from being booked. Rendering it as a cell
- * is what shows the desk *why* a time is not free, and rendering it as nothing would
- * make the same slot look like a time the doctor does not work.
+ * A 120-minute slot in a 30-minute axis is four rows; a 45-minute slot is one and a
+ * half rows and is drawn with a `rowSpan` of two — the slot's own end is what the
+ * cell's height reflects, not a whole number of 30-minute rows. The cell's content
+ * is the slot, and the axis is only the grid's own scaffold.
  */
 
 import Link from 'next/link'
@@ -43,7 +33,7 @@ import {
   type DoctorDayWindow,
 } from '@/modules/appointments'
 
-import { APPOINTMENTS_PAGE, RECEPTION_APPOINTMENTS } from '@/app/catalog'
+import { APPOINTMENTS_PAGE } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
 import type { IconName } from '@/core/components/icons'
 import type { BookingDialogProps } from './booking-dialog'
@@ -53,40 +43,25 @@ import { RowActions, type RowEditContext } from './row-actions'
 
 /** The grid's own props: the day's facts and what the page may do with them. */
 export interface DayGridProps {
-  /** The day the grid is showing, as a Jalali date. */
   readonly localDate: LocalDate
-  /** The columns: the doctors who work this weekday. */
   readonly doctors: readonly DoctorColumn[]
-  /** Each column's working window, for the off-schedule vs free-slot axis. Optional: a
-   * surface that does not load windows (the doctor's own single-column day) omits it,
-   * and a column with no window is schedule-unknown — a bookable «+» rather than a
-   * struck off-schedule cell, which is never shown without a window to judge it. */
   readonly windows?: readonly DoctorDayWindow[]
-  /** The day's rows, from the module's own query. */
   readonly rows: readonly AppointmentRow[]
-  /** The services the booking popup offers. */
   readonly services: readonly ServiceOption[]
-  /** The customers the booking popup searches. */
   readonly customers: readonly CustomerOption[]
-  /** Which panel is rendering — the action's own resolution. */
   readonly panel: BookingDialogProps['panel']
-  /** Whether the caller may write. Admin's grid is read-only. */
   readonly writable: boolean
-  /** The service ids each doctor offers, for filtering the popup's step one. */
   readonly servicesByDoctorId?: Readonly<Record<string, readonly string[]>>
-  /** The weekdays each doctor works, for filtering the popup's week strip. */
   readonly workingDaysByDoctorId?: Readonly<Record<string, readonly number[]>>
+  readonly slotMinutesByDoctorId?: Readonly<Record<string, number | null>>
 }
 
-/** The grid's hour step, in minutes — the resolution the empty axis is drawn at. */
-const AXIS_STEP = 30
+/** The default slot length, in minutes. */
+const DEFAULT_SLOT_MINUTES = 30
 
 /** The day grid, as the two breakpoints each render it. */
 export function DayGrid(props: DayGridProps) {
   const windows = props.windows ?? []
-  // Columns and hours are driven by `windows` so the grid is a full hour×doctor table
-  // on a day with no appointments at all. A surface that loads no windows (the doctor's
-  // own single-column day) falls back to its `doctors` prop and the rows' own times.
   const columns: readonly DoctorColumn[] =
     windows.length > 0 ? windows.map((w) => ({ id: w.id, name: w.name })) : props.doctors
 
@@ -96,6 +71,27 @@ export function DayGrid(props: DayGridProps) {
 
   const times = axisMinutes(windows, props.rows)
   const windowOf = new Map(windows.map((w) => [w.id, w]))
+
+  /**
+   * The row-span a cell at `minute` takes in a given doctor's column, or 0 when the
+   * minute is inside a slot a previous row already covers.
+   *
+   * The doctor's own slot starts at each range's `startMinute` plus a multiple of
+   * `slotMinutes`, and the slot is the number of axis rows between its start and the
+   * next start (or the range's end).
+   */
+  function rowSpanAt(window: DoctorDayWindow | null, minute: number): number {
+    const slot = window?.slotMinutes ?? DEFAULT_SLOT_MINUTES
+    const ranges = window?.ranges ?? []
+    const range = ranges.find((r) => minute >= r.startMinute && minute < r.endMinute)
+    if (range === undefined) return 1
+    const offset = minute - range.startMinute
+    if (offset % slot !== 0) return 0
+    // The slot's end: the smaller of its own length and the range's remaining time.
+    const slotEnd = Math.min(minute + slot, range.endMinute)
+    const rows = times.filter((m) => m >= minute && m < slotEnd).length
+    return Math.max(1, rows)
+  }
 
   return (
     <>
@@ -139,7 +135,7 @@ export function DayGrid(props: DayGridProps) {
                       colSpan={columns.length + 1}
                       className="border-b border-line bg-surface-sunken px-3 py-2 text-center text-xs text-ink-3"
                     >
-                      {RECEPTION_APPOINTMENTS.breakRow}
+                      {APPOINTMENTS_PAGE.controls.blockHours}
                     </td>
                   </tr>
                 )
@@ -153,11 +149,17 @@ export function DayGrid(props: DayGridProps) {
                     {formatTime(minutesToTime(minute))}
                   </th>
                   {columns.map((doctor) => {
-                    const row = rowAtMinute(props.rows, doctor.id, minute)
                     const window = windowOf.get(doctor.id) ?? null
+                    const span = rowSpanAt(window, minute)
+                    if (span === 0) return null
+                    const row = rowAtMinute(props.rows, doctor.id, minute)
                     const offSchedule = window !== null && !inAnyRange(window, minute)
                     return (
-                      <td key={doctor.id} className="min-w-[140px] border-b border-l border-line p-2 align-top">
+                      <td
+                        key={doctor.id}
+                        rowSpan={span}
+                        className="min-w-[140px] border-b border-l border-line p-2 align-top"
+                      >
                         {row !== null ? (
                           <BookedCell
                             row={row}
@@ -179,6 +181,7 @@ export function DayGrid(props: DayGridProps) {
                             writable={props.writable}
                             servicesByDoctorId={props.servicesByDoctorId}
                             workingDaysByDoctorId={props.workingDaysByDoctorId}
+                            slotMinutesByDoctorId={props.slotMinutesByDoctorId}
                           />
                         )}
                       </td>
@@ -217,10 +220,6 @@ export function DayGrid(props: DayGridProps) {
   )
 }
 
-/**
- * A booked cell — the row's own facts on a soft brand surface with a status-coloured
- * inline-start border, as the demo renders a taken slot.
- */
 function BookedCell({
   row,
   writable,
@@ -237,7 +236,7 @@ function BookedCell({
   return (
     <div
       className={cx(
-        'flex flex-col gap-2 rounded-sm p-2 [border-inline-start:3px_solid]',
+        'flex h-full flex-col gap-2 rounded-sm p-2 [border-inline-start:3px_solid]',
         CELL_BG[row.status] ?? CELL_BG.default,
         BORDER_CLASSES[row.status] ?? BORDER_CLASSES.default,
       )}
@@ -247,12 +246,6 @@ function BookedCell({
   )
 }
 
-/**
- * A booked cell's background by status, matching the demo's `.cel` states over the
- * project's own tokens: completed is green (`ok`), arrived amber (`warn`), the day's
- * upcoming is the brand tint (`busy`), the unrecorded alarm is danger, a no-show is
- * neutral. The inline-start strip's colour is `BORDER_CLASSES`.
- */
 const CELL_BG: Readonly<Record<string, string>> = {
   default: 'bg-brand-50',
   BOOKED: 'bg-brand-50',
@@ -263,13 +256,6 @@ const CELL_BG: Readonly<Record<string, string>> = {
   RESULT_NOT_RECORDED: 'bg-danger-bg',
 }
 
-/**
- * An empty but bookable cell — the dashed «+» the desk opens the booking popup from.
- *
- * The popup is the module's own three-step dialog, pre-filled with the column's doctor
- * and the grid's day; a read-only grid (admin's oversight) renders the same dashed cell
- * without the trigger, because there is nothing it could book.
- */
 function FreeCell({
   doctor,
   localDate,
@@ -280,6 +266,7 @@ function FreeCell({
   writable,
   servicesByDoctorId,
   workingDaysByDoctorId,
+  slotMinutesByDoctorId,
 }: {
   readonly doctor: DoctorColumn
   readonly localDate: LocalDate
@@ -290,16 +277,17 @@ function FreeCell({
   readonly writable: boolean
   readonly servicesByDoctorId?: Readonly<Record<string, readonly string[]>>
   readonly workingDaysByDoctorId?: Readonly<Record<string, readonly number[]>>
+  readonly slotMinutesByDoctorId?: Readonly<Record<string, number | null>>
 }) {
   if (!writable) {
     return (
-      <span className="grid min-h-9 place-items-center rounded-sm [border:1px_dashed_var(--line-2)] text-ink-3">
+      <span className="grid h-full min-h-9 place-items-center rounded-sm [border:1px_dashed_var(--line-2)] text-ink-3">
         <Icon name="add" size="compact" />
       </span>
     )
   }
   return (
-    <span className="block [&_button]:w-full [&_button]:justify-center [&_button]:[border-style:dashed]">
+    <span className="block h-full [&_button]:h-full [&_button]:w-full [&_button]:justify-center [&_button]:[border-style:dashed]">
       <BookingDialog
         variant="book"
         panel={panel}
@@ -314,6 +302,7 @@ function FreeCell({
         customers={customers}
         allowedServiceIds={servicesByDoctorId?.[doctor.id]}
         workingWeekdays={workingDaysByDoctorId?.[doctor.id]}
+        slotMinutes={slotMinutesByDoctorId?.[doctor.id] ?? null}
       />
       <span className="[&_button]:[border-style:solid]">
         <BlockDialog panel={panel} doctorId={doctor.id} localDate={localDate} time={time} />
@@ -322,18 +311,16 @@ function FreeCell({
   )
 }
 
-/** A cell at a time the doctor is off the schedule — the struck «خارج از برنامه» tile. */
 function OffScheduleCell() {
   return (
     <span
-      className="grid min-h-9 place-items-center rounded-sm text-xs text-ink-3 [background:repeating-linear-gradient(135deg,var(--neutral-bg),var(--neutral-bg)_6px,transparent_6px,transparent_12px)]"
+      className="grid h-full min-h-9 place-items-center rounded-sm text-xs text-ink-3 [background:repeating-linear-gradient(135deg,var(--neutral-bg),var(--neutral-bg)_6px,transparent_6px,transparent_12px)]"
     >
       {APPOINTMENTS_PAGE.offSchedule}
     </span>
   )
 }
 
-/** One cell of the table, as the row's own facts. */
 function Cell({
   row,
   writable,
@@ -375,7 +362,6 @@ function Cell({
   )
 }
 
-/** The edit popup's data for a row, as `RowActions` hands it to the dialog. */
 function editContext(
   row: AppointmentRow,
   services: readonly ServiceOption[],
@@ -392,11 +378,6 @@ function editContext(
   }
 }
 
-/**
- * The icon that says who booked a slot: a platform booking (website, Instagram, a
- * campaign) vs the desk's own (reception, phone). `null` for a legacy row with no
- * recorded source — no icon rather than a guessed one.
- */
 function sourceIcon(source: string | null): IconName | null {
   switch (source) {
     case 'WEBSITE':
@@ -411,16 +392,10 @@ function sourceIcon(source: string | null): IconName | null {
   }
 }
 
-/** Whether a minute falls inside any of a doctor's working ranges. */
 function inAnyRange(window: DoctorDayWindow, minute: number): boolean {
   return window.ranges.some((r) => minute >= r.startMinute && minute < r.endMinute)
 }
 
-/**
- * Whether an axis minute is a shared between-shift break — every working doctor is off
- * (in a gap between their ranges) and none is booked. Such a minute is one full-width
- * «استراحت میان دو شیفت» row rather than a line of identical off-schedule cells.
- */
 function isBreakRow(
   doctors: readonly DoctorColumn[],
   windowOf: ReadonlyMap<string, DoctorDayWindow>,
@@ -435,17 +410,11 @@ function isBreakRow(
   })
 }
 
-/**
- * The row's own description: the customer's name, or the block's marker.
- */
 function rowDescription(row: AppointmentRow): string {
   if (row.isSlotBlock) return APPOINTMENTS_PAGE.controls.blockHours
   return row.customerName ?? APPOINTMENTS_PAGE.controls.blockHours
 }
 
-/**
- * The status chip, in the status colour the token block defines for it.
- */
 function StatusChip({ status }: { readonly status: string }) {
   return (
     <span
@@ -459,9 +428,6 @@ function StatusChip({ status }: { readonly status: string }) {
   )
 }
 
-/**
- * The chip's colour per status, from the status-colour tokens.
- */
 const CHIP_CLASSES: Readonly<Record<string, string>> = {
   default: 'bg-neutral-bg text-ink-2',
   BOOKED: 'bg-info-bg text-info',
@@ -474,9 +440,6 @@ const CHIP_CLASSES: Readonly<Record<string, string>> = {
   RESULT_NOT_RECORDED: 'bg-danger-bg text-danger',
 }
 
-/**
- * The inline-start border colour of a booked cell, per status.
- */
 const BORDER_CLASSES: Readonly<Record<string, string>> = {
   default: '[border-inline-start-color:var(--line-2)]',
   BOOKED: '[border-inline-start-color:var(--info)]',
@@ -490,22 +453,34 @@ const BORDER_CLASSES: Readonly<Record<string, string>> = {
 }
 
 /**
- * The grid's time axis, in minutes: the stepped slots inside every doctor's window,
- * plus the exact times the day's rows hold.
+ * The grid's time axis, in minutes — the union of every doctor's own slot starts.
+ *
+ * The starts are exactly the slots each doctor has, at their own `slotMinutes`: a
+ * 30-minute doctor contributes 9:00, 9:30, 10:00 …; a 45-minute doctor contributes
+ * 10:00, 10:45 …; a 120-minute doctor contributes 11:00 only. A row's own time is
+ * added too, so an off-step booking still gets a row.
  */
 function axisMinutes(
   windows: readonly DoctorDayWindow[],
   rows: readonly AppointmentRow[],
 ): readonly number[] {
   const set = new Set<number>()
+
+  if (windows.length === 0) {
+    for (const row of rows) set.add(timeToMinutes(asLocalTime(row.localTime)))
+    return [...set].sort((a, b) => a - b)
+  }
+
   for (const w of windows) {
-    for (let m = w.startMinute; m < w.endMinute; m += AXIS_STEP) set.add(m)
+    const slot = w.slotMinutes ?? DEFAULT_SLOT_MINUTES
+    for (const r of w.ranges) {
+      for (let m = r.startMinute; m < r.endMinute; m += slot) set.add(m)
+    }
   }
   for (const row of rows) set.add(timeToMinutes(asLocalTime(row.localTime)))
   return [...set].sort((a, b) => a - b)
 }
 
-/** The row at one doctor's column and one axis minute, or `null` when the cell is empty. */
 function rowAtMinute(
   rows: readonly AppointmentRow[],
   doctorId: string,
@@ -518,9 +493,6 @@ function rowAtMinute(
   )
 }
 
-/**
- * The day navigation — yesterday and tomorrow around the day's own date.
- */
 export function DayNav({ localDate, basePath }: { readonly localDate: LocalDate; readonly basePath: string }) {
   const previous = shiftDay(localDate, -1)
   const next = shiftDay(localDate, 1)
@@ -542,14 +514,10 @@ export function DayNav({ localDate, basePath }: { readonly localDate: LocalDate;
   )
 }
 
-/**
- * One Jalali day shifted, as the stored `YYYY-MM-DD` string.
- */
 function shiftDay(localDate: LocalDate, days: number): LocalDate {
   return addLocalDays(localDate, days)
 }
 
-/** A stored `HH:mm` as the branded `LocalTime` the formatters take. */
 function timeAsLocal(value: string): ReturnType<typeof asLocalTime> {
   return asLocalTime(value)
 }
