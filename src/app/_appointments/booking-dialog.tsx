@@ -28,6 +28,29 @@
  * because the map is computed from the day's own rows. A locked slot skips the
  * picker and shows the day and the time as read-only facts, because the grid
  * already answered that question.
+ *
+ * ## Why the doctor survives a service change when the popup is locked
+ *
+ * A service change clears the doctor on the normal path, because the doctors a
+ * service offers are the service's own (a facial is not performed by the same set
+ * as a laser). A locked popup — one opened from a grid cell, where the doctor *is*
+ * the column the cell sits in — has no such question to ask: the doctor is a fact
+ * the grid already settled, and clearing it would silently unbook the very column
+ * the desk clicked. The `onChange` therefore keeps the props' own doctor when the
+ * popup was opened with one, and only clears it when the doctor is genuinely the
+ * desk's to choose.
+ *
+ * ## Why a new customer is created without a second permission check
+ *
+ * Step 3 collects a mobile and a name for a customer the file may not hold, and
+ * the write path turns that pair into a row through `customers`'s own
+ * `createOrFindCustomer` (`src/app/_appointments/support.ts` → `resolveCustomerId`).
+ * That function owns the mobile key, the dedupe, and the lead-to-customer
+ * conversion, and it is *the* path every booking takes — a popup that created a
+ * customer here, in the dialog, would be a popup whose creation a lead-desk booking
+ * never made. So the popup's part is to send the pair the write path needs, and
+ * nothing more: a mobile alone is not a booking, and a mobile with a name is the
+ * pair `createOrFindCustomer` reads.
  */
 
 'use client'
@@ -187,7 +210,16 @@ export function BookingDialog(props: BookingDialogProps) {
   const freeSlots = freeSlotsFor(props, values.doctorId, values.localDate)
 
   async function submit() {
-    if (values.doctorId === '') return
+    // The whole form's own gate, in order: every step the desk has walked past is
+    // re-checked before the write, so a submit that slips past a step the caller
+    // rendered (a locked slot that skipped step 2's own gate, a customer step that
+    // never saw the earlier one) still fails loudly rather than silently.
+    const gate = wholeFormError(values)
+    if (gate !== null) {
+      setResult({ ok: false, message: gate })
+      return
+    }
+
     const step = props.slotMinutes ?? service?.durationMinutes ?? 0
     if (step > 0 && service !== undefined && service.durationMinutes > step) {
       setConfirmShorten(true)
@@ -197,7 +229,11 @@ export function BookingDialog(props: BookingDialogProps) {
   }
 
   async function runSubmit() {
-    if (values.doctorId === '') return
+    const gate = wholeFormError(values)
+    if (gate !== null) {
+      setResult({ ok: false, message: gate })
+      return
+    }
     setPending(true)
     const input: BookingInput = {
       doctorId: values.doctorId,
@@ -287,7 +323,17 @@ export function BookingDialog(props: BookingDialogProps) {
                   className={CONTROL_CLASSES}
                   value={values.serviceId}
                   onChange={(event) => {
-                    setValues({ ...values, serviceId: event.target.value, doctorId: '' })
+                    // A service change clears the doctor on the normal path (the
+                    // doctors a service offers are its own); a locked popup keeps
+                    // the doctor the grid settled, because that doctor *is* the
+                    // column the desk clicked. See the header.
+                    const keepDoctor = props.doctorId ?? ''
+                    setValues({
+                      ...values,
+                      serviceId: event.target.value,
+                      doctorId: keepDoctor,
+                      localTime: keepDoctor === '' ? '' : values.localTime,
+                    })
                     setResult(null)
                   }}
                 >
@@ -591,6 +637,24 @@ function stepErrorMessage(
   if (step === 3) {
     if (values.customerId === '' && values.mobile === '') return BOOKING_POPUP.chooseCustomer
   }
+  return null
+}
+
+/**
+ * The whole form's own gate, checked on submit rather than only on the step the
+ * desk happens to be standing on.
+ *
+ * A locked slot skips step 2's own "next" gate by design, and the customer step is
+ * the last screen the desk sees — so a submit that reaches the server without the
+ * three facts it needs is a booking that fails silently, and silence is the one
+ * failure mode a desk cannot act on. The order here is the order the steps are
+ * walked: service, then doctor, then day-and-time, then customer.
+ */
+function wholeFormError(values: BookingValues): string | null {
+  if (values.serviceId === '') return BOOKING_POPUP.chooseService
+  if (values.doctorId === '') return BOOKING_POPUP.chooseDoctor
+  if (!isValidLocalTime(values.localTime)) return BOOKING_POPUP.chooseTime
+  if (values.customerId === '' && values.mobile === '') return BOOKING_POPUP.chooseCustomer
   return null
 }
 
