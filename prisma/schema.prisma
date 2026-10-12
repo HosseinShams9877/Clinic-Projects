@@ -45,13 +45,13 @@
 // `ALTER TABLE "customers" … "tenantId" = current_setting('app.tenant_id', true)`.
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  
+  provider  = "postgresql"   // ← برای Production
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ── Tenancy ──────────────────────────────────────────────────────────────────
