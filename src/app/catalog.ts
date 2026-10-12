@@ -324,6 +324,7 @@ export const BOOKING_POPUP = {
   },
   /** The one sentence the popup shows when a step is missing a choice. */
   chooseService: 'ابتدا یک خدمت انتخاب کنید.',
+  chooseDoctor: 'ابتدا یک پزشک انتخاب کنید.',
   chooseTime: 'ابتدا روز و ساعت را انتخاب کنید.',
   chooseCustomer: 'ابتدا شماره موبایل مشتری را وارد کنید.',
   /** The page's own sentence when the tenant has no service to book against. */

@@ -425,3 +425,52 @@ export async function unrecordedCartable(args: {
 export function weekDays(startOfWeek: LocalDate): readonly LocalDate[] {
   return jalaliWeek(startOfWeek)
 }
+/**
+ * The doctors who offer a service, as the booking popup's own list.
+ *
+ * Reads the `service_doctors` join table — a service's doctors are the ones the
+ * manager attached to it in the catalogue. Each `doctorId` is a **`User` id**
+ * (`03-data-model.md` §2.3), which is the same id every other scheduling surface
+ * carries.
+ */
+export async function doctorsForService(args: {
+  readonly tx: TransactionClient
+  readonly tenantId: string
+  readonly serviceId: string
+}): Promise<readonly DoctorColumn[]> {
+  const rows = await args.tx.serviceDoctor.findMany({
+    where: { tenantId: args.tenantId, serviceId: args.serviceId },
+    select: {
+      doctorId: true,
+      doctor: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { doctor: { firstName: 'asc' } },
+  })
+
+  return rows.map((row) => ({
+    id: row.doctor.id,
+    name: personName(row.doctor.firstName, row.doctor.lastName),
+  }))
+}
+
+/**
+ * The weekdays a doctor works, as the popup's week strip reads them.
+ *
+ * `weekday` is 0=شنبه … 6=جمعه (`06-constants.md`), and the returned list is the
+ * subset the doctor has a `DoctorWorkingHours` row for. The popup's week strip renders
+ * only these days, so a doctor who works Saturday, Monday and Wednesday is offered
+ * those three and no others.
+ */
+export async function workingWeekdaysForDoctor(args: {
+  readonly tx: TransactionClient
+  readonly tenantId: string
+  readonly doctorId: string
+}): Promise<readonly number[]> {
+  const rows = await args.tx.doctorWorkingHours.findMany({
+    where: { tenantId: args.tenantId, doctorId: args.doctorId },
+    select: { weekday: true },
+    distinct: ['weekday'],
+    orderBy: { weekday: 'asc' },
+  })
+  return rows.map((row) => row.weekday)
+}

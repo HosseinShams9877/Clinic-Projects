@@ -37,6 +37,7 @@ import {
 import { realClock } from '@/core/lib/clock'
 
 import { APPOINTMENTS_PAGE } from '@/app/catalog'
+import { BookingDialog } from '@/app/_appointments/booking-dialog'
 import { DayGrid, DayNav } from '@/app/_appointments/day-grid'
 import { FilterBar } from '@/app/_appointments/filter-bar'
 import { loadDayGrid, type DayRows } from '@/app/_appointments/page-data'
@@ -75,9 +76,23 @@ export default async function AdminAppointmentsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <h1 className="text-2xl font-bold text-ink">{APPOINTMENTS_PAGE.admin.title}</h1>
-        <p className="text-sm text-ink-2">{APPOINTMENTS_PAGE.admin.lead}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold text-ink">{APPOINTMENTS_PAGE.admin.title}</h1>
+          <p className="text-sm text-ink-2">{APPOINTMENTS_PAGE.admin.lead}</p>
+        </div>
+        <BookingDialog
+          variant="book"
+          panel="admin"
+          triggerLabel={APPOINTMENTS_PAGE.registerAppointment}
+          triggerVariant="primary"
+          triggerSize="default"
+          triggerIcon="add"
+          localDate={localDate}
+          services={data.services}
+          customers={data.customers}
+          doctorsByServiceId={data.doctorsByServiceId}
+        />
       </div>
 
       <FilterBar
@@ -101,6 +116,8 @@ export default async function AdminAppointmentsPage({
             rows={rows}
             services={data.services}
             customers={data.customers}
+            servicesByDoctorId={data.servicesByDoctorId}
+            workingDaysByDoctorId={data.workingDaysByDoctorId}
             panel="admin"
             writable={true}
           />

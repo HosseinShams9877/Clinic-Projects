@@ -117,7 +117,6 @@ export default async function ReceptionAppointmentsPage({
   })
 
   const hasUnrecorded = data.cartable.some((row) => row.status === 'RESULT_NOT_RECORDED')
-  const headerDoctor = data.day.doctors[0] ?? null
   const liveRows = data.day.rows.filter(
     (row) => !row.isSlotBlock && row.status !== 'CANCELLED' && row.status !== 'RESCHEDULED',
   )
@@ -156,21 +155,18 @@ export default async function ReceptionAppointmentsPage({
               customers={data.day.customers}
             />
           )}
-          {headerDoctor === null ? null : (
-            <BookingDialog
-              variant="book"
-              panel="reception"
-              triggerLabel={APPOINTMENTS_PAGE.registerAppointment}
-              triggerVariant="primary"
-              triggerSize="default"
-              triggerIcon="add"
-              doctorId={headerDoctor.id}
-              doctorName={headerDoctor.name}
-              localDate={localDate}
-              services={data.day.services}
-              customers={data.day.customers}
-            />
-          )}
+          <BookingDialog
+            variant="book"
+            panel="reception"
+            triggerLabel={APPOINTMENTS_PAGE.registerAppointment}
+            triggerVariant="primary"
+            triggerSize="default"
+            triggerIcon="add"
+            localDate={localDate}
+            services={data.day.services}
+            customers={data.day.customers}
+            doctorsByServiceId={data.day.doctorsByServiceId}
+          />
         </div>
       </div>
 
@@ -214,6 +210,8 @@ export default async function ReceptionAppointmentsPage({
                 rows={data.day.rows}
                 services={data.day.services}
                 customers={data.day.customers}
+                servicesByDoctorId={data.day.servicesByDoctorId}
+                workingDaysByDoctorId={data.day.workingDaysByDoctorId}
                 panel="reception"
                 writable
               />

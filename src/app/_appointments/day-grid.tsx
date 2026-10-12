@@ -72,6 +72,10 @@ export interface DayGridProps {
   readonly panel: BookingDialogProps['panel']
   /** Whether the caller may write. Admin's grid is read-only. */
   readonly writable: boolean
+  /** The service ids each doctor offers, for filtering the popup's step one. */
+  readonly servicesByDoctorId?: Readonly<Record<string, readonly string[]>>
+  /** The weekdays each doctor works, for filtering the popup's week strip. */
+  readonly workingDaysByDoctorId?: Readonly<Record<string, readonly number[]>>
 }
 
 /** The grid's hour step, in minutes — the resolution the empty axis is drawn at. */
@@ -173,6 +177,8 @@ export function DayGrid(props: DayGridProps) {
                             customers={props.customers}
                             panel={props.panel}
                             writable={props.writable}
+                            servicesByDoctorId={props.servicesByDoctorId}
+                            workingDaysByDoctorId={props.workingDaysByDoctorId}
                           />
                         )}
                       </td>
@@ -272,6 +278,8 @@ function FreeCell({
   customers,
   panel,
   writable,
+  servicesByDoctorId,
+  workingDaysByDoctorId,
 }: {
   readonly doctor: DoctorColumn
   readonly localDate: LocalDate
@@ -280,6 +288,8 @@ function FreeCell({
   readonly customers: readonly CustomerOption[]
   readonly panel: BookingDialogProps['panel']
   readonly writable: boolean
+  readonly servicesByDoctorId?: Readonly<Record<string, readonly string[]>>
+  readonly workingDaysByDoctorId?: Readonly<Record<string, readonly number[]>>
 }) {
   if (!writable) {
     return (
@@ -302,6 +312,8 @@ function FreeCell({
         defaultTime={time}
         services={services}
         customers={customers}
+        allowedServiceIds={servicesByDoctorId?.[doctor.id]}
+        workingWeekdays={workingDaysByDoctorId?.[doctor.id]}
       />
       <span className="[&_button]:[border-style:solid]">
         <BlockDialog panel={panel} doctorId={doctor.id} localDate={localDate} time={time} />
@@ -425,9 +437,6 @@ function isBreakRow(
 
 /**
  * The row's own description: the customer's name, or the block's marker.
- *
- * A slot block has no customer by construction — it is the calendar holding a time —
- * and a block rendered as «—» would look like a booking whose person was lost.
  */
 function rowDescription(row: AppointmentRow): string {
   if (row.isSlotBlock) return APPOINTMENTS_PAGE.controls.blockHours
@@ -436,10 +445,6 @@ function rowDescription(row: AppointmentRow): string {
 
 /**
  * The status chip, in the status colour the token block defines for it.
- *
- * The colour is a cue and never the only signal: the label is beside it, which is
- * what keeps a status readable by a person who does not see the cue and by the axe
- * rule that makes colour alone a violation.
  */
 function StatusChip({ status }: { readonly status: string }) {
   return (
@@ -456,11 +461,6 @@ function StatusChip({ status }: { readonly status: string }) {
 
 /**
  * The chip's colour per status, from the status-colour tokens.
- *
- * Written as a record rather than a `switch` because the statuses are a closed set
- * the module's catalog labels, and a `default` arm is what a status outside the
- * label set falls into rather than an error the grid raises on a row it already
- * holds.
  */
 const CHIP_CLASSES: Readonly<Record<string, string>> = {
   default: 'bg-neutral-bg text-ink-2',
@@ -476,10 +476,6 @@ const CHIP_CLASSES: Readonly<Record<string, string>> = {
 
 /**
  * The inline-start border colour of a booked cell, per status.
- *
- * The same closed status set as `CHIP_CLASSES`, in the border token rather than the
- * chip's background, so the cell's edge carries the status at a glance while the chip
- * carries the label the colour never stands in for.
  */
 const BORDER_CLASSES: Readonly<Record<string, string>> = {
   default: '[border-inline-start-color:var(--line-2)]',
@@ -496,10 +492,6 @@ const BORDER_CLASSES: Readonly<Record<string, string>> = {
 /**
  * The grid's time axis, in minutes: the stepped slots inside every doctor's window,
  * plus the exact times the day's rows hold.
- *
- * A booked row at an off-step time (a ۹:۱۵ reschedule) still needs a row of its own, so
- * the axis is the union of the regular grid and the rows' own times rather than a plain
- * stepped range — a time a row sits on is a time the grid must show.
  */
 function axisMinutes(
   windows: readonly DoctorDayWindow[],
@@ -528,10 +520,6 @@ function rowAtMinute(
 
 /**
  * The day navigation — yesterday and tomorrow around the day's own date.
- *
- * Links and not buttons because the day is a URL, and a URL is what a browser's back
- * button and a shared desk shift both speak. The grid re-reads the day on the
- * navigation, which is the same query the page ran.
  */
 export function DayNav({ localDate, basePath }: { readonly localDate: LocalDate; readonly basePath: string }) {
   const previous = shiftDay(localDate, -1)
@@ -554,14 +542,8 @@ export function DayNav({ localDate, basePath }: { readonly localDate: LocalDate;
   )
 }
 
-
 /**
  * One Jalali day shifted, as the stored `YYYY-MM-DD` string.
- *
- * Through `addLocalDays` and never through a `Date`, because the stored string is a
- * Jalali date and a `Date` constructor reads it as Gregorian — a day added that way
- * is a day added to the wrong calendar, and the grid would drift by the offset
- * between the two.
  */
 function shiftDay(localDate: LocalDate, days: number): LocalDate {
   return addLocalDays(localDate, days)

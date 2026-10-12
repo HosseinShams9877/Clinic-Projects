@@ -8,6 +8,14 @@
  * keeps the reception desk and the manager's oversight page from drifting apart on
  * which doctors a day holds.
  *
+ * ## Why the doctor/service/weekday maps are read here
+ *
+ * The booking popup filters two things the grid does not carry: a doctor's own
+ * services (through `service_doctors`) and a doctor's own working weekdays (through
+ * `doctor_working_hours`). Reading them once for the whole grid, as plain maps, is
+ * what keeps a day with N doctors from being N×2 extra queries — the page's reads
+ * stay the reads, and the maps are looked up where the popup opens.
+ *
  * ## What is deliberately not here
  *
  * A row. Nothing here writes, because a page is a read and a write is an action
@@ -29,6 +37,7 @@ import {
   unrecordedCartable,
   unrecordedOnDay,
   weekDays,
+  type DoctorColumn,
   type DoctorDayWindow,
 } from '@/modules/appointments'
 import { todaysReminders } from '@/modules/notifications'
@@ -50,7 +59,16 @@ export type DayRows = Awaited<ReturnType<typeof clinicDay>>
 /** The columns a day grid renders, as the module's own query answers them. */
 export type DayDoctors = Awaited<ReturnType<typeof doctorsOnDay>>
 
-/** One day's complete grid: its columns, its rows, the doctors' windows, and the popup's options. */
+/**
+ * One day's complete grid: its columns, its rows, the doctors' windows, and the
+ * popup's options.
+ *
+ * The three filter maps are what the booking popup reads: `servicesByDoctorId` for a
+ * `+` cell opened on a doctor's column, `workingDaysByDoctorId` for the week strip in
+ * the same popup, and `doctorsByServiceId` for the header's «ثبت نوبت» button, which
+ * has no doctor yet. Each is read once for the whole grid and looked up where the
+ * popup opens.
+ */
 export interface DayGridData {
   readonly doctors: DayDoctors
   readonly rows: DayRows
@@ -58,14 +76,20 @@ export interface DayGridData {
   readonly windows: readonly DoctorDayWindow[]
   readonly services: readonly ServiceOption[]
   readonly customers: readonly CustomerOption[]
+  /** The service ids each doctor offers, keyed by doctor id. */
+  readonly servicesByDoctorId: Readonly<Record<string, readonly string[]>>
+  /** The weekdays each doctor works (0=شنبه … 6=جمعه), keyed by doctor id. */
+  readonly workingDaysByDoctorId: Readonly<Record<string, readonly number[]>>
+  /** The doctors who offer each service, keyed by service id. */
+  readonly doctorsByServiceId: Readonly<Record<string, readonly DoctorColumn[]>>
 }
 
 /**
  * One reminder card the side panel renders, flattened from the ledger row.
  *
- * The panel is a pure view, so the instant → clinic-local time conversion happens here
- * where the tenant's offset is in hand, and the automatic-message label is resolved
- * here against the `notifications` catalog rather than in the component.
+ * The panel is a pure view, so the instant → clinic-local time conversion happens
+ * here where the tenant's offset is in hand, and the automatic-message label is
+ * resolved here against the `notifications` catalog rather than in the component.
  */
 export interface ReminderCard {
   readonly id: string
@@ -91,7 +115,8 @@ export interface ReminderCard {
  * The three queues the desk acts on — the treatment cycle, the balance, the lead
  * follow-up — get their own badge and page; everything else points at the customer's
  * own list, and a hand-sent message (no kind) gets no badge or action rather than a
- * guessed one. Labels come from the reception catalog and `NAV_LABELS`, never a literal.
+ * guessed one. Labels come from the reception catalog and `NAV_LABELS`, never a
+ * literal.
  */
 function reminderMeta(kind: string | null): {
   readonly badge: string
@@ -101,15 +126,35 @@ function reminderMeta(kind: string | null): {
 } | null {
   switch (kind) {
     case 'NEXT_SESSION_REMINDER':
-      return { badge: RECEPTION_APPOINTMENTS.reminder.cycle.badge, tone: 'brand', href: '/reception/cycles', label: RECEPTION_APPOINTMENTS.reminder.cycle.action }
+      return {
+        badge: RECEPTION_APPOINTMENTS.reminder.cycle.badge,
+        tone: 'brand',
+        href: '/reception/cycles',
+        label: RECEPTION_APPOINTMENTS.reminder.cycle.action,
+      }
     case 'BALANCE_REMINDER':
-      return { badge: RECEPTION_APPOINTMENTS.reminder.balance.badge, tone: 'warn', href: '/reception/debts', label: RECEPTION_APPOINTMENTS.reminder.balance.action }
+      return {
+        badge: RECEPTION_APPOINTMENTS.reminder.balance.badge,
+        tone: 'warn',
+        href: '/reception/debts',
+        label: RECEPTION_APPOINTMENTS.reminder.balance.action,
+      }
     case 'NO_SHOW_FOLLOW_UP':
-      return { badge: RECEPTION_APPOINTMENTS.reminder.followUp.badge, tone: 'info', href: '/reception/leads', label: RECEPTION_APPOINTMENTS.reminder.followUp.action }
+      return {
+        badge: RECEPTION_APPOINTMENTS.reminder.followUp.badge,
+        tone: 'info',
+        href: '/reception/leads',
+        label: RECEPTION_APPOINTMENTS.reminder.followUp.action,
+      }
     case null:
       return null
     default:
-      return { badge: RECEPTION_APPOINTMENTS.reminder.general.badge, tone: 'neutral', href: '/reception/customers', label: RECEPTION_APPOINTMENTS.reminder.general.action }
+      return {
+        badge: RECEPTION_APPOINTMENTS.reminder.general.badge,
+        tone: 'neutral',
+        href: '/reception/customers',
+        label: RECEPTION_APPOINTMENTS.reminder.general.action,
+      }
   }
 }
 
@@ -142,6 +187,11 @@ export interface AppointmentsPageData {
  * `clinicId` is the caller's own — the manager's oversight reads the same function and
  * passes the same value, which is what makes the two pages agree about which branch a
  * day belongs to.
+ *
+ * The three maps the popup filters on are read here in parallel with the row data:
+ * `servicesByDoctorId` for the grid's `+` cells (only this doctor's services),
+ * `workingDaysByDoctorId` for the week strip (only this doctor's days), and
+ * `doctorsByServiceId` for the header's «ثبت نوبت» button (only this service's doctors).
  */
 export async function loadDayGrid(args: {
   readonly tx: TransactionClient
@@ -152,10 +202,40 @@ export async function loadDayGrid(args: {
   const weekday = jalaliWeekday(args.localDate)
   const [doctors, windows, rows, unrecorded, options] = await Promise.all([
     doctorsOnDay({ tx: args.tx, tenantId: args.ctx.tenantId, weekday }),
-    doctorWindowsOnDay({ tx: args.tx, tenantId: args.ctx.tenantId, clinicId: args.clinicId, weekday }),
+    doctorWindowsOnDay({
+      tx: args.tx,
+      tenantId: args.ctx.tenantId,
+      clinicId: args.clinicId,
+      weekday,
+    }),
     clinicDay({ tx: args.tx, ctx: args.ctx, clinicId: args.clinicId, localDate: args.localDate }),
-    unrecordedOnDay({ tx: args.tx, ctx: args.ctx, clinicId: args.clinicId, localDate: args.localDate }),
+    unrecordedOnDay({
+      tx: args.tx,
+      ctx: args.ctx,
+      clinicId: args.clinicId,
+      localDate: args.localDate,
+    }),
     loadPopupOptions({ tx: args.tx, ctx: args.ctx }),
+  ])
+
+  // The three filter maps. Read once for the whole grid, and inside the request's own
+  // scope so a service or a weekday cannot come from another tenant.
+  const [servicesByDoctorId, workingDaysByDoctorId, doctorsByServiceId] = await Promise.all([
+    loadServicesByDoctor({
+      tx: args.tx,
+      tenantId: args.ctx.tenantId,
+      doctorIds: doctors.map((d) => d.id),
+    }),
+    loadWorkingDaysByDoctor({
+      tx: args.tx,
+      tenantId: args.ctx.tenantId,
+      doctorIds: doctors.map((d) => d.id),
+    }),
+    loadDoctorsByService({
+      tx: args.tx,
+      tenantId: args.ctx.tenantId,
+      serviceIds: options.services.map((s) => s.id),
+    }),
   ])
 
   // The alarm state is excluded from `clinicDay` by construction; merged here so the
@@ -167,6 +247,9 @@ export async function loadDayGrid(args: {
     rows: [...rows, ...unrecorded],
     services: options.services,
     customers: options.customers,
+    servicesByDoctorId,
+    workingDaysByDoctorId,
+    doctorsByServiceId,
   }
 }
 
@@ -237,4 +320,93 @@ export async function loadAppointmentsPage(args: {
   })
 
   return { day, week, cartable, reminders }
+}
+
+/* ── The three filter maps ─────────────────────────────────────────────────── */
+
+/**
+ * Each doctor's own service ids, read as one `service_doctors` query.
+ *
+ * A doctor's services are the ones a manager attached to them in the catalogue; the
+ * popup's «+» cell shows only these, so a service a doctor does not perform does not
+ * appear in their column.
+ */
+async function loadServicesByDoctor(args: {
+  readonly tx: TransactionClient
+  readonly tenantId: string
+  readonly doctorIds: readonly string[]
+}): Promise<Readonly<Record<string, readonly string[]>>> {
+  if (args.doctorIds.length === 0) return {}
+  const rows = await args.tx.serviceDoctor.findMany({
+    where: { tenantId: args.tenantId, doctorId: { in: [...args.doctorIds] } },
+    select: { doctorId: true, serviceId: true },
+  })
+  const map: Record<string, string[]> = {}
+  for (const row of rows) {
+    const held = map[row.doctorId] ?? []
+    held.push(row.serviceId)
+    map[row.doctorId] = held
+  }
+  return map
+}
+
+/**
+ * Each doctor's own working weekdays (0=شنبه … 6=جمعه), read as one query.
+ *
+ * The popup's week strip renders only the days a doctor works, so a doctor who works
+ * Saturday, Monday and Wednesday is offered those three and no others.
+ */
+async function loadWorkingDaysByDoctor(args: {
+  readonly tx: TransactionClient
+  readonly tenantId: string
+  readonly doctorIds: readonly string[]
+}): Promise<Readonly<Record<string, readonly number[]>>> {
+  if (args.doctorIds.length === 0) return {}
+  const rows = await args.tx.doctorWorkingHours.findMany({
+    where: { tenantId: args.tenantId, doctorId: { in: [...args.doctorIds] } },
+    select: { doctorId: true, weekday: true },
+    distinct: ['doctorId', 'weekday'],
+  })
+  const map: Record<string, number[]> = {}
+  for (const row of rows) {
+    const held = map[row.doctorId] ?? []
+    held.push(row.weekday)
+    map[row.doctorId] = held
+  }
+  for (const key of Object.keys(map)) map[key] = [...new Set(map[key])].sort((a, b) => a - b)
+  return map
+}
+
+/**
+ * Each service's own doctors, read as one `service_doctors` query.
+ *
+ * The header's «ثبت نوبت» button shows a service picker, and this map is what turns
+ * a picked service into a list of doctors who offer it — the second step's doctor
+ * select reads this and nothing else.
+ */
+async function loadDoctorsByService(args: {
+  readonly tx: TransactionClient
+  readonly tenantId: string
+  readonly serviceIds: readonly string[]
+}): Promise<Readonly<Record<string, readonly DoctorColumn[]>>> {
+  if (args.serviceIds.length === 0) return {}
+  const rows = await args.tx.serviceDoctor.findMany({
+    where: { tenantId: args.tenantId, serviceId: { in: [...args.serviceIds] } },
+    select: {
+      serviceId: true,
+      doctor: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { doctor: { firstName: 'asc' } },
+  })
+  const map: Record<string, DoctorColumn[]> = {}
+  for (const row of rows) {
+    const held = map[row.serviceId] ?? []
+    const name =
+      row.doctor.lastName === null || row.doctor.lastName === ''
+        ? row.doctor.firstName
+        : `${row.doctor.firstName} ${row.doctor.lastName}`
+    held.push({ id: row.doctor.id, name })
+    map[row.serviceId] = held
+  }
+  return map
 }

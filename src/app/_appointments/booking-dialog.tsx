@@ -11,29 +11,37 @@
  * ## Why the steps are the module's own vocabulary
  *
  * Step one is the service, because a service is what carries the duration and the
- * price the module's `BookArgs` needs, and a popup that asked for them separately
- * would be a popup where the two could disagree. Step two is the day and the time,
- * offered as the week the grid is already on — a Jalali week starting on شنبه, so
- * no Gregorian calendar control reaches the page and no date is typed. Step three is
+ * price the module's `BookArgs` needs. Step two is the day and the time, offered as
+ * the week the grid is already on — a Jalali week starting on شنبه. Step three is
  * the person, found by the mobile that is their identity.
+ *
+ * ## The three filters, and why they are props
+ *
+ * Three things a page that opens this popup may already know:
+ *
+ * - `allowedServiceIds`: the services the column's doctor offers. When given, step
+ *   one's `<select>` shows only those — a service a doctor does not perform does not
+ *   appear in their column's popup.
+ * - `workingWeekdays`: the weekdays (0=شنبه … 6=جمعه) the column's doctor works. When
+ *   given, step two's week strip renders only those days.
+ * - `doctorsByServiceId`: the doctors who offer each service, for the header's
+ *   «ثبت نوبت» button. When given, step two's doctor field becomes a `<select>`
+ *   filtered by the chosen service instead of a read-only text input.
+ *
+ * Every one of them is optional; a caller that omits all three gets the pre-filter
+ * popup the dialog had before, which is what the doctor's own quick-book still uses.
  *
  * ## Why the time is a free-form input and not a slot list
  *
  * The slot engine (`generateSlots`) speaks a `SlotDay` the desk has not assembled
- * yet — it needs the shift, the hours, the blocks and the holiday for one service's
- * duration, which is a read per service per day. The popup offers the whole working
- * day and lets the module be the authority on what it accepts: `assertSlotBookable`
- * answers `appointment.closed` or `appointment.slotTaken`, and the sentence reaches
- * the popup through the same key every other caller reads. A slot list driven by the
- * engine lands with the public booking page, where the three booking modes are what
- * the slot list is *for*.
+ * yet. The popup offers the whole working day and lets the module be the authority on
+ * what it accepts. A slot list lands with the public booking page.
  *
  * ## What is deliberately not here
  *
  * The price and the deposit. They are read from the service row inside the action's
  * transaction and never cross this boundary, because the `SECRETARY_EDIT_PRICE`
- * toggle is off by default and a popup that accepted an amount would be a popup
- * where the toggle is not enforced.
+ * toggle is off by default.
  */
 
 'use client'
@@ -86,11 +94,23 @@ export interface CustomerOption {
   readonly mobile: string
 }
 
+/** One doctor the popup's own doctor select may offer. */
+export interface DoctorOption {
+  readonly id: string
+  readonly name: string
+}
+
 /** The dialog's own props: the column it was opened from, and what it may book. */
 export interface BookingDialogProps {
-  /** Which doctor the booking is for. */
-  readonly doctorId: string
-  readonly doctorName: string
+  /**
+   * Which doctor the booking is for, when the caller already knows it (a grid column).
+   * Optional: a caller that opens the popup without a doctor (the header's «ثبت نوبت»
+   * button, which lets the user pick from a service) omits it, and step two's doctor
+   * field becomes a `<select>` fed by `doctorsByServiceId`.
+   */
+  readonly doctorId?: string
+  /** The doctor's name, when `doctorId` is given. */
+  readonly doctorName?: string
   /** The day the grid is showing, as the week strip's anchor. */
   readonly localDate: LocalDate
   readonly services: readonly ServiceOption[]
@@ -102,18 +122,26 @@ export interface BookingDialogProps {
   readonly variant: 'book' | 'quickBook'
   /** The panel the action resolves, which is the caller's own. */
   readonly panel: 'reception' | 'doctor' | 'admin'
-  /**
-   * A service preselected on open, so a caller that already knows it (a slot the grid
-   * offered for one service) skips step one's pick. Optional; omitted leaves step one
-   * empty as before.
-   */
+  /** A service preselected on open. Optional. */
   readonly defaultServiceId?: string
-  /**
-   * A time preselected on open, as a stored `HH:mm`, so a caller that opened from a
-   * known slot (a grid «+» or «اولین زمان آزاد») lands on that time rather than an empty
-   * field. Optional; omitted leaves the time empty as before.
-   */
+  /** A time preselected on open, as a stored `HH:mm`. Optional. */
   readonly defaultTime?: string
+  /**
+   * The services the doctor offers. When given, step one's `<select>` shows only
+   * those. When omitted, every service in `services` is offered.
+   */
+  readonly allowedServiceIds?: readonly string[]
+  /**
+   * The weekdays (0=شنبه … 6=جمعه) the doctor works. When given, step two's week
+   * strip renders only those days. When omitted, every day of the week is offered.
+   */
+  readonly workingWeekdays?: readonly number[]
+  /**
+   * The doctors who offer each service, for a popup that has no preselected doctor.
+   * When given, step two's doctor field becomes a `<select>` filtered by the chosen
+   * service. When omitted, the field is a read-only text input.
+   */
+  readonly doctorsByServiceId?: Readonly<Record<string, readonly DoctorOption[]>>
   /** The trigger button's variant; defaults to the desk's soft chip. */
   readonly triggerVariant?: ButtonProps['variant']
   /** The trigger button's size; defaults to small. */
@@ -128,6 +156,7 @@ type Step = 1 | 2 | 3
 /** What the dialog holds across the steps. */
 interface BookingValues {
   readonly serviceId: string
+  readonly doctorId: string
   readonly localDate: LocalDate
   readonly localTime: string
   readonly customerId: string
@@ -167,11 +196,15 @@ export function BookingDialog(props: BookingDialogProps) {
   }
 
   const service = props.services.find((option) => option.id === values.serviceId)
+  const offeredServices = offeredServicesOf(props)
+  const weekdays = offeredWeekdaysOf(props)
+  const doctorChoices = doctorsForChosenService(props, values.serviceId)
 
   async function submit() {
+    if (values.doctorId === '') return
     setPending(true)
     const input: BookingInput = {
-      doctorId: props.doctorId,
+      doctorId: values.doctorId,
       serviceId: values.serviceId,
       localDate: values.localDate,
       localTime: values.localTime,
@@ -222,8 +255,15 @@ export function BookingDialog(props: BookingDialogProps) {
             const done = step > number
             return (
               <li key={name} className="flex items-center gap-2">
-                {index === 0 ? null : <span className="h-[2px] w-[26px] rounded-[2px] bg-line-2" />}
-                <span className={cx('flex items-center gap-2 text-sm', reached ? 'font-bold text-ink' : 'text-ink-3')}>
+                {index === 0 ? null : (
+                  <span className="h-[2px] w-[26px] rounded-[2px] bg-line-2" />
+                )}
+                <span
+                  className={cx(
+                    'flex items-center gap-2 text-sm',
+                    reached ? 'font-bold text-ink' : 'text-ink-3',
+                  )}
+                >
                   <span
                     className={cx(
                       'grid size-7 shrink-0 place-items-center rounded-pill text-xs font-bold',
@@ -250,12 +290,12 @@ export function BookingDialog(props: BookingDialogProps) {
                 className={CONTROL_CLASSES}
                 value={values.serviceId}
                 onChange={(event) => {
-                  setValues({ ...values, serviceId: event.target.value })
+                  setValues({ ...values, serviceId: event.target.value, doctorId: '' })
                   setResult(null)
                 }}
               >
                 <option value="">{BOOKING_POPUP.chooseService}</option>
-                {props.services.map((option) => (
+                {offeredServices.map((option) => (
                   <option key={option.id} value={option.id}>
                     {option.name}
                   </option>
@@ -266,15 +306,40 @@ export function BookingDialog(props: BookingDialogProps) {
 
           {step === 2 ? (
             <>
-              <Field label={BOOKING_POPUP.fields.doctor}>
-                <input className={CONTROL_CLASSES} type="text" value={props.doctorName} readOnly />
-              </Field>
+              {doctorChoices === null ? (
+                <Field label={BOOKING_POPUP.fields.doctor}>
+                  <input
+                    className={CONTROL_CLASSES}
+                    type="text"
+                    value={props.doctorName ?? ''}
+                    readOnly
+                  />
+                </Field>
+              ) : (
+                <Field label={BOOKING_POPUP.fields.doctor} required>
+                  <select
+                    className={CONTROL_CLASSES}
+                    value={values.doctorId}
+                    onChange={(event) => {
+                      setValues({ ...values, doctorId: event.target.value })
+                      setResult(null)
+                    }}
+                  >
+                    <option value="">{BOOKING_POPUP.chooseDoctor}</option>
+                    {doctorChoices.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
               <fieldset className="flex flex-col gap-2">
                 <legend className="text-sm font-semibold text-ink-2">
                   {BOOKING_POPUP.fields.localDate}
                 </legend>
                 <div className="grid grid-cols-4 gap-2 panel:grid-cols-7">
-                  {weekDays(props.localDate).map((day: LocalDate) => (
+                  {weekdays.map((day: LocalDate) => (
                     <DayButton
                       key={day}
                       day={day}
@@ -312,7 +377,11 @@ export function BookingDialog(props: BookingDialogProps) {
                 lastName={values.lastName}
                 onChange={(patch) => setValues({ ...values, ...patch })}
               />
-              <Summary values={values} service={service} doctorName={props.doctorName} />
+              <Summary
+                values={values}
+                service={service}
+                doctorName={doctorNameOf(props, values, doctorChoices)}
+              />
             </>
           ) : null}
 
@@ -332,11 +401,7 @@ export function BookingDialog(props: BookingDialogProps) {
         </div>
 
         <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
-          <Button
-            variant="ghost"
-            onClick={() => setOpen(false)}
-            disabled={pending}
-          >
+          <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
             {BOOKING_POPUP.actions.close}
           </Button>
           <div className="flex gap-2">
@@ -359,11 +424,7 @@ export function BookingDialog(props: BookingDialogProps) {
                 {BOOKING_POPUP.actions.next}
               </Button>
             ) : (
-              <Button
-                variant="primary"
-                loading={pending}
-                onClick={() => void submit()}
-              >
+              <Button variant="primary" loading={pending} onClick={() => void submit()}>
                 {BOOKING_POPUP.actions.confirm}
               </Button>
             )}
@@ -373,6 +434,76 @@ export function BookingDialog(props: BookingDialogProps) {
     </Overlay>
   )
 }
+
+/* ── The three filters ─────────────────────────────────────────────────────── */
+
+/**
+ * The services step one offers.
+ *
+ * With `allowedServiceIds` given, only those services appear — the services a
+ * doctor's own column is bookable for. Without it, every service in `services` is
+ * offered, which is the header's own popup.
+ */
+function offeredServicesOf(props: BookingDialogProps): readonly ServiceOption[] {
+  if (props.allowedServiceIds === undefined) return props.services
+  const allowed = new Set(props.allowedServiceIds)
+  return props.services.filter((option) => allowed.has(option.id))
+}
+
+/**
+ * The days step two's week strip renders.
+ *
+ * With `workingWeekdays` given, only days whose `jalaliWeekday(day)` is in the list
+ * appear — a doctor's working days. Without it, every day of the current Jalali week
+ * is offered, which is the header's own popup and the doctor's home.
+ */
+function offeredWeekdaysOf(props: BookingDialogProps): readonly LocalDate[] {
+  const all = weekDays(props.localDate)
+  if (props.workingWeekdays === undefined) return all
+  const allowed = new Set(props.workingWeekdays)
+  return all.filter((day) => allowed.has(jalaliWeekday(day)))
+}
+
+/**
+ * The doctors step two's field offers, or `null` when the field is a read-only name.
+ *
+ * `null` has two cases and they are the same case to the renderer: no
+ * `doctorsByServiceId` map was given (the doctor's own quick-book and any other
+ * single-doctor caller), or `doctorId` was locked by the caller (a grid column). In
+ * both the field shows the doctor's name and not a `<select>`. A map given with no
+ * chosen service yet yields an empty list, and step two cannot be reached without a
+ * service, so the field is only ever rendered with a chosen service and a populated
+ * list.
+ */
+function doctorsForChosenService(
+  props: BookingDialogProps,
+  serviceId: string,
+): readonly DoctorOption[] | null {
+  if (props.doctorsByServiceId === undefined) return null
+  if (props.doctorId !== undefined) {
+    const locked = props.doctorsByServiceId[serviceId] ?? []
+    const onlyThis = locked.filter((option) => option.id === props.doctorId)
+    return onlyThis.length === 0 && props.doctorName !== undefined
+      ? [{ id: props.doctorId, name: props.doctorName }, ...onlyThis]
+      : onlyThis
+  }
+  return props.doctorsByServiceId[serviceId] ?? []
+}
+
+/** The doctor's name for the summary, as the chosen or locked doctor. */
+function doctorNameOf(
+  props: BookingDialogProps,
+  values: BookingValues,
+  doctorChoices: readonly DoctorOption[] | null,
+): string {
+  if (doctorChoices !== null) {
+    const chosen = doctorChoices.find((option) => option.id === values.doctorId)
+    if (chosen !== undefined) return chosen.name
+  }
+  return props.doctorName ?? ''
+}
+
+/* ── The step's own helpers ───────────────────────────────────────────────── */
 
 /** The three steps' names, in order, for the progress strip. */
 function stepNames(): readonly string[] {
@@ -390,6 +521,7 @@ function titleForStep(step: Step): 'service' | 'time' | 'customer' {
 function emptyValues(props: BookingDialogProps): BookingValues {
   return {
     serviceId: props.defaultServiceId ?? '',
+    doctorId: props.doctorId ?? '',
     localDate: props.localDate,
     localTime: props.defaultTime ?? '',
     customerId: '',
@@ -414,7 +546,10 @@ function stepErrorMessage(
   if (step === 1 && values.serviceId === '') return BOOKING_POPUP.chooseService
   if (step === 2) {
     if (!isValidLocalTime(values.localTime)) return BOOKING_POPUP.chooseTime
-    if (props.services.length === 0) return BOOKING_POPUP.noServices
+    if (props.doctorsByServiceId !== undefined && values.doctorId === '') {
+      return BOOKING_POPUP.chooseDoctor
+    }
+    if (offeredServicesOf(props).length === 0) return BOOKING_POPUP.noServices
   }
   if (step === 3) {
     if (values.customerId === '' && values.mobile === '') return BOOKING_POPUP.chooseCustomer
@@ -496,7 +631,8 @@ function CustomerSearch({
   readonly onChange: (patch: Partial<BookingValues>) => void
 }) {
   const matches = mobile === '' ? [] : searchCustomers(customers, mobile)
-  const chosen = selectedId === '' ? null : customers.find((option) => option.id === selectedId) ?? null
+  const chosen =
+    selectedId === '' ? null : customers.find((option) => option.id === selectedId) ?? null
 
   return (
     <>

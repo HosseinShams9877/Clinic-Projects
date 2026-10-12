@@ -92,7 +92,17 @@ export {
   LIFECYCLE_TICK_INTERVAL_MS,
 } from './lib/job'
 
-export { clinicDay, doctorDay, doctorsOnDay, doctorWindowsOnDay, unrecordedCartable, unrecordedOnDay, weekDays } from './lib/queries'
+export {
+  clinicDay,
+  doctorDay,
+  doctorsOnDay,
+  doctorsForService,
+  doctorWindowsOnDay,
+  unrecordedCartable,
+  unrecordedOnDay,
+  weekDays,
+  workingWeekdaysForDoctor,
+} from './lib/queries'
 
 export {
   readDoctorWorkingHours,
