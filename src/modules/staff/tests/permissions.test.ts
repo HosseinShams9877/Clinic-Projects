@@ -40,7 +40,7 @@ import {
   type UserId,
 } from '@/core/types'
 import { getTenantContext, hashToken } from '@/core/db'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 import { can } from '@/modules/roles-permissions'
 
 import {

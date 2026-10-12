@@ -161,7 +161,7 @@ import {
   type MembershipSnapshot,
 } from '@/modules/roles-permissions'
 
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 /**
  * The password every seeded staff member logs in with — see the header.

@@ -54,7 +54,7 @@ import {
 } from '@/core/tenant'
 import { asCustomerId, asTenantId, type CustomerId, type TenantId } from '@/core/types'
 
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import { tenantContextOf, type TenantContext } from './scope'
 

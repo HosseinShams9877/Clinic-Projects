@@ -46,7 +46,7 @@
  */
 
 import type { Clock } from '@/core/lib'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import { getTenantContextForJob } from '@/core/db/context'
 import { runInTenantScope } from '@/core/db/scope'

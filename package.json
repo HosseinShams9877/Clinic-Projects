@@ -8,9 +8,9 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build --debug-prerender",
+    "build": "next build",
     "start": "next start",
-    "vercel-build": "prisma generate &&  next build",
+    "vercel-build": "node scripts/db-provider.mjs set postgresql && prisma generate && next build",
     "worker": "tsx src/worker/main.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

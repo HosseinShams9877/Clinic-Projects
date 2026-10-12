@@ -33,7 +33,7 @@ import {
   type UserId,
 } from '@/core/types'
 import type { TenantContext } from '@/core/tenant'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import { blockHours, bookAppointment, bookOwnAppointment, cancelAppointment, rescheduleAppointment } from '../lib/book'
 import { recordArrival, recordNoShow, recordResult } from '../lib/transition'

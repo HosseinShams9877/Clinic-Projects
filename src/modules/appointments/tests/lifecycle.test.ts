@@ -28,7 +28,7 @@ import {
   type LocalTime,
 } from '@/core/localization'
 import { asClinicId, asTenantId, asUserId, type TenantId } from '@/core/types'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import {
   flagUnrecordedResults,

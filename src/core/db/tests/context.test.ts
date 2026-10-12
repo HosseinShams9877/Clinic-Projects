@@ -6,7 +6,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import { ROLES } from '@/core/constants'
 import { EMPTY_PERMISSION_OVERRIDES, parsePermissionOverrides } from '@/core/tenant'

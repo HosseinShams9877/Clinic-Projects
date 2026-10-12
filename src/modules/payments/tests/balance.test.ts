@@ -26,7 +26,7 @@ import {
 } from '@/core/constants'
 import { asClinicId, asTenantId, asUserId, type TenantId, type UserId } from '@/core/types'
 import type { TenantContext } from '@/core/tenant'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import { customerBalance, recordPayment, recordRefund } from '@/modules/payments'
 

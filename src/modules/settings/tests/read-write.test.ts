@@ -24,7 +24,7 @@ import {
 } from '@/core/constants'
 import { EMPTY_PERMISSION_OVERRIDES, type TenantContext } from '@/core/tenant'
 import { asClinicId, asTenantId, asUserId, type TenantId, type UserId } from '@/core/types'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import { asLocalTime } from '@/core/localization'
 

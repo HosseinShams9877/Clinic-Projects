@@ -65,7 +65,7 @@
 import { AppointmentStatus, CycleStatus } from '@/core/constants'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
-import type { Prisma } from '@/generated/prisma/client'
+import type { Prisma } from '@prisma/client'
 import { DomainError, NotFoundError } from '@/core/types'
 
 import type { CyclesMessageKey } from '../catalog'

@@ -7,7 +7,7 @@
  * never a clinic's, and no patient data is on any of them.
  */
 
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import type { ClinicRow, TenantMembershipRow, TenantRow } from '../types'
 

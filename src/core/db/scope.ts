@@ -59,7 +59,7 @@ import { isPostgresUrl } from '@/core/config/datasource'
 import { getEnv } from '@/core/config/env'
 import { asTenantId, type TenantId } from '@/core/types'
 
-import type { Prisma, PrismaClient } from '@/generated/prisma/client'
+import type { Prisma, PrismaClient } from '@prisma/client'
 
 /** The transaction client a scoped block receives. */
 export type TransactionClient = Prisma.TransactionClient

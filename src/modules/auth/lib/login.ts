@@ -50,7 +50,7 @@
  *    same key a wrong code does.
  */
 
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import { asTenantId, AuthError, type CustomerId, type TenantId, type UserId } from '@/core/types'
 

@@ -55,7 +55,7 @@ import { asTenantId, type CustomerId, type TenantId, type UserId } from '@/core/
 
 import { hashToken } from '@/core/db/context'
 
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 /** The name of the cookie the boundary sets (`installation.md` §4 documents it). */
 export const SESSION_COOKIE = 'clinic-session'

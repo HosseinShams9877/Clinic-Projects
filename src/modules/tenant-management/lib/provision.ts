@@ -11,7 +11,7 @@
 import { Role } from '@/core/constants'
 import { DomainError } from '@/core/types'
 import { hashPassword } from '@/modules/auth'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import type { ProvisionTenantInput, TenantRow } from '../types'
 

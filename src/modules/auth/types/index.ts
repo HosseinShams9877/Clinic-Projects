@@ -25,7 +25,7 @@
  * separate stages).
  */
 
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import type { CustomerId, TenantId, UserId } from '@/core/types'
 

@@ -38,7 +38,7 @@
 import { CycleStatus } from '@/core/constants'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
-import type { Prisma } from '@/generated/prisma/client'
+import type { Prisma } from '@prisma/client'
 import { fromUtcInstant } from '@/core/localization'
 import { requirePermission } from '@/modules/roles-permissions'
 

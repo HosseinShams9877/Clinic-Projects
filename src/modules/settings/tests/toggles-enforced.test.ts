@@ -23,7 +23,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { DomainError, asTenantId, type TenantId } from '@/core/types'
 import { TOGGLE_DEFAULTS, type Toggle } from '@/modules/roles-permissions'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import { readToggles, requireToggle, toggleEnabled, writeToggles } from '../index'
 

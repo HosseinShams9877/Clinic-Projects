@@ -24,7 +24,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { DomainError } from '@/core/types'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import type { LicenseRow, LicenseValidation } from '../types'
 import { LicenseStatus as Status } from '../types'

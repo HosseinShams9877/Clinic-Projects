@@ -14,7 +14,7 @@
  * wall clock would be asserting tomorrow's queue against today's.
  */
 
-import type { JobQueue, PrismaClient } from '@/generated/prisma/client'
+import type { JobQueue, PrismaClient } from '@prisma/client'
 
 import { JobStatus } from '../status'
 

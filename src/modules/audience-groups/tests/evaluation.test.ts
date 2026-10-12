@@ -23,7 +23,7 @@ import {
   CustomerLifecycle,
 } from '@/core/constants'
 import { asClinicId, asTenantId, asUserId, type TenantId, type UserId } from '@/core/types'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import {
   ensureBuiltInGroups,

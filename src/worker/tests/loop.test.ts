@@ -15,8 +15,8 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { Prisma } from '@/generated/prisma/client'
-import type { PrismaClient } from '@/generated/prisma/client'
+import { Prisma } from '@prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import { pollOnce, activeTenantIds, type PollConfig } from '../loop'
 import { build, type JobHandler } from '../registry'

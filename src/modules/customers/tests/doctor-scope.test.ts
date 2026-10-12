@@ -31,7 +31,7 @@ import {
   type TenantId,
   type UserId,
 } from '@/core/types'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
 import { customerProfile, ownPatients } from '../index'
 import { NotFoundError, PermissionError } from '@/core/types'

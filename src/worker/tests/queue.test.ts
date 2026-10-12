@@ -19,7 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createPrismaClient } from '@/core/db/client'
 import { runInTenantScope, tenantContextOf } from '@/core/db/scope'
 import { ROLES } from '@/core/constants'
-import type { JobQueue, PrismaClient } from '@/generated/prisma/client'
+import type { JobQueue, PrismaClient } from '@prisma/client'
 
 import { claimDueJobs, completeJob, failJob, recoverStaleClaims, skipJob } from '../queue'
 import { JobStatus, MAX_JOB_ATTEMPTS, RETRY_BACKOFF_BASE_MS } from '../status'

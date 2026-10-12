@@ -1,17 +1,21 @@
 /**
- * The client and its adapter choice (`client.ts`).
+ * The client and its two constructors (`client.ts`).
  *
- * The property that matters is stated in the file’s own header: a module that
+ * The property that matters is stated in the file's own header: a module that
  * imported `PrismaClient` directly would get an unscoped client, and nothing in
  * the type of the object would say so. These tests are what makes the two
  * constructors behave differently at run time as well as in the name.
+ *
+ * Prisma 6 no longer uses a driver adapter, so the `adapterFor` tests are gone;
+ * the URL is the client's own concern now, and the two constructors differ only
+ * in whether the tenant extension is applied.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient } from '@prisma/client'
 
-import { adapterFor, createPrismaClient, createUnscopedClient } from '../client'
+import { createPrismaClient, createUnscopedClient } from '../client'
 
 import { createTestDatabase, deleteTestDatabase, type TestDatabase } from './database'
 
@@ -27,23 +31,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await deleteTestDatabase(database)
-})
-
-describe('adapterFor', () => {
-  it('chooses sqlite for a file URL', () => {
-    expect(adapterFor('file:./prisma/dev.db')).toBe('sqlite')
-  })
-
-  it('chooses postgres for either spelling', () => {
-    expect(adapterFor('postgresql://host/db')).toBe('postgres')
-    expect(adapterFor('postgres://host/db')).toBe('postgres')
-  })
-
-  it('refuses a URL that is neither, without printing it', () => {
-    const url = 'mongodb://user:pass@host/db'
-    expect(() => adapterFor(url)).toThrowError(/no driver adapter can be chosen/)
-    expect(() => adapterFor(url)).toThrowError(new RegExp(`^((?!${url}).)*$`, 's'))
-  })
 })
 
 describe('a client built by createPrismaClient', () => {

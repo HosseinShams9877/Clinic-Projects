@@ -37,7 +37,7 @@
  * default behaviour, exactly as before.
  */
 
-import type { Prisma } from '@/generated/prisma/client'
+import type { Prisma } from '@prisma/client'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 import { jalaliWeek, type LocalDate } from '@/core/localization'
