@@ -1,5 +1,6 @@
 /**
- * The appointments pages' own extra copy: the edit popup and the cancel confirm.
+ * The appointments pages' own extra copy: the edit popup, the cancel confirm, and
+ * the booking popup's locked-slot badge.
  *
  * The main app catalog sits at its 1000-line cap, so the booking-management surfaces
  * Phase 3 adds keep their Persian here, beside the components that render them. The
@@ -40,6 +41,7 @@ export const BLOCK_POPUP = {
   cancel: 'انصراف',
   close: 'بستن',
 } as const
+
 /**
  * The shorten-confirm dialog: the desk's answer to a service that runs longer than
  * the doctor's own slot.
@@ -58,4 +60,15 @@ export const SHORTEN_POPUP = {
   bodyEnd: ' دقیقه‌ای است. آیا می‌خواهید با زمان کمتر ثبت شود؟',
   confirm: 'بله، با زمان کمتر ثبت کن',
   dismiss: 'نه، زمان دیگری انتخاب می‌کنم',
+} as const
+
+/**
+ * The booking popup's locked-slot badge — the mark on step 2 when the popup was
+ * opened from a grid cell and the day and the time are the facts the desk already
+ * chose by clicking. The lock is the popup's own, not a permission: the desk
+ * changes the slot by returning to the grid, not by editing the step.
+ */
+export const LOCKED_SLOT = {
+  badge: 'از جدول',
+  hint: 'تاریخ و ساعت از روی جدول انتخاب شده و قابل تغییر نیست. برای تغییر، این پنجره را ببندید و روی خانه دیگری بزنید.',
 } as const

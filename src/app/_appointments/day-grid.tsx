@@ -36,7 +36,7 @@ import {
 import { APPOINTMENTS_PAGE } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
 import type { IconName } from '@/core/components/icons'
-import type { BookingDialogProps } from './booking-dialog'
+import type { BookingDialogProps, LockedSlot } from './booking-dialog'
 import { BookingDialog, type CustomerOption, type ServiceOption } from './booking-dialog'
 import { BlockDialog } from './block-dialog'
 import { RowActions, type RowEditContext } from './row-actions'
@@ -286,6 +286,7 @@ function FreeCell({
       </span>
     )
   }
+  const lockedSlot: LockedSlot = { localDate, localTime: time }
   return (
     <span className="block h-full [&_button]:h-full [&_button]:w-full [&_button]:justify-center [&_button]:[border-style:dashed]">
       <BookingDialog
@@ -298,6 +299,7 @@ function FreeCell({
         doctorName={doctor.name}
         localDate={localDate}
         defaultTime={time}
+        lockedSlot={lockedSlot}
         services={services}
         customers={customers}
         allowedServiceIds={servicesByDoctorId?.[doctor.id]}

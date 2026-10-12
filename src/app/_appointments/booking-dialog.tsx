@@ -9,6 +9,14 @@
  * the fact the column's cell was drawn against, and a booking that quietly ran past
  * it would be a slot the grid cannot show. The dialog is the one point in the flow
  * where the desk says "yes, in less time" — a "no" leaves the booking un-written.
+ *
+ * ## The locked slot
+ *
+ * When the popup opens from a grid cell (a free slot), the day and the time are the
+ * facts the desk already chose by clicking. `lockedSlot` carries them, and step 2
+ * renders them as read-only facts with a lock badge: the day strip and the time
+ * input are shown selected and disabled, and the "next" gate already passes. The
+ * desk changes the slot by returning to the grid, not by editing the step.
  */
 
 'use client'
@@ -39,6 +47,7 @@ import {
 import { weekDays } from '@/modules/appointments'
 
 import { BOOKING_POPUP } from '@/app/catalog'
+import { LOCKED_SLOT } from './catalog'
 import {
   createBookingAction,
   quickBookAction,
@@ -68,6 +77,12 @@ export interface DoctorOption {
   readonly name: string
 }
 
+/** The day-and-time pair the popup is opened against, when it is opened from a cell. */
+export interface LockedSlot {
+  readonly localDate: LocalDate
+  readonly localTime: string
+}
+
 /** The dialog's own props: the column it was opened from, and what it may book. */
 export interface BookingDialogProps {
   readonly doctorId?: string
@@ -88,6 +103,13 @@ export interface BookingDialogProps {
    * default and the dialog behaves exactly as before the override existed.
    */
   readonly slotMinutes?: number | null
+  /**
+   * The day and the time the popup was opened against, when it was opened from a
+   * grid cell. Their presence locks step 2 — the day strip and the time input are
+   * shown selected and disabled, and the desk changes the slot by returning to the
+   * grid rather than by editing the step.
+   */
+  readonly lockedSlot?: LockedSlot
   readonly triggerVariant?: ButtonProps['variant']
   readonly triggerSize?: Exclude<ButtonSize, 'icon'>
   readonly triggerIcon?: IconName | null
@@ -144,6 +166,7 @@ export function BookingDialog(props: BookingDialogProps) {
   const offeredServices = offeredServicesOf(props)
   const weekdays = offeredWeekdaysOf(props)
   const doctorChoices = doctorsForChosenService(props, values.serviceId)
+  const lockedSlot = props.lockedSlot ?? null
 
   async function submit() {
     if (values.doctorId === '') return
@@ -300,21 +323,38 @@ export function BookingDialog(props: BookingDialogProps) {
                         key={day}
                         day={day}
                         selected={day === values.localDate}
+                        disabled={lockedSlot !== null}
                         onSelect={() => setValues({ ...values, localDate: day })}
                       />
                     ))}
                   </div>
                 </fieldset>
                 <Field label={BOOKING_POPUP.fields.localTime} required>
-                  <TextInput
-                    type="time"
-                    value={values.localTime}
-                    onChange={(event) => {
-                      setValues({ ...values, localTime: event.target.value })
-                      setResult(null)
-                    }}
-                  />
+                  <div className="flex items-center gap-2">
+                    <TextInput
+                      type="time"
+                      value={values.localTime}
+                      readOnly={lockedSlot !== null}
+                      disabled={lockedSlot !== null}
+                      onChange={(event) => {
+                        setValues({ ...values, localTime: event.target.value })
+                        setResult(null)
+                      }}
+                    />
+                    {lockedSlot === null ? null : (
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-brand-50 px-2 py-[3px] text-[11px] font-semibold text-brand-700"
+                        title={LOCKED_SLOT.hint}
+                      >
+                        <Icon name="lock" size="compact" />
+                        {LOCKED_SLOT.badge}
+                      </span>
+                    )}
+                  </div>
                 </Field>
+                {lockedSlot === null ? null : (
+                  <p className="text-xs text-ink-3">{LOCKED_SLOT.hint}</p>
+                )}
                 {service === undefined ? null : (
                   <p className="text-xs text-ink-3">
                     {service.name} — {BOOKING_POPUP.duration} {formatNumber(service.durationMinutes)}
@@ -462,8 +502,8 @@ function emptyValues(props: BookingDialogProps): BookingValues {
   return {
     serviceId: props.defaultServiceId ?? '',
     doctorId: props.doctorId ?? '',
-    localDate: props.localDate,
-    localTime: props.defaultTime ?? '',
+    localDate: props.lockedSlot?.localDate ?? props.localDate,
+    localTime: props.lockedSlot?.localTime ?? props.defaultTime ?? '',
     customerId: '',
     mobile: '',
     firstName: '',
@@ -516,22 +556,27 @@ function Overlay({
 function DayButton({
   day,
   selected,
+  disabled,
   onSelect,
 }: {
   readonly day: LocalDate
   readonly selected: boolean
+  readonly disabled: boolean
   readonly onSelect: () => void
 }) {
   return (
     <button
       type="button"
       onClick={onSelect}
+      disabled={disabled}
       aria-pressed={selected}
+      aria-disabled={disabled}
       className={cx(
         'rounded-xs border px-2 py-2 text-xs',
         selected
           ? 'border-brand bg-brand-50 font-semibold text-brand-700'
           : 'border-line-2 bg-surface text-ink-2',
+        disabled ? 'cursor-not-allowed opacity-60' : null,
       )}
     >
       {`${weekdayName(jalaliWeekday(day))} ${toPersianDigits(jalaliParts(day).day)}`}

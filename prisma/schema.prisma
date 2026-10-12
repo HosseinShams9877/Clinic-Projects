@@ -49,11 +49,10 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"   // ← برای Production
+  provider  = "sqlite"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
-
 // ── Tenancy ──────────────────────────────────────────────────────────────────
 // `Tenant` is the row every other tenant-scoped row points at. It carries no
 // `tenantId` of its own; its RLS policy matches on `id`.

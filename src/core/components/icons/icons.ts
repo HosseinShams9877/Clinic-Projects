@@ -82,6 +82,7 @@ import {
   Info,
   LayoutDashboard,
   LoaderCircle,
+  Lock,
   LockKeyhole,
   LogOut,
   Mail,
@@ -236,6 +237,13 @@ export const ICONS = {
   shield: { glyph: Shield, mirrorsInRtl: false },
   shieldCheck: { glyph: ShieldCheck, mirrorsInRtl: false },
   blocked: { glyph: Ban, mirrorsInRtl: false },
+  /**
+   * The lock — the small mark on a field or a fact that cannot be edited. §42
+   * lists the padlock among the categories in use ("shield, sparkles"); the
+   * `LockKeyhole` glyph above is the fuller "permission" reading and this is the
+   * plainer one the booking popup's locked slot uses.
+   */
+  lock: { glyph: Lock, mirrorsInRtl: false },
 
   /* Contact and reach. */
   phone: { glyph: Phone, mirrorsInRtl: false },
