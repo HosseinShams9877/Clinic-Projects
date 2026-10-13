@@ -1,5 +1,5 @@
 /**
- * The staff page's seven writers, as the manager panel renders them.
+ * The staff page's writers, as the manager panel renders them.
  */
 
 'use server'
@@ -19,7 +19,9 @@ import {
   deactivateMembership,
   inviteStaff,
   rejectLeaveRequest,
+  resetStaffPassword,
   updateMembershipPermissions,
+  updateStaffProfile,
   recordAudit,
   AuditAction,
   AuditEntity,
@@ -52,6 +54,19 @@ export interface PermissionsInput {
   readonly revoked: readonly string[]
 }
 
+/** The edit form's fields, as the modal holds them. */
+export interface StaffProfileInput {
+  readonly membershipId: string
+  readonly firstName: string
+  readonly lastName: string
+}
+
+/** The reset form's fields, as the modal holds them. */
+export interface StaffPasswordInput {
+  readonly membershipId: string
+  readonly password: string
+}
+
 /** One action's own scope: the transaction and the caller's own context. */
 interface ScopeArgs {
   readonly tx: TransactionClient
@@ -61,7 +76,7 @@ interface ScopeArgs {
 /** The sentinel a block returns when it has nothing but a success to report. */
 const SUCCESS = { succeeded: true } as const
 
-/* ── The seven writes ──────────────────────────────────────────────────────── */
+/* ── The writes ────────────────────────────────────────────────────────────── */
 
 export async function inviteStaffAction(input: InviteInput): Promise<ActionResult> {
   const result = await inTenantScope(({ tx, ctx }) =>
@@ -147,6 +162,54 @@ export async function activateMembershipAction(membershipId: string): Promise<Ac
 export async function deactivateMembershipAction(membershipId: string): Promise<ActionResult> {
   const result = await inTenantScope(({ tx, ctx }) =>
     deactivateMembership({ tx, ctx, membershipId }).then(() => SUCCESS),
+  )
+  if (!('succeeded' in result)) return result
+  revalidateStaff()
+  return { ok: true }
+}
+
+/**
+ * «ویرایش کارمند» — the manager's own write for a membership's display name.
+ *
+ * The write is the staff module's; this action is the panel's own thin wrapper, which
+ * is the pattern every other writer on this page keeps. The mobile is not a field: it
+ * is the person's identity (`user_tenant_mobile_key`), and a changed number is a
+ * different person.
+ */
+export async function updateStaffProfileAction(
+  input: StaffProfileInput,
+): Promise<ActionResult> {
+  const result = await inTenantScope(({ tx, ctx }) =>
+    updateStaffProfile({
+      tx,
+      ctx,
+      membershipId: input.membershipId,
+      firstName: input.firstName,
+      lastName: input.lastName,
+    }).then(() => SUCCESS),
+  )
+  if (!('succeeded' in result)) return result
+  revalidateStaff()
+  return { ok: true }
+}
+
+/**
+ * «تغییر رمز عبور» — the manager's own reset for a staff member who forgot theirs.
+ *
+ * The plaintext never leaves this call: the module hashes it through `auth`'s
+ * `hashPassword` and writes only the hash. The audit row the module records names the
+ * actor and the subject, not the password.
+ */
+export async function resetStaffPasswordAction(
+  input: StaffPasswordInput,
+): Promise<ActionResult> {
+  const result = await inTenantScope(({ tx, ctx }) =>
+    resetStaffPassword({
+      tx,
+      ctx,
+      membershipId: input.membershipId,
+      password: input.password,
+    }).then(() => SUCCESS),
   )
   if (!('succeeded' in result)) return result
   revalidateStaff()

@@ -1,12 +1,6 @@
-/**
- * The staff page's writers, as the manager panel renders them.
- */
-
 'use client'
-
 import { useId, useState, useTransition } from 'react'
 import type { FormEvent, MouseEvent, ReactNode } from 'react'
-
 import { Button } from '@/core/components/button'
 import { Combobox } from '@/core/components/combobox'
 import { Field, TextInput } from '@/core/components/form'
@@ -14,10 +8,9 @@ import { Icon } from '@/core/components/icons'
 import { STAFF_PAGE } from '@/app/catalog'
 import { ADMIN_STAFF } from '@/app/admin/catalog'
 import { cx } from '@/core/lib'
-import { toPersianDigits, weekdayName } from '@/core/localization'
+import { formatPhone, toPersianDigits, weekdayName } from '@/core/localization'
 import { PERMISSION_LABELS, ROLE_LABELS } from '@/core/localization'
 import { Permission, Role } from '@/core/constants'
-
 import {
   activateMembershipAction,
   approveLeaveRequestAction,
@@ -25,28 +18,20 @@ import {
   deactivateMembershipAction,
   inviteStaffAction,
   rejectLeaveRequestAction,
+  resetStaffPasswordAction,
   setDoctorShiftRangesAction,
-  updateMembershipPermissionsAction,
-  type ActionResult,
-  type InviteInput,
-  type PermissionsInput,
+  updateMembershipPermissionsAction,updateStaffProfileAction,type ActionResult,type InviteInput,type PermissionsInput,type StaffPasswordInput,type StaffProfileInput,
 } from './actions'
-
-/** The three roles the invite form's select offers. */
 const ROLE_OPTIONS = Object.values(Role).map((value) => ({
   value,
   label: ROLE_LABELS[value],
 }))
-
-/* ── The invite dialog ────────────────────────────────────────────────────── */
-
 export function NewStaffDialog() {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
   const [role, setRole] = useState<string>('')
   const titleId = useId()
-
   if (!open) {
     return (
       <Button variant="primary" leadingIcon="customer" onClick={() => setOpen(true)}>
@@ -54,7 +39,6 @@ export function NewStaffDialog() {
       </Button>
     )
   }
-
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (role === '') {
@@ -77,7 +61,6 @@ export function NewStaffDialog() {
       setAnswer(outcome)
     })
   }
-
   return (
     <Overlay onClose={() => setOpen(false)}>
       <div
@@ -98,7 +81,6 @@ export function NewStaffDialog() {
             onClick={() => setOpen(false)}
           />
         </header>
-
         <p className="px-6 pt-6 text-sm text-ink-2">{STAFF_PAGE.invite.lead}</p>
 
         <form id={INVITE_FORM_ID} className="flex flex-col gap-4 p-6" onSubmit={submit}>
@@ -146,9 +128,6 @@ export function NewStaffDialog() {
 }
 
 const INVITE_FORM_ID = 'invite-staff-form'
-
-/* ── The membership row's own actions ─────────────────────────────────────── */
-
 export interface StaffRowActionsProps {
   readonly membership: {
     readonly id: string
@@ -175,14 +154,14 @@ export interface StaffRowActionsProps {
     }[]
   }
 }
-
 export function StaffRowActions({ membership, grid, workingHours, shiftRanges }: StaffRowActionsProps) {
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
   const [editing, setEditing] = useState(false)
+  const [editingProfile, setEditingProfile] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
   const [hoursOpen, setHoursOpen] = useState(false)
   const [role, setRole] = useState<string | null>(membership.role)
-
   function run(action: () => Promise<ActionResult>, onOk: () => void) {
     startTransition(async () => {
       const outcome = await action()
@@ -193,7 +172,6 @@ export function StaffRowActions({ membership, grid, workingHours, shiftRanges }:
       setAnswer(outcome)
     })
   }
-
   return (
     <div className="flex flex-col items-start gap-2">
       <div className="flex flex-wrap gap-2">
@@ -208,6 +186,28 @@ export function StaffRowActions({ membership, grid, workingHours, shiftRanges }:
           }}
         >
           {STAFF_PAGE.columns.permissions}
+        </Button>
+        <Button
+          size="small"
+          variant="neutral"
+          disabled={pending}
+          onClick={() => {
+            setAnswer(null)
+            setEditingProfile(true)
+          }}
+        >
+          {STAFF_PAGE.edit.trigger}
+        </Button>
+        <Button
+          size="small"
+          variant="neutral"
+          disabled={pending}
+          onClick={() => {
+            setAnswer(null)
+            setChangingPassword(true)
+          }}
+        >
+          {STAFF_PAGE.password.trigger}
         </Button>
         {workingHours !== undefined ? (
           <Button
@@ -240,9 +240,7 @@ export function StaffRowActions({ membership, grid, workingHours, shiftRanges }:
           </Button>
         )}
       </div>
-
       <FormAnswer answer={answer} />
-
       {editing ? (
         <PermissionModal
           membership={membership}
@@ -259,7 +257,32 @@ export function StaffRowActions({ membership, grid, workingHours, shiftRanges }:
           }}
         />
       ) : null}
-
+      {editingProfile ? (
+        <EditStaffModal
+          membership={membership}
+          onClose={() => setEditingProfile(false)}
+          onDone={(outcome) => {
+            if (outcome.ok) {
+              setEditingProfile(false)
+              return
+            }
+            setAnswer(outcome)
+          }}
+        />
+      ) : null}
+      {changingPassword ? (
+        <ChangePasswordModal
+          membership={membership}
+          onClose={() => setChangingPassword(false)}
+          onDone={(outcome) => {
+            if (outcome.ok) {
+              setChangingPassword(false)
+              return
+            }
+            setAnswer(outcome)
+          }}
+        />
+      ) : null}
       {hoursOpen && workingHours !== undefined ? (
         <WorkingHoursModal
           doctorId={workingHours.doctorId}
@@ -279,6 +302,175 @@ export function StaffRowActions({ membership, grid, workingHours, shiftRanges }:
     </div>
   )
 }
+function EditStaffModal({
+  membership,
+  onClose,
+  onDone,
+}: {
+  readonly membership: StaffRowActionsProps['membership']
+  readonly onClose: () => void
+  readonly onDone: (outcome: ActionResult) => void
+}) {
+  const [pending, startTransition] = useTransition()
+  const titleId = useId()
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const input: StaffProfileInput = {
+      membershipId: membership.id,
+      firstName: asFormString(form, 'firstName'),
+      lastName: asFormString(form, 'lastName'),
+    }
+    startTransition(async () => onDone(await updateStaffProfileAction(input)))
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg"
+      >
+        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
+          <h2 id={titleId} className="text-lg font-bold text-ink">
+            {STAFF_PAGE.edit.title}
+          </h2>
+          <Button
+            size="icon"
+            variant="ghost"
+            icon="close"
+            aria-label={STAFF_PAGE.edit.cancel}
+            onClick={onClose}
+          />
+        </header>
+
+        <p className="px-6 pt-6 text-sm text-ink-2">{STAFF_PAGE.edit.lead}</p>
+
+        <form id={EDIT_FORM_ID} className="flex flex-col gap-4 p-6" onSubmit={submit}>
+          <div className="flex flex-col gap-4 panel:flex-row">
+            <Field label={STAFF_PAGE.edit.firstName} required className="flex-1">
+              <TextInput name="firstName" defaultValue={membership.user.firstName} />
+            </Field>
+            <Field label={STAFF_PAGE.edit.lastName} className="flex-1">
+              <TextInput name="lastName" defaultValue={membership.user.lastName} />
+            </Field>
+          </div>
+
+          <Field label={STAFF_PAGE.columns.mobile}>
+            <TextInput
+              name="mobile"
+              value={formatPhone(membership.user.mobile)}
+              readOnly
+              aria-readonly="true"
+              dir="ltr"
+            />
+          </Field>
+        </form>
+
+        <footer className="flex items-center justify-end gap-2 border-t border-line p-6">
+          <Button variant="ghost" onClick={onClose} disabled={pending}>
+            {STAFF_PAGE.edit.cancel}
+          </Button>
+          <Button type="submit" form={EDIT_FORM_ID} variant="primary" loading={pending}>
+            {STAFF_PAGE.edit.save}
+          </Button>
+        </footer>
+      </div>
+    </Overlay>
+  )
+}
+
+const EDIT_FORM_ID = 'edit-staff-form'
+
+/* ── The «تغییر رمز عبور» modal ────────────────────────────────────────────── */
+
+function ChangePasswordModal({
+  membership,
+  onClose,
+  onDone,
+}: {
+  readonly membership: StaffRowActionsProps['membership']
+  readonly onClose: () => void
+  readonly onDone: (outcome: ActionResult) => void
+}) {
+  const [pending, startTransition] = useTransition()
+  const titleId = useId()
+  const [localError, setLocalError] = useState<string | null>(null)
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const password = asFormString(form, 'password')
+    const confirm = asFormString(form, 'confirmPassword')
+    if (password.length < 8) {
+      setLocalError(STAFF_PAGE.password.tooShort)
+      return
+    }
+    if (password !== confirm) {
+      setLocalError(STAFF_PAGE.password.mismatch)
+      return
+    }
+    setLocalError(null)
+    const input: StaffPasswordInput = {
+      membershipId: membership.id,
+      password,
+    }
+    startTransition(async () => onDone(await resetStaffPasswordAction(input)))
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg"
+      >
+        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
+          <h2 id={titleId} className="text-lg font-bold text-ink">
+            {`${STAFF_PAGE.password.title} — ${membership.user.firstName} ${membership.user.lastName}`}
+          </h2>
+          <Button
+            size="icon"
+            variant="ghost"
+            icon="close"
+            aria-label={STAFF_PAGE.password.cancel}
+            onClick={onClose}
+          />
+        </header>
+
+        <p className="px-6 pt-6 text-sm text-ink-2">{STAFF_PAGE.password.lead}</p>
+
+        <form id={PASSWORD_FORM_ID} className="flex flex-col gap-4 p-6" onSubmit={submit}>
+          <Field label={STAFF_PAGE.password.newPassword} required>
+            <TextInput name="password" type="password" autoComplete="new-password" dir="ltr" />
+          </Field>
+          <Field label={STAFF_PAGE.password.confirmPassword} required>
+            <TextInput name="confirmPassword" type="password" autoComplete="new-password" dir="ltr" />
+          </Field>
+          {localError === null ? null : (
+            <p className="text-sm text-danger" role="alert">
+              {localError}
+            </p>
+          )}
+        </form>
+
+        <footer className="flex items-center justify-end gap-2 border-t border-line p-6">
+          <Button variant="ghost" onClick={onClose} disabled={pending}>
+            {STAFF_PAGE.password.cancel}
+          </Button>
+          <Button type="submit" form={PASSWORD_FORM_ID} variant="primary" loading={pending}>
+            {STAFF_PAGE.password.save}
+          </Button>
+        </footer>
+      </div>
+    </Overlay>
+  )
+}
+
+const PASSWORD_FORM_ID = 'change-staff-password-form'
 
 /* ── The «ساعت کاری» modal ─────────────────────────────────────────────────── */
 
@@ -547,9 +739,6 @@ function initialRangesFrom(
     slotMinutes: String(row.slotMinutes),
   }))
 }
-
-/* ── The permission modal ─────────────────────────────────────────────────── */
-
 function PermissionModal({
   membership,
   grid,
@@ -583,7 +772,6 @@ function PermissionModal({
     const input: PermissionsInput = { granted, revoked }
     startTransition(async () => onDone(await updateMembershipPermissionsAction(membership.id, input)))
   }
-
   return (
     <Overlay onClose={onClose}>
       <div
@@ -668,7 +856,6 @@ function PermissionModal({
             </fieldset>
           </form>
         )}
-
         <footer className="flex items-center justify-end gap-2 border-t border-line p-6">
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             {STAFF_PAGE.invite.cancel}
@@ -683,16 +870,11 @@ function PermissionModal({
     </Overlay>
   )
 }
-
 const PERMISSIONS_FORM_ID = 'membership-permissions-form'
-
-/* ── The leave table's two decisions ───────────────────────────────────────── */
-
 export interface LeaveRowActionsProps {
   readonly leaveRequestId: string
   readonly status: string
 }
-
 export function LeaveRowActions({ leaveRequestId, status }: LeaveRowActionsProps) {
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
@@ -705,7 +887,6 @@ export function LeaveRowActions({ leaveRequestId, status }: LeaveRowActionsProps
       if (!outcome.ok) setAnswer(outcome)
     })
   }
-
   return (
     <div className="flex flex-col items-start gap-2">
       <div className="flex flex-wrap gap-2">
@@ -730,9 +911,6 @@ export function LeaveRowActions({ leaveRequestId, status }: LeaveRowActionsProps
     </div>
   )
 }
-
-/* ── The pieces the forms share ───────────────────────────────────────────── */
-
 type FormAnswer = { readonly ok: boolean; readonly message: string }
 
 function FormAnswer({ answer }: { readonly answer: FormAnswer | null }) {
@@ -748,7 +926,6 @@ function FormAnswer({ answer }: { readonly answer: FormAnswer | null }) {
     </p>
   )
 }
-
 function Overlay({
   children,
   onClose,
@@ -790,7 +967,6 @@ function PermissionRow({
     </label>
   )
 }
-
 function LockedRow({ label }: { readonly label: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-sm border border-line bg-surface-2 px-3 py-2">

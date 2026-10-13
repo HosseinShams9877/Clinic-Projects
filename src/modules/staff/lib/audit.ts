@@ -51,6 +51,22 @@ export const AuditAction = {
   MembershipRoleChanged: 'membership.role_changed',
   MembershipActivated: 'membership.activated',
   MembershipDeactivated: 'membership.deactivated',
+  /**
+   * A membership's display name changed — «ویرایش کارمند».
+   *
+   * The mobile is the person's identity and is not editable, so this row records the
+   * two names and nothing else. The audit exists because a manager who edits a
+   * colleague's name should be able to see who did it.
+   */
+  MembershipUpdated: 'membership.updated',
+  /**
+   * A staff member's password was reset by a manager — «تغییر رمز عبور».
+   *
+   * The row records that the password was changed and by whom, never what it was:
+   * the plaintext never leaves the reset form and the hash is not a fact a trail
+   * should carry.
+   */
+  MembershipPasswordReset: 'membership.password_reset',
   LeaveRequested: 'leave.requested',
   LeaveApproved: 'leave.approved',
   LeaveRejected: 'leave.rejected',

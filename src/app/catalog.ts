@@ -590,6 +590,30 @@ export const STAFF_PAGE = {
     saved: 'کاربر دعوت شد.',
     cancel: 'انصراف',
   },
+     edit: {
+    /** The button that opens the modal, in the row's actions. */
+    trigger: 'ویرایش',
+    title: 'ویرایش کارمند',
+    lead: 'نام و نام خانوادگی این کاربر را ویرایش کنید. شماره موبایل قابل تغییر نیست.',
+    firstName: 'نام',
+    lastName: 'نام خانوادگی',
+    save: 'ذخیره تغییرات',
+    saved: 'تغییرات ذخیره شد.',
+    cancel: 'انصراف',
+  },
+  password: {
+    /** The button that opens the modal, in the row's actions. */
+    trigger: 'تغییر رمز',
+    title: 'تغییر رمز عبور',
+    lead: 'رمز عبور جدید این کاربر را وارد کنید. رمز فعلی نمایش داده نمی‌شود.',
+    newPassword: 'رمز عبور جدید',
+    confirmPassword: 'تکرار رمز عبور',
+    save: 'ذخیره رمز عبور',
+    saved: 'رمز عبور تغییر کرد.',
+    cancel: 'انصراف',
+    mismatch: 'دو رمز وارد شده یکسان نیستند.',
+    tooShort: 'رمز عبور باید حداقل ۸ کاراکتر باشد.',
+  },
   matrix: {
     title: 'ماتریس دسترسی‌ها',
     lead: 'هر ستون یک نقش و هر ردیف یک دسترسی است. تغییرات بلافاصله اعمال می‌شوند.',

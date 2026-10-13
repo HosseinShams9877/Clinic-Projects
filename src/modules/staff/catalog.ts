@@ -16,6 +16,7 @@
  * | `staff.mobileInvalid` | Type the mobile as `09xxxxxxxxx`. |
  * | `staff.nameRequired` | Type a name — the list cannot render a person without one. |
  * | `staff.passwordRequired` | Set a password the person can log in with. |
+ * | `staff.passwordTooShort` | Type a password at least eight characters long. |
  * | `staff.roleInvalid` | Pick one of the three roles the matrix holds. |
  * | `staff.leaveAlreadyDecided` | The request is closed; there is nothing to change. |
  * | `staff.lastManager` | Appoint another manager first, then make the change. |
@@ -41,6 +42,7 @@ export type StaffMessageKey =
   | 'staff.mobileInvalid'
   | 'staff.nameRequired'
   | 'staff.passwordRequired'
+  | 'staff.passwordTooShort'
   | 'staff.roleInvalid'
   | 'staff.leaveAlreadyDecided'
   | 'staff.lastManager'
@@ -67,6 +69,11 @@ export const MESSAGES: Readonly<Record<StaffMessageKey, string>> = {
   'staff.nameRequired': 'نام کاربر الزامی است.',
 
   'staff.passwordRequired': 'برای ورود، یک رمز عبور تعیین کنید.',
+
+  // The reset path's own refusal. The length is the module's own choice, not a policy
+  // the settings own: a staff row a person can log in with is a row the clinic can use,
+  // and eight characters is the shortest that is not a guessable word.
+  'staff.passwordTooShort': 'رمز عبور باید حداقل ۸ کاراکتر باشد.',
 
   'staff.roleInvalid': 'نقش باید یکی از مدیر، پزشک یا منشی باشد.',
 

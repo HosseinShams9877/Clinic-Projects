@@ -46,9 +46,10 @@ export {
   deactivateMembership,
   inviteStaff,
   listStaff,
+  resetStaffPassword,
   updateMembershipPermissions,
+  updateStaffProfile,
 } from './lib/memberships'
-
 export {
   approveLeaveRequest,
   listLeaveRequests,
