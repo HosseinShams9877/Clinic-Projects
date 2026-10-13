@@ -1,18 +1,43 @@
+'use client'
+
 /**
  * The day grid — one column per doctor, one row per time.
  *
- * ## The per-doctor slot granularity
+ * ## The per-range slot granularity
  *
- * The axis is the union of every doctor's own slot *starts*, at the doctor's own
- * `slotMinutes`. A doctor with 30-minute slots contributes 9:00, 9:30, 10:00 …; a
- * doctor with a 45-minute override contributes 10:00, 10:45 …; a doctor with a
- * 120-minute override contributes 11:00 only. The rows are the union, and a slot's
- * cell spans the rows between its start and the next start.
+ * The axis is the union of every range's own slot *starts*, at the range's own
+ * `slotMinutes`. A doctor with a 10–12 range at 120 minutes contributes 10:00; a
+ * doctor with a 14–17 range at 45 minutes contributes 14:00, 14:45, 15:30, 16:15.
+ * The rows are the union, and a slot's cell spans the rows between its start and the
+ * next start.
  *
- * A 120-minute slot in a 30-minute axis is four rows; a 45-minute slot is one and a
- * half rows and is drawn with a `rowSpan` of two — the slot's own end is what the
- * cell's height reflects, not a whole number of 30-minute rows. The cell's content
- * is the slot, and the axis is only the grid's own scaffold.
+ * ## Why the step is per range and not per doctor
+ *
+ * A doctor who works 10–12 at 120 minutes and 14–17 at 45 minutes has two ranges
+ * with two different steps, and the two must not interfere. A single step on the
+ * doctor would have to choose between them, and whichever it chose would break the
+ * other range. The step is therefore a property of the *range* — the field the
+ * schema already stores — and the grid reads it there.
+ *
+ * ## Why the table is `border-separate`
+ *
+ * `position: sticky` on a `<th>` does not work inside a `<table>` with
+ * `border-collapse: collapse` — the browser shares the collapsed border between
+ * adjacent cells, and a cell that is sticking cannot own the half it needs. The
+ * table therefore uses `border-separate` with `border-spacing-0`, so each cell's
+ * border is its own and the sticky cells in the hour column can stick in both
+ * directions. The `border-spacing-0` is what keeps the layout identical to the
+ * collapsed version — the only visual difference is that each cell draws its own
+ * border instead of sharing one with its neighbour.
+ *
+ * ## The time column is sticky in both directions
+ *
+ * The hour column is the grid's scaffold: it holds no booking surface, and it is
+ * the only thing on screen that tells a reader *when* a slot is. It is `sticky` on
+ * the inline-start edge, so a horizontal pan does not carry it off-screen, and
+ * `sticky top-0` inside the header row, so a vertical scroll does not either. The
+ * `bg-surface-sunken` is what makes the stickiness legible — without an opaque
+ * background the sticky cell would let the cells behind it show through.
  */
 
 import Link from 'next/link'
@@ -40,6 +65,7 @@ import type { BookingDialogProps, LockedSlot } from './booking-dialog'
 import { BookingDialog, type CustomerOption, type ServiceOption } from './booking-dialog'
 import { BlockDialog } from './block-dialog'
 import { RowActions, type RowEditContext } from './row-actions'
+import { useDragScroll } from './use-drag-scroll'
 
 /** The grid's own props: the day's facts and what the page may do with them. */
 export interface DayGridProps {
@@ -59,11 +85,16 @@ export interface DayGridProps {
 /** The default slot length, in minutes. */
 const DEFAULT_SLOT_MINUTES = 30
 
+/** The minimum width of a doctor's column, in pixels — wide enough for its buttons. */
+const DOCTOR_COLUMN_MIN_WIDTH = 'min-w-[220px]'
+
 /** The day grid, as the two breakpoints each render it. */
 export function DayGrid(props: DayGridProps) {
   const windows = props.windows ?? []
   const columns: readonly DoctorColumn[] =
     windows.length > 0 ? windows.map((w) => ({ id: w.id, name: w.name })) : props.doctors
+
+  const { containerRef } = useDragScroll<HTMLDivElement>()
 
   if (columns.length === 0) {
     return <p className="text-sm text-ink-3">{APPOINTMENTS_PAGE.empty.day}</p>
@@ -72,36 +103,29 @@ export function DayGrid(props: DayGridProps) {
   const times = axisMinutes(windows, props.rows)
   const windowOf = new Map(windows.map((w) => [w.id, w]))
 
-  /**
-   * The row-span a cell at `minute` takes in a given doctor's column, or 0 when the
-   * minute is inside a slot a previous row already covers.
-   *
-   * The doctor's own slot starts at each range's `startMinute` plus a multiple of
-   * `slotMinutes`, and the slot is the number of axis rows between its start and the
-   * next start (or the range's end).
-   */
   function rowSpanAt(window: DoctorDayWindow | null, minute: number): number {
-    const slot = window?.slotMinutes ?? DEFAULT_SLOT_MINUTES
     const ranges = window?.ranges ?? []
     const range = ranges.find((r) => minute >= r.startMinute && minute < r.endMinute)
     if (range === undefined) return 1
     const offset = minute - range.startMinute
-    if (offset % slot !== 0) return 0
-    // The slot's end: the smaller of its own length and the range's remaining time.
-    const slotEnd = Math.min(minute + slot, range.endMinute)
+    if (offset % range.slotMinutes !== 0) return 0
+    const slotEnd = Math.min(minute + range.slotMinutes, range.endMinute)
     const rows = times.filter((m) => m >= minute && m < slotEnd).length
     return Math.max(1, rows)
   }
 
   return (
     <>
-      <div className="hidden max-h-[70vh] overflow-auto panel:block">
-        <table className="inline-size-full border-collapse text-sm">
+      <div
+        ref={containerRef}
+        className="hidden max-h-[70vh] overflow-auto panel:block"
+      >
+        <table className="min-w-max border-separate border-spacing-0 text-sm">
           <thead>
-            <tr>
+            <tr data-drag-scroll className="select-none">
               <th
                 scope="col"
-                className="sticky inset-inline-start-0 top-0 z-20 border-b border-line bg-surface px-3 py-2 text-start text-xs font-semibold text-ink-3"
+                className="sticky inset-inline-start-0 top-0 z-30 border-b border-e border-line bg-surface-sunken px-3 py-2 text-start text-xs font-semibold text-ink-3"
               >
                 {APPOINTMENTS_PAGE.timeColumn}
               </th>
@@ -111,7 +135,10 @@ export function DayGrid(props: DayGridProps) {
                   <th
                     key={doctor.id}
                     scope="col"
-                    className="sticky top-0 z-10 min-w-[140px] border-b border-l border-line bg-surface px-3 py-2 text-start align-bottom"
+                    className={cx(
+                      'sticky top-0 z-10 border-b border-e border-line bg-surface px-3 py-2 text-start align-bottom',
+                      DOCTOR_COLUMN_MIN_WIDTH,
+                    )}
                   >
                     <span className="block font-semibold text-ink">{doctor.name}</span>
                     {window === null ? null : (
@@ -144,7 +171,7 @@ export function DayGrid(props: DayGridProps) {
                 <tr key={minute}>
                   <th
                     scope="row"
-                    className="sticky inset-inline-start-0 z-10 border-b border-line bg-surface px-3 py-2 text-start font-semibold text-ink-2 tabular-nums"
+                    className="sticky inset-inline-start-0 z-20 border-b border-e border-line bg-surface-sunken px-3 py-2 text-start font-semibold text-ink-2 tabular-nums"
                   >
                     {formatTime(minutesToTime(minute))}
                   </th>
@@ -158,7 +185,10 @@ export function DayGrid(props: DayGridProps) {
                       <td
                         key={doctor.id}
                         rowSpan={span}
-                        className="min-w-[140px] border-b border-l border-line p-2 align-top"
+                        className={cx(
+                          'border-b border-e border-line p-2 align-top',
+                          DOCTOR_COLUMN_MIN_WIDTH,
+                        )}
                       >
                         {row !== null ? (
                           <BookedCell
@@ -455,12 +485,7 @@ const BORDER_CLASSES: Readonly<Record<string, string>> = {
 }
 
 /**
- * The grid's time axis, in minutes — the union of every doctor's own slot starts.
- *
- * The starts are exactly the slots each doctor has, at their own `slotMinutes`: a
- * 30-minute doctor contributes 9:00, 9:30, 10:00 …; a 45-minute doctor contributes
- * 10:00, 10:45 …; a 120-minute doctor contributes 11:00 only. A row's own time is
- * added too, so an off-step booking still gets a row.
+ * The grid's time axis, in minutes — the union of every range's own slot starts.
  */
 function axisMinutes(
   windows: readonly DoctorDayWindow[],
@@ -474,9 +499,9 @@ function axisMinutes(
   }
 
   for (const w of windows) {
-    const slot = w.slotMinutes ?? DEFAULT_SLOT_MINUTES
     for (const r of w.ranges) {
-      for (let m = r.startMinute; m < r.endMinute; m += slot) set.add(m)
+      const step = r.slotMinutes || DEFAULT_SLOT_MINUTES
+      for (let m = r.startMinute; m < r.endMinute; m += step) set.add(m)
     }
   }
   for (const row of rows) set.add(timeToMinutes(asLocalTime(row.localTime)))

@@ -18,7 +18,7 @@ import type { TenantContext, TransactionClient } from '@/core/db/scope'
 import type { LocalDate, LocalTime } from '@/core/localization'
 
 import type { AppointmentsMessageKey } from '../catalog'
-import type { AppointmentRow, DoctorColumn } from '../lib/queries'
+import type { AppointmentRow, DoctorColumn, DoctorDayRange, DoctorDayWindow } from '../lib/queries'
 import type { BookingSettings } from '../lib/settings'
 import type { Range, Slot, SlotDay } from '../lib/slots'
 import type { DoctorShiftRangeRow, DoctorShiftRangeInput } from '../lib/shift-ranges'
@@ -69,6 +69,8 @@ export type {
   AppointmentsMessageKey,
   BookingSettings,
   DoctorColumn,
+  DoctorDayRange,
+  DoctorDayWindow,
   DoctorShiftRangeInput,
   DoctorShiftRangeRow,
   Range,

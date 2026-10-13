@@ -35,6 +35,15 @@
  * read *those* and not the default row: the doctor is a column, and the column's
  * working ranges are the override's ranges. A weekday with no override rows is the
  * default behaviour, exactly as before.
+ *
+ * ## The per-range slot length
+ *
+ * Each range carries its own `slotMinutes`, and the grid reads them per range rather
+ * than per doctor. A doctor who works 10–12 in 30-minute slots and 14–17 in 60-minute
+ * slots has two ranges with two different steps; the doctor's *axis* is the union of
+ * both walks, and a cell's `rowSpan` is the number of axis rows between its own slot's
+ * start and its own slot's end. A single `slotMinutes` on the doctor would have to
+ * choose between the two, and whichever it chose would break the other range.
  */
 
 import type { Prisma } from '@prisma/client'
@@ -255,6 +264,20 @@ export async function doctorsOnDay(args: {
 }
 
 /**
+ * One range of a doctor's day, with its own slot step.
+ *
+ * The step is what the range is cut to: a 10–12 range at 120 minutes offers a single
+ * slot (10:00), and a 14–17 range at 45 minutes offers 14:00, 14:45, 15:30 and 16:15.
+ * A range whose step does not divide its length exactly drops its trailing partial
+ * step, which is the same rule `slotsInRange` states on the booking path.
+ */
+export interface DoctorDayRange {
+  readonly startMinute: number
+  readonly endMinute: number
+  readonly slotMinutes: number
+}
+
+/**
  * One doctor's working window on a weekday, as the grid's hour axis reads it.
  */
 export interface DoctorDayWindow {
@@ -265,27 +288,21 @@ export interface DoctorDayWindow {
   /** Minutes since midnight the window closes (spanning max; half-open). */
   readonly endMinute: number
   /**
-   * The individual working ranges, one per shift the doctor holds that weekday.
+   * The individual working ranges, one per shift the doctor holds that weekday, each
+   * carrying its own slot step. The grid walks each range at its own step and takes
+   * the union of the starts as the axis; a single step across the doctor would have to
+   * choose one range's step and break the other's.
    */
-  readonly ranges: readonly { readonly startMinute: number; readonly endMinute: number }[]
-  /**
-   * The doctor's own slot step for the weekday, or `null` when they have no override.
-   *
-   * `null` is the default: the grid's own `AXIS_STEP`. A number is the doctor's own
-   * override and the grid's row axis uses it for this column.
-   */
-  readonly slotMinutes: number | null
+  readonly ranges: readonly DoctorDayRange[]
 }
 
 /**
  * The working window of each doctor who works a weekday, for the grid's hour axis.
  *
  * Reads `DoctorShiftRange` when the doctor has any rows for the weekday: the ranges
- * are *those* (each intersected with the clinic's shift), the spanning envelope is the
- * override's, and `slotMinutes` is the smallest step across the override's ranges — so
- * a doctor who works 10–12 in 30-minute slots and 14–17 in 60-minute slots gets the
- * finer axis, and the column can hold both. A doctor with no override rows falls back
- * to `DoctorWorkingHours`, as before.
+ * are *those* (each intersected with the clinic's shift), each with its own
+ * `slotMinutes`, and the spanning envelope is the override's. A doctor with no
+ * override rows falls back to `DoctorWorkingHours`, with the module's default step.
  */
 export async function doctorWindowsOnDay(args: {
   readonly tx: TransactionClient
@@ -332,44 +349,50 @@ export async function doctorWindowsOnDay(args: {
     string,
     {
       name: string
-      ranges: { startMinute: number; endMinute: number }[]
-      slotMinutes: number | null
+      ranges: DoctorDayRange[]
     }
   >()
 
   // The override wins: a doctor with `DoctorShiftRange` rows for the weekday has
-  // *those* as their schedule, and the default row is not read.
+  // *those* as their schedule, and the default row is not read. Each range keeps its
+  // own step; the grid walks each range at that step.
   const doctorsWithOverride = new Set(rangeRows.map((row) => row.doctor.id))
   for (const row of rangeRows) {
     const range = workingRange({ shift, hours: { startTime: row.startTime, endTime: row.endTime } })
     if (range === null) continue
     const existing = byDoctor.get(row.doctor.id)
-    const next = { startMinute: range.start, endMinute: range.end }
+    const next: DoctorDayRange = {
+      startMinute: range.start,
+      endMinute: range.end,
+      slotMinutes: row.slotMinutes,
+    }
     if (existing === undefined) {
       byDoctor.set(row.doctor.id, {
         name: personName(row.doctor.firstName, row.doctor.lastName),
         ranges: [next],
-        slotMinutes: row.slotMinutes,
       })
     } else {
       existing.ranges.push(next)
-      existing.slotMinutes =
-        existing.slotMinutes === null ? row.slotMinutes : Math.min(existing.slotMinutes, row.slotMinutes)
     }
   }
 
-  // The default row, for doctors who have no override for the weekday.
+  // The default row, for doctors who have no override for the weekday. The default
+  // step is `DEFAULT_SLOT_MINUTES` — the same one the booking path reads when the
+  // doctor has no override for a weekday.
   for (const row of hoursRows) {
     if (doctorsWithOverride.has(row.doctor.id)) continue
     const range = workingRange({ shift, hours: { startTime: row.startTime, endTime: row.endTime } })
     if (range === null) continue
     const existing = byDoctor.get(row.doctor.id)
-    const next = { startMinute: range.start, endMinute: range.end }
+    const next: DoctorDayRange = {
+      startMinute: range.start,
+      endMinute: range.end,
+      slotMinutes: 30,
+    }
     if (existing === undefined) {
       byDoctor.set(row.doctor.id, {
         name: personName(row.doctor.firstName, row.doctor.lastName),
         ranges: [next],
-        slotMinutes: null,
       })
     } else {
       existing.ranges.push(next)
@@ -384,7 +407,6 @@ export async function doctorWindowsOnDay(args: {
       startMinute: Math.min(...ordered.map((r) => r.startMinute)),
       endMinute: Math.max(...ordered.map((r) => r.endMinute)),
       ranges: ordered,
-      slotMinutes: w.slotMinutes,
     }
   })
 }
