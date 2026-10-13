@@ -10,8 +10,9 @@
  *    `doctorDebts`) and the customer profile's own summary. Each holds `view_debts`.
  * 2. **The two writes** — `recordFollowUp` and `rescheduleDueDate`, both gated by
  *    `follow_up_debt`, and the complete list of what a debt may be written on.
- * 3. **The bucket arithmetic** — `bucketOf` and `effectiveDueInstant`, so a page that
- *    renders a row's bucket reads the same function the list built it with.
+ * 3. **The bucket arithmetic** — `bucketOf`, `daysOverdueOf` and `effectiveDueInstant`,
+ *    so a page that renders a row's bucket reads the same function the list built it
+ *    with.
  *
  * ## What is deliberately not
  *
@@ -25,7 +26,7 @@
  * caller opened the scope.
  */
 
-export type { DebtBuckets, DebtRow, DebtsMessageKey, DebtsModule } from './types'
+export type { DebtBuckets, DebtRow, DebtsMessageKey, DebtsModule, LastFollowUp } from './types'
 
 export { DEBT_BUCKET_LABELS, DEBT_BUCKET_ORDER, MESSAGES } from './catalog'
 
@@ -33,6 +34,6 @@ export { clinicDebts, contactList, customerDebts, doctorDebts } from './lib/quer
 
 export { recordFollowUp, rescheduleDueDate } from './lib/follow-up'
 
-export { bucketOf, effectiveDueInstant } from './lib/buckets'
+export { bucketOf, daysOverdueOf, effectiveDueInstant } from './lib/buckets'
 
 export { DEFAULT_DEBT_SETTINGS, readDebtSettings, type DebtSettings } from './lib/settings'

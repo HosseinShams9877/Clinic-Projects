@@ -20,6 +20,13 @@
  * stacks the four lists in `DEBT_BUCKET_ORDER` and each one's empty state is its own
  * sentence. A page of 20 rows sorted by date would put the row the desk loses the most
  * by not calling at the bottom.
+ *
+ * ## Why the days-overdue column is the module's number
+ *
+ * `daysOverdue` is computed once, in `buckets.ts`, from the same `now` the read ran
+ * with — the same clock the bucket was decided against. Re-deriving it from
+ * `dueLocalDate` and `todayLocalDate()` here would be a second arithmetic and a second
+ * clock, and the two could disagree on the row the desk is looking at.
  */
 
 import { DEBTS_PAGE } from '@/app/catalog'
@@ -28,6 +35,7 @@ import {
   asLocalDate,
   formatDate,
   formatMoney,
+  formatNumber,
   formatPhone,
 } from '@/core/localization'
 import type { DebtRow } from '@/modules/debts'
@@ -85,12 +93,14 @@ function BucketTable({
           <tr className="border-b border-line-2 bg-surface-2 text-ink-3">
             <Th>{DEBTS_PAGE.columns.customer}</Th>
             <Th>{DEBTS_PAGE.columns.mobile}</Th>
+            <Th>{DEBTS_PAGE.filter.doctor}</Th>
             <Th className="text-end">{DEBTS_PAGE.columns.charged}</Th>
             <Th className="text-end">{DEBTS_PAGE.columns.discount}</Th>
             <Th className="text-end">{DEBTS_PAGE.columns.paid}</Th>
             <Th className="text-end">{DEBTS_PAGE.columns.balance}</Th>
             <Th>{DEBTS_PAGE.columns.dueDate}</Th>
-            <Th>{DEBTS_PAGE.columns.followUp}</Th>
+            <Th className="text-end">{DEBTS_PAGE.columns.daysOverdue}</Th>
+            <Th>{DEBTS_PAGE.columns.lastFollowUp}</Th>
             <Th>{DEBTS_PAGE.columns.nextContact}</Th>
             {showActions ? <Th>{DEBTS_PAGE.columns.actions}</Th> : null}
           </tr>
@@ -126,6 +136,7 @@ function DebtRowMarkup({
       <td className="px-4 py-3 text-ink-2 tabular-nums" dir="ltr">
         {formatPhone(row.customerMobile)}
       </td>
+      <td className="px-4 py-3 text-ink-2">{row.doctorName}</td>
       <td className="px-4 py-3 text-end tabular-nums">{formatMoney(row.charged)}</td>
       <td className="px-4 py-3 text-end tabular-nums text-ink-2">{formatMoney(row.discount)}</td>
       <td className="px-4 py-3 text-end tabular-nums">{formatMoney(row.paid)}</td>
@@ -135,15 +146,20 @@ function DebtRowMarkup({
       <td className="px-4 py-3 tabular-nums text-ink-2">
         {formatDate(asLocalDate(row.dueLocalDate), 'short')}
       </td>
-      <td className="px-4 py-3 tabular-nums text-ink-2">
-        {row.debtFollowUpAt === null
-          ? '—'
-          : formatDate(dateToLocalDate(row.debtFollowUpAt), 'short')}
+      <td className="px-4 py-3 text-end tabular-nums text-ink-2">
+        {row.daysOverdue > 0
+          ? `${formatNumber(row.daysOverdue)} ${DEBTS_PAGE.days}`
+          : DEBTS_PAGE.dash}
       </td>
       <td className="px-4 py-3 tabular-nums text-ink-2">
-        {row.debtNextContactAt === null
-          ? '—'
-          : formatDate(dateToLocalDate(row.debtNextContactAt), 'short')}
+        {row.lastFollowUp === null
+          ? DEBTS_PAGE.dash
+          : formatDate(dateToLocalDate(row.lastFollowUp.at), 'short')}
+      </td>
+      <td className="px-4 py-3 tabular-nums text-ink-2">
+        {row.nextContactAt === null
+          ? DEBTS_PAGE.dash
+          : formatDate(dateToLocalDate(row.nextContactAt), 'short')}
       </td>
       {showActions && paymentOptions !== undefined ? (
         <td className="px-4 py-3">

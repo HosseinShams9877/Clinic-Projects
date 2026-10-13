@@ -22,8 +22,8 @@ import type { TransactionClient } from '@/core/db/scope'
 import { requirePermission } from '@/modules/roles-permissions'
 import { asBalance } from '@/modules/payments'
 
-import type { DebtBuckets, DebtRow } from '../types'
-import { bucketOf, effectiveDueInstant } from './buckets'
+import type { DebtBuckets, DebtRow, LastFollowUp } from '../types'
+import { bucketOf, daysOverdueOf, effectiveDueInstant } from './buckets'
 import { readDebtSettings } from './settings'
 
 /** The most a bucket reads in one go; a list is scrolled, not paged. */
@@ -38,9 +38,11 @@ const APPOINTMENT_SELECT = {
   scheduledAt: true,
   priceAtBooking: true,
   debtFollowUpAt: true,
+  debtFollowUpNote: true,
   debtNextContactAt: true,
   debtDueDateOverride: true,
   customer: { select: { firstName: true, lastName: true, mobile: true } },
+  doctor: { select: { firstName: true, lastName: true } },
 } as const
 
 /** The shape Prisma hands back from the appointments read. */
@@ -52,12 +54,17 @@ type AppointmentRow = {
   readonly scheduledAt: Date
   readonly priceAtBooking: bigint
   readonly debtFollowUpAt: Date | null
+  readonly debtFollowUpNote: string | null
   readonly debtNextContactAt: Date | null
   readonly debtDueDateOverride: Date | null
   readonly customer: {
     readonly firstName: string
     readonly lastName: string | null
     readonly mobile: string
+  }
+  readonly doctor: {
+    readonly firstName: string
+    readonly lastName: string
   }
 }
 
@@ -126,6 +133,9 @@ async function tenantDebts(
       graceDays: settings.debtGraceDays,
     })
 
+    const lastFollowUp: LastFollowUp | null =
+      row.debtFollowUpAt === null ? null : { at: row.debtFollowUpAt, note: row.debtFollowUpNote }
+
     buckets[bucketKey(bucketOf(now, dueAt))].push({
       appointmentId: row.id,
       customerId: row.customerId,
@@ -133,16 +143,18 @@ async function tenantDebts(
       customerLastName: row.customer.lastName,
       customerMobile: row.customer.mobile,
       doctorId: row.doctorId,
+      doctorName: doctorName(row.doctor.firstName, row.doctor.lastName),
       serviceId: row.serviceId,
       charged: balance.charged,
       discount: balance.discount,
       paid: balance.paid,
       balance: balance.balance,
       dueLocalDate: dueLocalDate(dueAt, settings.utcOffsetMinutes),
-      debtFollowUpAt: row.debtFollowUpAt,
-      debtNextContactAt: row.debtNextContactAt,
-      debtDueDateOverride: row.debtDueDateOverride,
+      lastFollowUp,
+      nextContactAt: row.debtNextContactAt,
+      dueDateOverride: row.debtDueDateOverride,
       bucket: bucketOf(now, dueAt),
+      daysOverdue: daysOverdueOf(now, dueAt),
     })
   }
 
@@ -177,6 +189,11 @@ type MutableBuckets = {
 /** The due date as a `LocalDate`, in the tenant's own calendar and digits. */
 function dueLocalDate(dueAt: Date, utcOffsetMinutes: number): LocalDate {
   return fromUtcInstant(dueAt, utcOffsetMinutes).localDate
+}
+
+/** The doctor's name, with the last name only when the row carries one. */
+function doctorName(firstName: string, lastName: string | null): string {
+  return lastName === null || lastName === '' ? firstName : `${firstName} ${lastName}`
 }
 
 /**
@@ -236,5 +253,11 @@ export async function customerDebts(args: {
   readonly now: Date
 }): Promise<readonly DebtRow[]> {
   const buckets = await tenantDebts(args.tx, args.tenantId, args.now)
-  return [...buckets.overdue30, ...buckets.overdue7, ...buckets.overdue, ...buckets.dueSoon]
+  const all = [
+    ...buckets.overdue30,
+    ...buckets.overdue7,
+    ...buckets.overdue,
+    ...buckets.dueSoon,
+  ]
+  return all.filter((row) => row.customerId === args.customerId)
 }

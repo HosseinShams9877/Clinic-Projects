@@ -49,7 +49,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "sqlite"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -600,6 +600,7 @@ model Appointment {
   // desk booked, and a due date the customer promised. There is no `debts` table
   // (`03-data-model.md` §4.3), so the follow-up lives on the charge it is about.
   debtFollowUpAt      DateTime?
+  debtFollowUpNote    String?
   debtNextContactAt   DateTime?
   debtDueDateOverride DateTime?
 

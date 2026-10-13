@@ -8,6 +8,8 @@
  * key here.
  */
 
+import { ZWNJ } from '@/core/localization'
+
 /** The appointments page's reception-specific copy (beyond the shared `APPOINTMENTS_PAGE`). */
 export const RECEPTION_APPOINTMENTS = {
   /** The grid footer legend: how a booked cell says who booked it. */
@@ -60,15 +62,21 @@ export const RECEPTION_CYCLES = {
   },
 } as const
 
-/** The debts page's reception-specific copy — the four KPI tiles above the buckets. */
+/**
+ * The debts page's reception-specific copy — the three KPI tiles above the buckets.
+ *
+ * The average-delay tile is gone: an average across debts of different sizes is not a
+ * debt, and the row's own `daysOverdue` column carries the fact per debt, which is what
+ * the desk actually calls about. Three tiles remain — the total, the past-due count,
+ * and what came in this month.
+ */
 export const RECEPTION_DEBTS = {
   kpi: {
     collected: 'وصول‌شده این ماه',
-    avgDelay: 'میانگین تأخیر',
     overdue: 'سررسید گذشته',
     total: 'مجموع مانده',
   },
-  /** The «میانگین تأخیر» unit, appended to the day count. */
+  /** The «روز» unit, appended to a day count in a row's own `daysOverdue` column. */
   days: 'روز',
   /** The chip filter's «all» label; the bucket labels come from the module. */
   filterAll: 'همه',
@@ -118,3 +126,113 @@ export const RECEPTION_CUSTOMERS = {
   exportLabel: 'خروجی Excel',
 } as const
 
+/**
+ * The four debt surfaces' copy — Phase 5.
+ *
+ * The three staff pages are one row read through three permissions, and the copy each
+ * one renders is its own because the three facts are different: the desk owes a call,
+ * the manager oversees, and the doctor reads their own. The customer's own history is
+ * the fourth surface and the one with no permission at all.
+ *
+ * ## The tabs
+ *
+ * The desk's list is now tabbed, and the four tabs are the four states of the debt
+ * queue: every open debt (`everyone`), the ones with a follow-up date today (`today`),
+ * the ones the desk has called about (`all`), and the ones it has not (`unfollowed`).
+ * A row leaves one tab and enters another when a follow-up is recorded, which is what
+ * makes the desk's work list the list of what to do next rather than a list of
+ * everything.
+ *
+ * ## Why this lives in the reception catalog and not the main one
+ *
+ * `src/app/catalog.ts` sits at its 1000-line cap, and the debt surfaces are Phase 5's
+ * addition. The main catalog re-exports this object, so every caller that already
+ * imports from `@/app/catalog` keeps working.
+ */
+export const DEBTS_PAGE = {
+  reception: {
+    title: `مانده${ZWNJ}حساب`,
+    lead: 'بدهی‌های گذشته از سررسید، از قدیمی‌ترین. تماس بگیرید، نتیجه را ثبت کنید و در صورت نیاز سررسید را تغییر دهید.',
+  },
+  admin: {
+    title: `مانده${ZWNJ}حساب`,
+    lead: 'نگاه کلی کلینیک به بدهی‌های باز. این صفحه فقط خواندنی است؛ ثبت پرداخت و پیگیری در صفحه پیشخوان انجام می‌شود.',
+  },
+  doctor: {
+    title: `مانده${ZWNJ}حساب`,
+    lead: 'بدهی‌های مراجعینی که جلسه‌های آن‌ها را شما انجام داده‌اید.',
+  },
+  columns: {
+    customer: 'مشتری',
+    mobile: 'شماره موبایل',
+    charged: 'مبلغ کل',
+    discount: 'تخفیف',
+    paid: 'پرداختی',
+    balance: 'بدهی',
+    dueDate: 'سررسید',
+    daysOverdue: 'روز تأخیر',
+    lastFollowUp: 'آخرین پیگیری',
+    nextContact: 'تماس بعدی',
+    actions: 'عملیات',
+  },
+  /**
+   * The four tabs, keyed as the search param is. `everyone` is the default — the whole
+   * picture the desk opens to first. `today` is the day the desk works, `all` is every
+   * debt the desk has called about, and `unfollowed` is the debts it has not.
+   */
+  tabs: {
+    everyone: 'همه بدهکاران',
+    all: 'همه پیگیری‌ها',
+    today: 'پیگیری امروز',
+    unfollowed: 'بدون پیگیری',
+  },
+  buckets: {
+    overdue30: 'بیش از ۳۰ روز',
+    overdue7: 'بیش از ۷ روز',
+    overdue: 'گذشته از سررسید',
+    dueSoon: 'نزدیک سررسید',
+    empty: 'بدهی‌ای در این دسته نیست.',
+  },
+  search: {
+    label: 'جستجو',
+    placeholder: 'نام یا شماره موبایل',
+    clear: 'پاک کردن جستجو',
+  },
+  filter: {
+    doctor: 'پزشک',
+    allDoctors: 'همه پزشکان',
+  },
+  total: {
+    label: 'جمع کل',
+    filteredLabel: 'جمع نتایج فیلترشده',
+  },
+  actions: {
+    payment: 'ثبت پرداخت',
+    paymentTitle: 'ثبت پرداخت',
+    amount: 'مبلغ پرداختی',
+    method: 'روش پرداخت',
+    methodEmpty: 'روشی یافت نشد.',
+    kind: 'نوع پرداخت',
+    kindEmpty: 'نوعی یافت نشد.',
+    discountAmount: 'مبلغ تخفیف',
+    discountReason: 'علت تخفیف',
+    note: 'یادداشت',
+    confirm: 'ثبت',
+    cancel: 'انصراف',
+    followUp: 'ثبت پیگیری',
+    followUpTitle: 'ثبت پیگیری',
+    nextContactAt: 'تاریخ تماس بعدی',
+    followUpNote: 'خلاصه تماس',
+    followUpNotePlaceholder: 'مثلاً: قول داد آخر هفته پرداخت کند.',
+    previousFollowUp: 'یادداشت تماس قبلی',
+    previousNoteLabel: 'یادداشت',
+    previousAtLabel: 'تاریخ',
+    noPreviousNote: 'بدون یادداشت',
+    reschedule: 'تغییر سررسید',
+    rescheduleTitle: 'تغییر سررسید',
+    dueDate: 'سررسید جدید',
+    saved: 'ثبت شد.',
+  },
+  dash: '—',
+  days: 'روز',
+} as const satisfies Record<string, unknown>

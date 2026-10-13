@@ -6,11 +6,33 @@ import type { DebtBucket } from '@/core/constants'
 
 /** Every catalog key this module can raise. */
 export type DebtsMessageKey =
-  'debt.notFound' | 'debt.dueDateRequired' | 'debt.alreadySettled' | 'debt.cannotMoveDueDate'
+  | 'debt.notFound'
+  | 'debt.dueDateRequired'
+  | 'debt.alreadySettled'
+  | 'debt.cannotMoveDueDate'
+  | 'debt.noteTooLong'
 
 /**
- * One row of the debtor list — an appointment that carries a balance, with the dates
- * the desk's follow-up needs.
+ * The last follow-up the desk recorded on a debt — the call it made, and what was
+ * said on it.
+ *
+ * Kept as one object rather than two columns on the row so that "there is a
+ * follow-up" is the object's own existence and not a truthiness check on a date
+ * that could be null for two different reasons. `note` is the sentence the desk
+ * wrote down and the next call reads back; it is optional, because a secretary in
+ * a hurry may skip it, and a call with no comment is not an incomplete follow-up —
+ * `at` is what says the call happened.
+ */
+export interface LastFollowUp {
+  /** When the desk made the call — the instant `debtFollowUpAt` stores. */
+  readonly at: Date
+  /** What the desk wrote down on the call; `null` when it skipped the note. */
+  readonly note: string | null
+}
+
+/**
+ * One row of the debtor list — an appointment that carries a balance, with the
+ * dates the desk's follow-up needs.
  *
  * There is no `debts` table (`03-data-model.md` §4.3), so this object is what a debt
  * *is*: a computed view over an appointment and its payments. The `appointmentId` is
@@ -23,6 +45,7 @@ export interface DebtRow {
   readonly customerLastName: string | null
   readonly customerMobile: string
   readonly doctorId: string
+  readonly doctorName: string
   readonly serviceId: string | null
   /** Σ `priceAtBooking` for this appointment. */
   readonly charged: bigint
@@ -34,14 +57,22 @@ export interface DebtRow {
   readonly balance: bigint
   /** `scheduledAt + debtGraceDays`, as the local day the desk reads. */
   readonly dueLocalDate: string
-  /** The follow-up the desk already recorded, if any. */
-  readonly debtFollowUpAt: Date | null
+  /**
+   * The last follow-up the desk recorded, if any — the call and the note it left.
+   * `null` when the desk has never called about this debt.
+   */
+  readonly lastFollowUp: LastFollowUp | null
   /** The next contact the desk promised, if any. */
-  readonly debtNextContactAt: Date | null
+  readonly nextContactAt: Date | null
   /** A due date the customer promised, overriding the computed one. */
-  readonly debtDueDateOverride: Date | null
+  readonly dueDateOverride: Date | null
   /** The bucket the row is in, most severe first. */
   readonly bucket: DebtBucket
+  /**
+   * Whole days the debt is past its due date, at the read's own `now`. `0` when the
+   * debt is due today; negative when the due date has not arrived.
+   */
+  readonly daysOverdue: number
 }
 
 /** The four buckets, with the rows each one holds. */

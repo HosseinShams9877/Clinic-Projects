@@ -19,6 +19,22 @@
  * The column stores an instant and the desk reads a day, so the day the picker hands
  * the action is a `LocalDate` and the action converts it — the library's conversion,
  * and a second one would be the one that lands on the wrong day.
+ *
+ * ## Why the amount is the `MoneyInput` and not a `TextInput`
+ *
+ * `06-constants.md` §6: money on screen is Toman, in Persian digits, with the `٬`
+ * thousands separator. The desk types a number, not a formatted string; the input
+ * shows the formatted value and hands the action the digit string. A plain
+ * `TextInput` with `inputMode="numeric"` shows `1234567`, which a person has to count
+ * the digits of to read; the `MoneyInput` shows `۱٬۲۳۴٬۵۶۷`, which is what the desk
+ * reads the figure by.
+ *
+ * ## Why the follow-up form shows the previous note
+ *
+ * The desk's next call needs the last call's context, and a row that hides it is a row
+ * the desk re-asks the customer about money they already discussed. The previous note
+ * is rendered above the new one, with its own date, so the two facts sit beside each
+ * other — what was said, and when it was said.
  */
 
 'use client'
@@ -29,12 +45,12 @@ import type { FormEvent } from 'react'
 import { Button } from '@/core/components/button'
 import type { ComboboxOption } from '@/core/components/combobox'
 import { Combobox } from '@/core/components/combobox'
-import { Field, TextInput } from '@/core/components/form'
+import { Field, MoneyInput, TextArea } from '@/core/components/form'
 import { Icon } from '@/core/components/icons'
 import { JalaliDatePicker } from '@/core/components/date-picker'
 import { DEBTS_PAGE, RECEPTION_DEBTS } from '@/app/catalog'
 import { realClock } from '@/core/lib/clock'
-import { formatMoney, toLatinDigits, todayLocalDate } from '@/core/localization'
+import { formatDate, formatMoney, dateToLocalDate, todayLocalDate } from '@/core/localization'
 import type { DebtRow } from '@/modules/debts'
 
 import {
@@ -132,6 +148,10 @@ export function DebtRowActions({
  * `PARTIAL` — so the desk never picks it by hand. When a new due date is given on an
  * unsettled balance, the form records the payment and then moves the date, so the two
  * demo fields are one submit.
+ *
+ * The amount is the `MoneyInput`, whose value is the digit string the action reads and
+ * whose display is the formatted Persian amount; the two are the localization layer's
+ * own, not this form's.
  */
 function PaymentForm({
   row,
@@ -145,22 +165,22 @@ function PaymentForm({
   readonly onDone: () => void
 }) {
   const [pending, startTransition] = useTransition()
-  const [amount, setAmount] = useState('')
+  const [amountDigits, setAmountDigits] = useState('')
   const [method, setMethod] = useState<string | null>(null)
   const [newDueDate, setNewDueDate] = useState<string | null>(null)
   const formId = useId()
 
-  const amountRial = BigInt(Number(toLatinDigits(amount).replace(/[^0-9]/g, '')) || 0)
+  const amountRial = amountDigits === '' ? 0n : BigInt(amountDigits)
   const remaining = row.balance - amountRial
   const settles = remaining <= 0n
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (method === null || amount === '') return
+    if (method === null || amountDigits === '') return
     onAnswer(null)
     startTransition(async () => {
       const outcome = await recordPaymentAction(RECEPTION_PANEL, row.appointmentId, {
-        amount,
+        amount: amountDigits,
         method,
         kind: settles ? 'FINAL' : 'PARTIAL',
         discountAmount: '',
@@ -174,7 +194,9 @@ function PaymentForm({
       // The demo merges the new due date into m-pay: once the receipt is in, move the
       // promised date if the balance did not clear and the desk named one.
       if (!settles && newDueDate !== null) {
-        const due = await rescheduleDueDateAction(RECEPTION_PANEL, row.appointmentId, { dueDate: newDueDate })
+        const due = await rescheduleDueDateAction(RECEPTION_PANEL, row.appointmentId, {
+          dueDate: newDueDate,
+        })
         if (!due.ok) {
           onAnswer(due)
           return
@@ -191,11 +213,10 @@ function PaymentForm({
       onSubmit={submit}
     >
       <Field label={DEBTS_PAGE.actions.amount} required>
-        <TextInput
+        <MoneyInput
           name="amount"
-          value={amount}
-          inputMode="numeric"
-          onChange={(event) => setAmount(event.target.value)}
+          value={amountDigits}
+          onChange={setAmountDigits}
         />
       </Field>
       <div className="flex items-center justify-between rounded-sm bg-surface px-3 py-2 text-sm">
@@ -225,7 +246,7 @@ function PaymentForm({
           size="small"
           variant="primary"
           loading={pending}
-          disabled={method === null || amount === ''}
+          disabled={method === null || amountDigits === ''}
         >
           {DEBTS_PAGE.actions.confirm}
         </Button>
@@ -237,7 +258,16 @@ function PaymentForm({
   )
 }
 
-/** «ثبت پیگیری» — the call the desk just made, and the day it promised to try again. */
+/**
+ * «ثبت پیگیری» — the call the desk just made, the day it promised to try again, and
+ * the note the next call reads back.
+ *
+ * The previous note is rendered above the two fields, with its own date, when the row
+ * carries one; a row the desk has never called about shows nothing and the two fields
+ * are the whole form. The note is optional — a secretary in a hurry may skip it — and
+ * the form's own submit is disabled only while the date is missing, because the date
+ * is what the write is about and the note is what the write is *enriched* with.
+ */
 function FollowUpForm({
   row,
   onAnswer,
@@ -249,6 +279,7 @@ function FollowUpForm({
 }) {
   const [pending, startTransition] = useTransition()
   const [nextContactAt, setNextContactAt] = useState<string | null>(null)
+  const [note, setNote] = useState('')
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -257,6 +288,7 @@ function FollowUpForm({
     startTransition(async () => {
       const outcome = await recordFollowUpAction(RECEPTION_PANEL, row.appointmentId, {
         nextContactAt,
+        note: note === '' ? null : note,
       })
       if (outcome.ok) {
         onDone()
@@ -268,11 +300,21 @@ function FollowUpForm({
 
   return (
     <form
-      className="flex flex-col gap-3 rounded-sm border border-line-2 bg-surface-2 p-3 panel:min-w-72"
+      className="flex flex-col gap-3 rounded-sm border border-line-2 bg-surface-2 p-3 panel:min-w-80"
       onSubmit={submit}
     >
+      <PreviousFollowUp row={row} />
       <Field label={DEBTS_PAGE.actions.nextContactAt} required>
         <JalaliDatePicker value={nextContactAt} onChange={setNextContactAt} min={today()} />
+      </Field>
+      <Field label={DEBTS_PAGE.actions.followUpNote}>
+        <TextArea
+          name="note"
+          value={note}
+          rows={3}
+          placeholder={DEBTS_PAGE.actions.followUpNotePlaceholder}
+          onChange={(event) => setNote(event.target.value)}
+        />
       </Field>
       <div className="flex items-center gap-2">
         <Button
@@ -292,9 +334,31 @@ function FollowUpForm({
   )
 }
 
+/**
+ * The previous follow-up, as the two facts the desk reads before the new call: when it
+ * was, and what was said on it.
+ *
+ * Rendered above the two fields and never instead of them, because the desk is about
+ * to make a second call and the row's history is what the second call reads first. A
+ * row with no follow-up, or a follow-up whose note was skipped, renders nothing — a
+ * "no previous note" placeholder above a form that is itself a note would be noise,
+ * and the form's own empty state is the placeholder's job.
+ */
+function PreviousFollowUp({ row }: { readonly row: DebtRow }) {
+  if (row.lastFollowUp === null) return null
+  if (row.lastFollowUp.note === null) return null
+  const at = formatDate(dateToLocalDate(row.lastFollowUp.at), 'short')
+  return (
+    <div className="flex flex-col gap-1 rounded-sm border border-line-2 bg-surface px-3 py-2 text-xs">
+      <span className="font-semibold text-ink-2">{DEBTS_PAGE.actions.previousFollowUp}</span>
+      <span className="text-ink-3">{at}</span>
+      <p className="whitespace-pre-line text-ink">{row.lastFollowUp.note}</p>
+    </div>
+  )
+}
+
 /* ── The pieces the forms share ────────────────────────────────────────────── */
 
-/** A form's answer: nothing while the form is clean, a sentence once the action returned. */
 /**
  * A form's answer, as the sentence the failure became.
  *

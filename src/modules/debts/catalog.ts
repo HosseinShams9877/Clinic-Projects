@@ -21,6 +21,9 @@ export const MESSAGES: Readonly<Record<DebtsMessageKey, string>> = {
 
   // Toggle 4 is off, so the desk may not move a due date; the manager turns it on.
   'debt.cannotMoveDueDate': 'تغییر سررسید توسط منشی غیرفعال است. مدیر باید آن را فعال کند.',
+
+  // The follow-up note the form typed is longer than the module accepts.
+  'debt.noteTooLong': 'یادداشت پیگیری بیش از حد طولانی است. خلاصه‌تری بنویسید.',
 } satisfies Record<DebtsMessageKey, string>
 
 /**

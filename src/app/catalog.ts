@@ -1,6 +1,6 @@
 import { toPersianDigits, ZWNJ } from '@/core/localization'
 
-export { RECEPTION_APPOINTMENTS, RECEPTION_CUSTOMERS, RECEPTION_CYCLES, RECEPTION_DEBTS, RECEPTION_DESK, RECEPTION_LEADS } from './reception/catalog'
+export { RECEPTION_APPOINTMENTS, RECEPTION_CUSTOMERS, RECEPTION_CYCLES, RECEPTION_DEBTS, RECEPTION_DESK, RECEPTION_LEADS, DEBTS_PAGE } from './reception/catalog'
 
 /** The product's name. It is the tab title, the bookmark, and the install name. */
 export const APP_NAME = 'سامانه مدیریت کلینیک'
@@ -18,12 +18,7 @@ export const PANELS_PAGE = {
   /** The line under it. */
   lead: 'یکی از دو مسیر ورود را انتخاب کنید.',
   staff: {
-    /**
-     * The card's description. It names the credential, which is what a person at
-     * this door needs to know — and which the other card's credential differs from.
-     * The card's heading is the link, and it is `LOGIN_LABELS.staffTitle` from
-     * `auth`: the door's own name is the module's vocabulary and not this tier's.
-     */
+ 
     description: 'ورود با شماره موبایل و گذرواژه',
   },
   customer: {
@@ -31,13 +26,6 @@ export const PANELS_PAGE = {
   },
 } as const
 
-/**
- * The four panels' names, keyed as their routes are.
- *
- * `satisfies Record<string, string>` rather than `as const` alone, so a label is a
- * plain string at every use and the shell does not widen a literal into a key it
- * then has to narrow back.
- */
 export const PANEL_NAMES = {
   admin: 'پنل مدیریت',
   doctor: 'پنل پزشک',
@@ -45,12 +33,6 @@ export const PANEL_NAMES = {
   account: 'پنل مشتری',
 } as const satisfies Record<string, string>
 
-/**
- * The four panels' home surfaces, as `02-architecture.md` §7 names them in the
- * `dashboard` row: «مدیر «داشبورد من»، پزشک «برنامه من»، منشی «میز کار امروز»،
- * مشتری dashboard». The customer's is the document's own transliterated word,
- * which is the Persian a clinic reads for a dashboard.
- */
 export const PANEL_HOMES = {
   admin: 'داشبورد من',
   doctor: 'برنامه من',
@@ -58,11 +40,6 @@ export const PANEL_HOMES = {
   account: 'داشبورد',
 } as const satisfies Record<string, string>
 
-/**
- * One sentence per panel naming its scope, shown under the home's title. The scope
- * is the page inventory of `02-architecture.md` §9 restated for a person, so the
- * sentence and the navigation beside it cannot disagree about what a panel holds.
- */
 export const PANEL_SCOPE = {
   admin: 'نمای کامل کلینیک: نوبت‌ها، مشتریان، دوره‌های درمان، مانده‌حساب، کمپین‌ها، خدمات، کارکنان و گزارش‌ها.',
   doctor: 'برنامه روز خود، پرونده مراجعین و دوره‌های درمان خودتان.',
@@ -72,12 +49,12 @@ export const PANEL_SCOPE = {
 
 
 export const NAV_LABELS = {
-  /** The reception panel's desk — the day's work list, named for the page itself. */
+  
   desk: 'میز کار امروز',
-  /** The panel's home. The label is `PANEL_HOMES[panel]`, not this one. */
+
   appointments: `نوبت${ZWNJ}ها`,
   customers: 'مشتریان',
-  /** `04-roles-permissions.md` §2's «دیدن ماندهحساب», without the verb a nav item does not need. */
+
   debts: `مانده${ZWNJ}حساب`,
   cycles: `چرخه${ZWNJ}های درمان`,
   campaigns: `کمپین${ZWNJ}ها`,
@@ -85,9 +62,9 @@ export const NAV_LABELS = {
   staff: 'کارکنان',
   reports: `گزارش${ZWNJ}ها`,
   settings: 'تنظیمات',
-  /** `04-roles-permissions.md` §2's own phrase for the lead cartable. */
+  
   leads: 'کارتابل لید',
-  /** The customer panel's six — five destinations, the sixth being the way out. */
+
   accountAppointments: `نوبت${ZWNJ}های من`,
   accountCare: `مراقبت${ZWNJ}ها`,
   accountPayments: `پرداخت${ZWNJ}ها`,
@@ -96,25 +73,13 @@ export const NAV_LABELS = {
   logout: 'خروج',
 } as const satisfies Record<string, string>
 
-/**
- * The screen-reader names of the shell's icon-only controls and its navigation
- * region.
- *
- * An `aria-label` is user-visible text — a screen reader reads it — so §14 puts it
- * in a catalog and not in the component. The icons these label stay *decorative*
- * (`Icon` with no `label`), because a button that announces both its own
- * `aria-label` and an icon's announces the same thing twice.
- */
+
 export const SHELL_ARIA = {
   /** The navigation region's name, which a screen reader uses to skip to it. */
   navigation: 'ناوبری اصلی',
   /** The hamburger's name — the §43 below-1000px drawer's only opener. */
   openMenu: 'باز کردن منو',
 } as const satisfies Record<string, string>
-
-/* ── The login forms ───────────────────────────────────────────────────────── */
-
-/** The staff login page, which carries the customer form beside the staff one. */
 export const STAFF_LOGIN_PAGE = {
   title: 'ورود کارکنان',
   /** The line above the two forms. */
@@ -129,17 +94,6 @@ export const CUSTOMER_LOGIN_PAGE = {
   /** The link back to the entry page, which is where the other door is. */
   backToEntry: 'بازگشت',
 } as const
-
-/**
- * The second step's sentence, naming the mobile the code went to.
- *
- * `09-security.md` §10 permits exactly this disclosure and no more: showing the
- * number confirms which mobile to check without revealing whether any other number
- * has an account. `{mobile}` is filled by the message renderer, which also converts
- * the substituted digits — the number arrives already formatted by `formatPhone`,
- * whose bidi isolates keep the leading zero at the right end (`07-localization.md`
- * §5), and the conversion is idempotent on it.
- */
 export const CODE_SENT_TO = 'کد ارسال شده به شماره {mobile} را وارد کنید'
 
 /** The countdown's label. The digits beside it are the minutes and seconds left. */
@@ -159,38 +113,13 @@ export const FIELD_REQUIRED = {
   code: 'کد را وارد کنید',
 } as const satisfies Record<string, string>
 
-/**
- * The field-level sentences for a value that is present but not acceptable, raised
- * by the same schemas the server re-validates against.
- *
- * `{length}` is filled by the message renderer, which converts the substituted
- * digits — the only place a number reaches these sentences.
- */
 export const FIELD_INVALID = {
   mobile: 'شماره موبایل درست نیست.',
   /** The code's own length, which is `auth`'s `oneTimeCodeLength`. */
   codeLength: 'کد باید {length} رقم باشد.',
 } as const satisfies Record<string, string>
-
-/**
- * The sentence for a page whose host names no clinic.
- *
- * `02-architecture.md` §11 resolves the tenant from the subdomain, which is a fact
- * about the request and not something the caller typed. A host that names no active
- * tenant has no tenant to issue a code for, and the honest sentence says so without
- * naming the host.
- */
 export const NO_TENANT_FOR_THIS_ADDRESS = 'ورود ممکن نیست؛ کلینیک این نشانی شناسایی نشد.'
 
-/**
- * The global error boundary's copy (`09-security.md` §9 names the boundary).
- *
- * This is the page a person sees when the root layout itself failed, which means it
- * replaces the root layout and carries its own `<html>` and `<body>`. The sentence
- * says "try again" and means it: the boundary's own `retry` is the action, and the
- * sentence never blames the person or names an internal detail — `error.message` in
- * production is the framework's generic text and is not rendered here.
- */
 export const GLOBAL_ERROR_PAGE = {
   title: 'خطای سامانه',
   lead: 'مشکلی پیش آمد. دوباره تلاش کنید.',
@@ -256,21 +185,6 @@ export const APPOINTMENTS_PAGE = {
   remindersFooter:
     'مناسبت‌ها و موعدهای چرخهٔ درمان خودکار ساخته می‌شوند — نیازی به ورود دستی نیست.',
 } as const satisfies Record<string, unknown>
-
-/**
- * The three-step booking popup — `10-testing-strategy.md` line 308 names the steps:
- * service → day and time → name and mobile → deposit.
- *
- * The desk's popup is the same three steps in the reception's vocabulary, opened
- * from a slot the grid already knows: the service the visit is for, the day and
- * time the grid offered, and the person the visit is for. The public site's own
- * popup (`booking.html`) is Phase 8; the shell it renders in is this phase's, and
- * the two share an engine and differ in who is typing.
- *
- * Each step's own labels, its placeholders and the sentence it raises when a field
- * is not filled are below, because a step's copy is the step's and no other
- * surface's.
- */
 export const BOOKING_POPUP = {
   /** The three steps, in order, as the progress indicator names them. */
   steps: { service: 'خدمت', time: 'روز و ساعت', customer: 'مشتری' },
@@ -342,29 +256,6 @@ export const BLOCK_HOURS_POPUP = {
   lead: 'ساعت انتخاب شده برای پزشک بسته می‌شود و دیگر قابل رزرو نیست.',
 } as const satisfies Record<string, unknown>
 
-/* ── Phase 3: the customers, services and staff surfaces ─────────────────────
- *
- * The seven pages `02-architecture.md` §9 names for this phase — the reception's
- * customer file and lead cartable, the manager's customer file, the customer
- * profile, the services catalogue, the staff page, and the doctor's own patients.
- * Their copy is here for the same reason Phase 2's three appointments pages are:
- * the module owns the sentences its functions *raise* (`customer.notFound` and its
- * neighbours, through `MESSAGES`), while a page's own titles, column headers,
- * button labels and empty states are composition the app tier does from those.
- *
- * The module catalogs are not repeated here. A key reaches a page through the
- * failure-message lookup, which is the only path a key takes to a sentence.
- * ─────────────────────────────────────────────────────────────────────────── */
-
-/**
- * The three customer lists — reception, admin and the doctor's own — which are one
- * read through three permissions, and the copy that the three surfaces share.
- *
- * The three are the same rows and the same columns; the three leads differ, because
- * the desk's names the search it offers, the manager's names the oversight and the
- * doctor's names the scope. One object with a `panel` key would be one object whose
- * three halves a reader has to keep apart.
- */
 export const CUSTOMERS_PAGE = {
   reception: {
     title: 'مشتریان',
@@ -745,69 +636,6 @@ export const STAFF_PAGE = {
     action: 'عملیات',
     at: 'زمان',
     detail: 'جزئیات',
-  },
-} as const satisfies Record<string, unknown>
-
-/**
- * The four debt surfaces' copy — Phase 5.
- *
- * The three staff pages are one row read through three permissions, and the copy each
- * one renders is its own because the three facts are different: the desk owes a call,
- * the manager oversees, and the doctor reads their own. The customer's own history is
- * the fourth surface and the one with no permission at all.
- */
-export const DEBTS_PAGE = {
-  reception: {
-    title: `مانده${ZWNJ}حساب`,
-    lead: 'بدهی‌های گذشته از سررسید، از قدیمی‌ترین. تماس بگیرید، نتیجه را ثبت کنید و در صورت نیاز سررسید را تغییر دهید.',
-  },
-  admin: {
-    title: `مانده${ZWNJ}حساب`,
-    lead: 'نگاه کلی کلینیک به بدهی‌های باز. این صفحه فقط خواندنی است؛ ثبت پرداخت و پیگیری در صفحه پیشخوان انجام می‌شود.',
-  },
-  doctor: {
-    title: `مانده${ZWNJ}حساب`,
-    lead: 'بدهی‌های مراجعینی که جلسه‌های آن‌ها را شما انجام داده‌اید.',
-  },
-  columns: {
-    customer: 'مشتری',
-    mobile: 'شماره موبایل',
-    charged: 'مبلغ کل',
-    discount: 'تخفیف',
-    paid: 'پرداختی',
-    balance: 'بدهی',
-    dueDate: 'سررسید',
-    followUp: 'آخرین پیگیری',
-    nextContact: 'تماس بعدی',
-    actions: 'عملیات',
-  },
-  buckets: {
-    overdue30: 'بیش از ۳۰ روز',
-    overdue7: 'بیش از ۷ روز',
-    overdue: 'گذشته از سررسید',
-    dueSoon: 'نزدیک سررسید',
-    empty: 'بدهی‌ای در این دسته نیست.',
-  },
-  actions: {
-    payment: 'ثبت پرداخت',
-    paymentTitle: 'ثبت پرداخت',
-    amount: 'مبلغ پرداختی',
-    method: 'روش پرداخت',
-    methodEmpty: 'روشی یافت نشد.',
-    kind: 'نوع پرداخت',
-    kindEmpty: 'نوعی یافت نشد.',
-    discountAmount: 'مبلغ تخفیف',
-    discountReason: 'علت تخفیف',
-    note: 'یادداشت',
-    confirm: 'ثبت',
-    cancel: 'انصراف',
-    followUp: 'ثبت پیگیری',
-    followUpTitle: 'ثبت پیگیری',
-    nextContactAt: 'تاریخ تماس بعدی',
-    reschedule: 'تغییر سررسید',
-    rescheduleTitle: 'تغییر سررسید',
-    dueDate: 'سررسید جدید',
-    saved: 'ثبت شد.',
   },
 } as const satisfies Record<string, unknown>
 

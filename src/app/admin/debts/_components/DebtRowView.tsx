@@ -9,6 +9,13 @@
  * the number of days between the row's due date and today. The module's own bucket is
  * the severity ladder the chips filter on; this cell is the sentence a manager reads,
  * which needs the exact count and not the ladder.
+ *
+ * ## Why the follow-up cell reads `lastFollowUp`
+ *
+ * The row's follow-up is one fact in two parts — when the call was, and what was said
+ * on it — and `DebtRow` carries them as one object so that "there is a follow-up" is
+ * the object's own existence. The cell reads `lastFollowUp.at` for the date it used to
+ * read `debtFollowUpAt` for, and renders the same two lines it always did.
  */
 
 import Link from 'next/link'
@@ -81,12 +88,12 @@ export function DebtRowView({ row, today, serviceName, doctorName }: DebtRowView
       </td>
       <td className="px-4 py-3 text-start align-middle">{statusBadge(delay)}</td>
       <td className="px-4 py-3 text-start align-middle text-ink-3 tabular-nums">
-        {row.debtFollowUpAt === null ? (
+        {row.lastFollowUp === null ? (
           ADMIN_DEBTS.notFollowedUp
         ) : (
           <span className="flex flex-col">
             <span>{ADMIN_DEBTS.followedUp}</span>
-            <span>{formatDate(dateToLocalDate(row.debtFollowUpAt), 'short')}</span>
+            <span>{formatDate(dateToLocalDate(row.lastFollowUp.at), 'short')}</span>
           </span>
         )}
       </td>

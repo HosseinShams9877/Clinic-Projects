@@ -34,14 +34,14 @@
  *
  * ## What is exported, and why `useControlWiring` is
  *
- * The six components and their prop types. `useControlWiring` and `ControlWiring`
+ * The seven components and their prop types. `useControlWiring` and `ControlWiring`
  * are exported as well, and they are the only internal of the shell that is: a
  * **control** that is not one of the two text controls — the Jalali date picker in
  * `src/core/components/date-picker`, the searchable select in
- * `src/core/components/combobox` — has to join the same contract, and the contract
- * is these four attributes. Exporting them means the third and fourth controls add
- * no wiring of their own, which is the only way the guarantee stays true as the
- * count grows.
+ * `src/core/components/combobox`, the money input below — has to join the same
+ * contract, and the contract is these four attributes. Exporting them means the
+ * third, fourth and fifth controls add no wiring of their own, which is the only
+ * way the guarantee stays true as the count grows.
  *
  * `FieldContext` itself is not exported. Providing or reading it directly would
  * let something look like a control inside a field without being one, and the
@@ -59,6 +59,9 @@ export type { TextInputProps } from './TextInput'
 
 export { TextArea } from './TextArea'
 export type { TextAreaProps } from './TextArea'
+
+export { MoneyInput, formatMoneyInputDigits } from './MoneyInput'
+export type { MoneyInputProps, MoneyInputValue } from './MoneyInput'
 
 export { SubmitButton } from './SubmitButton'
 export type { SubmitButtonProps } from './SubmitButton'

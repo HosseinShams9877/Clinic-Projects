@@ -13,6 +13,15 @@
  * the row in the list is the only thing that would tell the desk otherwise. The check
  * is the balance's own computation and not a column, so a payment that settled the debt
  * between the page's read and this write is a write the module refuses.
+ *
+ * ## Why the note is optional but trimmed
+ *
+ * The note is the desk's own sentence about the call, and the next call reads it back.
+ * It is optional because a secretary in a hurry may skip it; it is trimmed so that a
+ * run of spaces is `null` and not an empty string a renderer would print. There is no
+ * length floor: a note may be one word, and refusing it would be the module inventing
+ * a policy the desk did not ask for. The upper bound is the validation's, on the way
+ * in, not this file's.
  */
 
 import { DomainError, NotFoundError } from '@/core/types'
@@ -52,12 +61,24 @@ async function assertStillOwed(
   }
 }
 
+/** The trimmed note, or `null` when the desk left it blank. */
+function normaliseNote(note: string | null | undefined): string | null {
+  if (note === null || note === undefined) return null
+  const trimmed = note.trim()
+  return trimmed === '' ? null : trimmed
+}
+
 /**
  * «ثبت پیگیری» — the desk called, and recorded when to try again.
  *
  * `debtFollowUpAt` is the call the desk just made, and `debtNextContactAt` is the
  * reminder the customer was promised. Both are instants the caller converts from the
  * day the picker collected, in the tenant's own clock.
+ *
+ * `note` is the desk's own sentence about the call, written beside the date; it is
+ * what the *next* follow-up reads back as context, and it is optional because a
+ * secretary in a hurry may skip it. A blank note is stored as `null`, not as an
+ * empty string — the module's own definition of "no note".
  *
  * @throws PermissionError — no `follow_up_debt`.
  * @throws NotFoundError — the appointment is not in this tenant.
@@ -69,6 +90,8 @@ export async function recordFollowUp(args: {
   readonly appointmentId: string
   /** When the desk promised to try again; `null` closes the reminder. */
   readonly nextContactAt: Date | null
+  /** What the desk wrote down on the call, if anything. */
+  readonly note?: string | null
   readonly now: Date
 }): Promise<void> {
   requirePermission(args.ctx, Permission.FollowUpDebt)
@@ -86,6 +109,7 @@ export async function recordFollowUp(args: {
     where: { id: appointment.id },
     data: {
       debtFollowUpAt: args.now,
+      debtFollowUpNote: normaliseNote(args.note),
       debtNextContactAt: args.nextContactAt,
     },
   })

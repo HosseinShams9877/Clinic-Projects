@@ -21,6 +21,14 @@
  * framework's own error page, which is English and loses the sentence the module raised
  * on purpose — so every call is wrapped and the key becomes Persian through
  * `moduleFailureMessage`.
+ *
+ * ## Why the follow-up note is validated and not trimmed here
+ *
+ * The note is the desk's own sentence about the call, and the next call reads it back.
+ * It is bounded here, at the boundary, and not in the module: a note a person typed is
+ * a value the boundary parses, and a module that re-validated would be a second place
+ * the ceiling lives. A note longer than the ceiling is refused with the sentence the
+ * form renders; a blank note is `null` and the module stores `null`.
  */
 
 'use server'
@@ -32,6 +40,7 @@ import { asLocalDate, fromClockParts, toUtcInstant } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import type { TenantContext } from '@/core/tenant'
 import { PaymentMethod, PaymentKind, isMember } from '@/core/constants'
+import { ValidationError } from '@/core/types'
 import { recordPayment } from '@/modules/payments'
 import { recordFollowUp, rescheduleDueDate, readDebtSettings } from '@/modules/debts'
 import type { Panel } from '@/app/_shell/navigation'
@@ -41,6 +50,9 @@ import { moduleFailureMessage } from '../_shared/module-failure'
 
 /** The answer every action gives: nothing to render on success, or the sentence. */
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly message: string }
+
+/** The maximum the note field carries, in characters. */
+const NOTE_MAX_LENGTH = 500
 
 /** The fields the payment form collects. */
 export interface RecordPaymentInput {
@@ -56,6 +68,11 @@ export interface RecordPaymentInput {
 export interface FollowUpInput {
   /** A `LocalDate` string the action converts to the instant the column stores. */
   readonly nextContactAt: string
+  /**
+   * What the desk wrote down on the call, if anything. Optional, and bounded at
+   * `NOTE_MAX_LENGTH`; a blank string is stored as `null`.
+   */
+  readonly note?: string | null
 }
 
 /** The fields the reschedule form collects. */
@@ -158,18 +175,38 @@ export async function recordPaymentAction(
  * The day the picker hands the action is a `LocalDate` and the column stores an instant;
  * the conversion is the library's own and reads the tenant's offset, so a day the desk
  * reads as «۱۴۰۵/۰۳/۰۴» lands on that day in the clinic's clock.
+ *
+ * The note is bounded here and not in the module: a note a person typed is a value the
+ * boundary parses, and a note longer than the ceiling is the boundary's refusal with
+ * the sentence the form renders.
+ *
+ * @throws never — a failure is returned as a sentence, never thrown.
  */
 export async function recordFollowUpAction(
   panel: Panel,
   appointmentId: string,
   input: FollowUpInput,
 ): Promise<ActionResult> {
+  const note = normaliseNote(input.note)
+  if (note !== null && note.length > NOTE_MAX_LENGTH) {
+    return {
+      ok: false,
+      message: moduleFailureMessage(
+        new ValidationError('The follow-up note is longer than the ceiling', {
+          messageKey: 'debt.noteTooLong',
+          detail: { length: note.length },
+        }),
+      ),
+    }
+  }
+
   const result = await inTenantScope(panel, async ({ tx, ctx, tenantId }) => {
     await recordFollowUp({
       tx,
       ctx,
       appointmentId,
       nextContactAt: await asInstant(tx, tenantId, input.nextContactAt),
+      note,
       now: realClock(),
     })
     return SUCCESS
@@ -223,4 +260,11 @@ function asAmount(text: string | null): bigint {
 async function asInstant(tx: ScopeArgs['tx'], tenantId: string, localDate: string): Promise<Date> {
   const settings = await readDebtSettings(tx, tenantId)
   return toUtcInstant(asLocalDate(localDate), MIDNIGHT, settings.utcOffsetMinutes)
+}
+
+/** The note as the module reads it: trimmed, and `null` when it was blank. */
+function normaliseNote(note: string | null | undefined): string | null {
+  if (note === null || note === undefined) return null
+  const trimmed = note.trim()
+  return trimmed === '' ? null : trimmed
 }

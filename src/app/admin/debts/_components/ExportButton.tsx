@@ -47,9 +47,9 @@ export function ExportButton({ rows, serviceNames, doctorNames, today, dateStamp
       formatMoney(row.balance),
       formatDate(asLocalDate(row.dueLocalDate), 'short'),
       delayLabel(row.dueLocalDate, today),
-      row.debtFollowUpAt === null
+      row.lastFollowUp === null
         ? ADMIN_DEBTS.notFollowedUp
-        : formatDate(dateToLocalDate(row.debtFollowUpAt), 'short'),
+        : formatDate(dateToLocalDate(row.lastFollowUp.at), 'short'),
     ])
     const csv = [headers, ...body].map((cells) => cells.map(csvCell).join(',')).join('\r\n')
     const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' })
