@@ -538,8 +538,12 @@ export function BookingDialog(props: BookingDialogProps) {
 /* ── The three filters ─────────────────────────────────────────────────────── */
 
 function offeredServicesOf(props: BookingDialogProps): readonly ServiceOption[] {
-  if (props.allowedServiceIds === undefined) return props.services
-  const allowed = new Set(props.allowedServiceIds)
+  if (props.doctorId === undefined) {
+    if (props.allowedServiceIds === undefined) return props.services
+    const allowed = new Set(props.allowedServiceIds)
+    return props.services.filter((option) => allowed.has(option.id))
+  }
+  const allowed = new Set(props.allowedServiceIds ?? [])
   return props.services.filter((option) => allowed.has(option.id))
 }
 

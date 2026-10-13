@@ -89,7 +89,7 @@ export async function loadServicesCatalogue(args: {
   const [rows, links, doctorOptions] = await Promise.all([
     listServices({ tx: args.tx, ctx: args.ctx, category: args.category, includeInactive: true }),
     args.tx.serviceDoctor.findMany({
-      where: { tenantId: args.ctx.tenantId, service: { id: undefined } },
+      where: { tenantId: args.ctx.tenantId },
       select: { serviceId: true, doctor: { select: { id: true, firstName: true, lastName: true } } },
     }),
     loadDoctorOptions(args.tx, args.ctx),

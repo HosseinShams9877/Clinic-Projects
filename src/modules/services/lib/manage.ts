@@ -257,6 +257,16 @@ export async function activateService(args: {
  * already holds the whole set; a delta would force the page to track what was checked
  * before it loaded.
  *
+ * ## Why the write deletes the whole service and re-inserts it
+ *
+ * The table's primary key is the composite `(serviceId, doctorId)`, so an insert that
+ * names a row already in the table is a unique-index violation — the `P2002` the
+ * composite key raises. A write that deleted only the rows *not* in the new set would
+ * leave the rows *in* the set in place and then try to insert them again, which is
+ * the violation; every existing doctor assignment would be a duplicate insert. The
+ * write therefore clears the service's rows and re-inserts the set: one delete and
+ * one insert, and no path that can name a row the table already holds.
+ *
  * Every id must be a DOCTOR membership in this tenant. A non-doctor or another
  * tenant's id is dropped rather than written, because a service bookable by a
  * secretary is a booking page the doctor's calendar cannot show.
@@ -294,10 +304,11 @@ export async function assignServiceDoctors(args: {
 
   const keep = new Set(doctors.map((row) => row.userId))
 
-  // The rows that are going are deleted first, so a re-add in the same transaction is
-  // not a write the composite id refuses.
+  // Clear the service's rows entirely, then re-insert the set. A write that deleted
+  // only the rows *not* in `keep` would leave the rows *in* `keep` in place, and the
+  // composite primary key would refuse the insert of a row the table already holds.
   await args.tx.serviceDoctor.deleteMany({
-    where: { serviceId: service.id, doctorId: { notIn: [...keep] } },
+    where: { tenantId: args.ctx.tenantId, serviceId: service.id },
   })
   if (keep.size > 0) {
     await args.tx.serviceDoctor.createMany({
