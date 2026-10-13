@@ -5,6 +5,17 @@ const nextConfig = {
   serverExternalPackages: ['@prisma/client', '@prisma/engines'],
   typedRoutes: true,
 
+  experimental: {
+    serverActions: {
+      allowedOrigins: [
+        'localhost:3000',
+        '127.0.0.1:3000',
+        process.env.VERCEL_URL ?? '',
+        process.env.NEXT_PUBLIC_SITE_URL ?? '',
+      ].filter(Boolean),
+    },
+  },
+
   async headers() {
     return [
       {

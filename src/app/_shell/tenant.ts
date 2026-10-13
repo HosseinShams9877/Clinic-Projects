@@ -55,6 +55,36 @@ export async function resolveTenantId(): Promise<TenantId | null> {
 }
 
 /**
+ * The tenant and its first active clinic, for the public booking path.
+ *
+ * ## Why the clinic is not simply "the first by name"
+ *
+ * `ClinicShift` is keyed on `clinicId`, and a booking written against a clinic is a
+ * booking the desk's grid reads only when the desk's own `clinicId` matches it. The
+ * public site has no way to know which branch a visitor meant, so it uses the
+ * clinic the platform has been seeded with — the first active one — and the desk's
+ * membership must be on that same clinic for the two surfaces to agree. In a
+ * single-branch tenant the two are the same by construction, which is the mode the
+ * public site is built for; a multi-branch tenant needs a branch picker before the
+ * public site can be more precise, and that is a later phase.
+ */
+export async function resolvePublicContext(): Promise<{
+  readonly tenantId: TenantId
+  readonly clinicId: string | null
+} | null> {
+  const tenantId = await resolveTenantId()
+  if (tenantId === null) return null
+
+  const clinic = await unscopedPrisma().clinic.findFirst({
+    where: { tenantId, isActive: true },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  })
+
+  return { tenantId, clinicId: clinic?.id ?? null }
+}
+
+/**
  * The tenant's slug from the request's own host, or `undefined` when the host names
  * no subdomain.
  *

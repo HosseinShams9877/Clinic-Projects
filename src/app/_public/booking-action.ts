@@ -1,5 +1,5 @@
 /**
- * The public site's two Server Actions — the booking and the slot read.
+ * The public site's Server Actions — the booking, the slot read, and the doctors.
  *
  * `02-architecture.md` §6 puts composition in `src/app/`, and an action is composition
  * of the most literal kind: it resolves the tenant from the host, opens the tenant
@@ -14,6 +14,15 @@
  * is the only reader. A body that named a tenant would be a body nothing reads, and an
  * action that trusted one would be the forgery §11's "tenant context is resolved, never
  * received" exists to prevent.
+ *
+ * ## Why the clinic is resolved too
+ *
+ * `ClinicShift` is keyed on `clinicId`, and the booking engine reads it to decide the
+ * day's bookable window. The public site has no branch picker yet, so the action asks
+ * `resolvePublicContext` for the tenant's first active clinic — one branch for a
+ * single-branch clinic, the first alphabetically for a multi-branch one — and hands
+ * the id to the module. Without it the day would resolve to no shift and every slot
+ * would be refused for the wrong reason.
  *
  * ## Why the booking goes through the appointments module and not around it
  *
@@ -31,13 +40,6 @@
  * sentence the module raised on purpose — so every call is wrapped and the key becomes
  * a sentence through the catalog. The one thing that is not caught is a bug the product
  * wants to see.
- *
- * ## Why the slot read is an action and not a client fetch
- *
- * The wizard's second step needs the slots the real engine generated, and the engine is
- * a server-only module function. A `fetch` to an API route would be a second surface
- * with its own tenant resolution and its own error shape; an action is the one the
- * booking already uses, and the two share the scope and the sentences.
  */
 
 'use server'
@@ -45,7 +47,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { prisma, runInTenantScope } from '@/core/db'
-import { resolveTenantId } from '@/app/_shell/tenant'
+import { resolvePublicContext } from '@/app/_shell/tenant'
 import { AppointmentSource } from '@/core/constants'
 import { asLocalDate, asLocalTime, type LocalDate } from '@/core/localization'
 import { asTenantId, asUserId, type ClinicId, ValidationError } from '@/core/types'
@@ -53,12 +55,18 @@ import { createOrFindCustomer } from '@/modules/customers'
 import { bookPublicAppointment as createPublicBooking, type PublicBookingContext } from '@/modules/appointments'
 import { loadBookableService } from '@/modules/services'
 
-import { publicSlotsForDay, PUBLIC_FAILURES } from '@/modules/public-site'
+import { publicDoctorsForService, publicServiceDeposit, publicSlotsForDay, PUBLIC_FAILURES } from '@/modules/public-site'
 
 /** A slot the wizard may offer, as the action hands it to the island. */
 export interface PublicSlot {
   readonly time: string
   readonly durationMinutes: number
+}
+
+/** A doctor the wizard may offer, as the action hands it to the island. */
+export interface PublicDoctorOption {
+  readonly id: string
+  readonly name: string
 }
 
 /** The booking's answer: the row it wrote, or the sentence to render. */
@@ -79,11 +87,11 @@ export type PublicBookingResult =
 /** The failure shape the island holds while it re-renders the form. */
 export type PublicBookingFailure = Extract<PublicBookingResult, { readonly ok: false }>
 
-/** A context the public site acts under: a tenant, and no permissions at all. */
-function publicContext(tenantId: string): PublicBookingContext {
+/** A context the public site acts under: a tenant, a clinic, and no permissions. */
+function publicContext(tenantId: string, clinicId: string | null): PublicBookingContext {
   return {
     tenantId: asTenantId(tenantId),
-    clinicId: null as ClinicId | null,
+    clinicId: clinicId as ClinicId | null,
     role: 'public',
     userId: asUserId('public'),
     overrides: { granted: [], revoked: [] },
@@ -109,56 +117,68 @@ export async function bookPublicAppointment(args: {
   readonly mobile: string
   readonly note: string
 }): Promise<PublicBookingResult> {
-  const tenantId = await resolveTenantId()
-  if (tenantId === null) return { ok: false, message: PUBLIC_FAILURES.tenantUnknown }
+  const resolved = await resolvePublicContext()
+  if (resolved === null) return { ok: false, message: PUBLIC_FAILURES.tenantUnknown }
 
   try {
-    return await runInTenantScope(publicContext(tenantId), prisma(), async (tx) => {
-      const ctx = publicContext(tenantId)
-      const service = await loadBookableService({ tx, ctx, serviceId: args.serviceId })
+    return await runInTenantScope(
+      publicContext(resolved.tenantId, resolved.clinicId),
+      prisma(),
+      async (tx) => {
+        const ctx = publicContext(resolved.tenantId, resolved.clinicId)
+        const service = await loadBookableService({ tx, ctx, serviceId: args.serviceId })
 
-      const customer = await createOrFindCustomer({
-        tx,
-        ctx,
-        mobile: args.mobile,
-        firstName: args.firstName,
-        lastName: args.lastName === '' ? undefined : args.lastName,
-        acquisitionSource: AppointmentSource.Website,
-      })
+        const customer = await createOrFindCustomer({
+          tx,
+          ctx,
+          mobile: args.mobile,
+          firstName: args.firstName,
+          lastName: args.lastName === '' ? undefined : args.lastName,
+          acquisitionSource: AppointmentSource.Website,
+        })
 
-      const created = await createPublicBooking({
-        tx,
-        ctx,
-        clinicId: ctx.clinicId ?? '',
-        doctorId: args.doctorId,
-        customerId: customer.id,
-        serviceId: service.id,
-        localDate: args.localDate,
-        localTime: asLocalTime(args.localTime),
-        durationMinutes: service.durationMinutes,
-        priceAtBooking: service.price,
-        depositAmount: service.depositAmount,
-        source: AppointmentSource.Website,
-      })
+        const created = await createPublicBooking({
+          tx,
+          ctx,
+          clinicId: resolved.clinicId ?? '',
+          doctorId: args.doctorId,
+          customerId: customer.id,
+          serviceId: service.id,
+          localDate: args.localDate,
+          localTime: asLocalTime(args.localTime),
+          durationMinutes: service.durationMinutes,
+          priceAtBooking: service.price,
+          depositAmount: service.depositAmount,
+          source: AppointmentSource.Website,
+        })
 
-      revalidatePath('/booking')
-      revalidatePath('/service/[id]')
+        // Revalidate every surface that names this booking: the public booking page,
+        // the desk's day grid, the manager's oversight, and the doctor's own home.
+        // A public booking is a write the desk must see the moment its page next
+        // renders — without these paths the grid keeps serving the cache it built
+        // before the row existed.
+        revalidatePath('/booking')
+        revalidatePath('/reception/appointments')
+        revalidatePath('/admin/appointments')
+        revalidatePath('/doctor')
 
-      return {
-        ok: true as const,
-        appointmentId: created.id,
-        localDate: created.localDate,
-        localTime: created.localTime,
-        cycle: null,
-      }
-    })
+        return {
+          ok: true as const,
+          appointmentId: created.id,
+          localDate: created.localDate,
+          localTime: created.localTime,
+          cycle: null,
+        }
+      },
+    )
   } catch (error: unknown) {
     return { ok: false, message: bookingFailureMessage(error) }
   }
 }
 
 /**
- * The wizard's second step: the slots the real engine has for one service and one day.
+ * The wizard's third step: the slots the real engine has for one service, one doctor
+ * and one day.
  *
  * An empty answer is a day with no free time and not an error, so the action resolves it
  * and the island renders the catalog's «وقت خالی وجود ندارد». The holiday is inside the
@@ -170,19 +190,60 @@ export async function fetchPublicSlots(args: {
   readonly doctorId: string
   readonly localDate: LocalDate
 }): Promise<readonly PublicSlot[]> {
-  const tenantId = await resolveTenantId()
-  if (tenantId === null) return []
+  const resolved = await resolvePublicContext()
+  if (resolved === null) return []
   if (args.doctorId === '') return []
 
-  return runInTenantScope(publicContext(tenantId), prisma(), (tx) =>
-    publicSlotsForDay({
-      tx,
-      tenantId,
-      clinicId: null,
-      doctorId: args.doctorId,
-      serviceId: args.serviceId,
-      localDate: args.localDate,
-    }),
+  return runInTenantScope(
+    publicContext(resolved.tenantId, resolved.clinicId),
+    prisma(),
+    (tx) =>
+      publicSlotsForDay({
+        tx,
+        tenantId: resolved.tenantId,
+        clinicId: resolved.clinicId,
+        doctorId: args.doctorId,
+        serviceId: args.serviceId,
+        localDate: args.localDate,
+      }),
+  )
+}
+
+/**
+ * The wizard's second step: the doctors who perform one service.
+ *
+ * An empty answer is a service with no doctors assigned and not an error, so the
+ * action resolves it and the island renders the catalog's `doctorsEmpty` sentence.
+ */
+export async function fetchDoctorsForService(
+  serviceId: string,
+): Promise<readonly PublicDoctorOption[]> {
+  const resolved = await resolvePublicContext()
+  if (resolved === null) return []
+
+  return runInTenantScope(
+    publicContext(resolved.tenantId, resolved.clinicId),
+    prisma(),
+    (tx) => publicDoctorsForService(tx, resolved.tenantId, serviceId),
+  )
+}
+
+/**
+ * The deposit a service carries, for the wizard's deposit notice.
+ *
+ * The wizard shows the amount the clinic will ask for before the visitor picks a
+ * doctor. The action resolves `null` for a service the clinic does not offer — the
+ * wizard shows its own empty list in that case — and the amount itself is a `bigint`
+ * the island renders through `formatMoney`.
+ */
+export async function fetchServiceDeposit(serviceId: string): Promise<bigint | null> {
+  const resolved = await resolvePublicContext()
+  if (resolved === null) return null
+
+  return runInTenantScope(
+    publicContext(resolved.tenantId, resolved.clinicId),
+    prisma(),
+    (tx) => publicServiceDeposit(tx, resolved.tenantId, serviceId),
   )
 }
 

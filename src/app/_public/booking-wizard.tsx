@@ -1,23 +1,42 @@
 /**
- * The booking wizard — the public site's three-step flow, as a full page.
+ * The booking wizard — the public site's four-step flow, as a full page.
  *
- * Step 1 picks a service, step 2 picks a day and a time from the slots the real
- * availability engine generated, step 3 takes the name and the mobile the booking is
- * keyed on. The three are one client island because a step's choices are the next
- * step's props, and the submit is a Server Action because a booking is a write and the
- * write runs through `bookPublicAppointment` — the module's own public path, with the
- * same guards the desk's booking has.
+ * Step 1 picks a service, step 2 picks one of the doctors who performs it, step 3
+ * picks a day and a time from the slots the real availability engine generated,
+ * step 4 takes the name and the mobile the booking is keyed on. The four are one
+ * client island because a step's choices are the next step's props, and the submit
+ * is a Server Action because a booking is a write and the write runs through
+ * `bookPublicAppointment` — the module's own public path, with the same guards the
+ * desk's booking has.
  *
  * The island holds no Persian literal and no module barrel: the labels are props the
- * page built from the catalog, and the slots are what the action returned. The two
- * formatted lines a service card carries and the two the outcome renders arrive as
- * template strings and are filled here with `renderMessage`, because a function cannot
- * cross the server-client boundary.
+ * page built from the catalog, and the slots and doctors are what the actions
+ * returned. The two formatted lines a service card carries and the two the outcome
+ * renders arrive as template strings and are filled here with `renderMessage`,
+ * because a function cannot cross the server-client boundary.
+ *
+ * ## The deposit notice
+ *
+ * A service whose `depositAmount` is greater than zero cannot be booked online yet —
+ * the public site has no payment gateway — so the wizard shows the amount the clinic
+ * will ask for *before* the visitor picks a doctor, and offers only the clinic's
+ * phone number as the next step. The notice replaces the whole flow rather than
+ * appearing beside it: a visitor who cannot complete the booking should not be walked
+ * through three more steps to read a sentence about it.
+ *
+ * ## Why the router is refreshed after a booking
+ *
+ * A Server Action's `revalidatePath` invalidates the server-side cache, but the
+ * client Router keeps the RSC payload it already fetched — so a desk that opens
+ * `/reception/appointments` in the same tab sees the grid it saw before the booking.
+ * `router.refresh()` discards that payload and re-fetches it, which is what makes the
+ * row appear on the next navigation without a full page reload.
  */
 
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 
 import { Button } from '@/core/components/button'
 import { Field, TextArea, TextInput } from '@/core/components/form'
@@ -40,8 +59,11 @@ import { weekDays } from '@/modules/appointments'
 
 import {
   bookPublicAppointment,
+  fetchDoctorsForService,
   fetchPublicSlots,
+  fetchServiceDeposit,
   type PublicBookingResult,
+  type PublicDoctorOption,
   type PublicSlot,
 } from '@/app/_public/booking-action'
 
@@ -53,8 +75,12 @@ interface WizardProps {
     readonly depositAmount: bigint
     readonly showPriceOnSite: boolean
   }[]
-  readonly doctors: readonly { readonly id: string; readonly name: string }[]
-  readonly steps: { readonly service: string; readonly time: string; readonly details: string }
+  readonly steps: {
+    readonly service: string
+    readonly doctor: string
+    readonly time: string
+    readonly details: string
+  }
   readonly labels: {
     readonly service: string
     readonly doctor: string
@@ -67,6 +93,7 @@ interface WizardProps {
   }
   readonly hints: {
     readonly mobile: string
+    readonly pickDoctor: string
     readonly pickDay: string
     readonly noSlots: string
     readonly depositRequired: string
@@ -81,6 +108,7 @@ interface WizardProps {
     readonly duration: string
     readonly deposit: string
     readonly slotsFailure: string
+    readonly doctorsFailure: string
   }
   readonly result: {
     readonly successTitle: string
@@ -89,22 +117,30 @@ interface WizardProps {
     readonly failure: string
     readonly another: string
   }
-  /** The day the calendar opens on, from the clock the page read. */
   readonly today: LocalDate
   readonly empty: string
+  readonly doctorsEmpty: string
+  readonly depositNotice: {
+    readonly title: string
+    readonly body: string
+    readonly callAction: string
+  }
 }
 
-type Step = 'service' | 'time' | 'details'
+type Step = 'service' | 'doctor' | 'time' | 'details'
 
-const STEP_ORDER: readonly Step[] = ['service', 'time', 'details']
+const STEP_ORDER: readonly Step[] = ['service', 'doctor', 'time', 'details']
 
 export function BookingWizard(props: WizardProps) {
+  const router = useRouter()
   const [step, setStep] = useState<Step>('service')
   const [serviceId, setServiceId] = useState<string>('')
-  const [doctorId, setDoctorId] = useState<string>(props.doctors[0]?.id ?? '')
+  const [doctorId, setDoctorId] = useState<string>('')
+  const [doctors, setDoctors] = useState<readonly PublicDoctorOption[]>([])
   const [localDate, setLocalDate] = useState<LocalDate>(props.today)
   const [localTime, setLocalTime] = useState<string>('')
   const [slots, setSlots] = useState<readonly PublicSlot[]>([])
+  const [depositAmount, setDepositAmount] = useState<bigint>(0n)
   const [firstName, setFirstName] = useState<string>('')
   const [lastName, setLastName] = useState<string>('')
   const [mobile, setMobile] = useState<string>('')
@@ -126,9 +162,11 @@ export function BookingWizard(props: WizardProps) {
           setOutcome(null)
           setStep('service')
           setServiceId('')
-          setDoctorId(props.doctors[0]?.id ?? '')
+          setDoctorId('')
+          setDoctors([])
           setLocalTime('')
           setSlots([])
+          setDepositAmount(0n)
           setFirstName('')
           setLastName('')
           setMobile('')
@@ -139,7 +177,7 @@ export function BookingWizard(props: WizardProps) {
   }
 
   const service = props.services.find((row) => row.id === serviceId)
-  const doctor = props.doctors.find((row) => row.id === doctorId)
+  const doctor = doctors.find((row) => row.id === doctorId)
 
   return (
     <div className="flex flex-col gap-6">
@@ -150,7 +188,7 @@ export function BookingWizard(props: WizardProps) {
           {failure}
         </p>
       )}
-      {step === 'service' ? (
+      {step === 'service' && depositAmount === 0n ? (
         <ServiceStep
           labels={props.labels}
           services={props.services}
@@ -159,7 +197,24 @@ export function BookingWizard(props: WizardProps) {
           onService={setServiceId}
         />
       ) : null}
-      {step === 'time' ? (
+      {step === 'service' && depositAmount > 0n ? (
+        <DepositNotice
+          service={service}
+          depositAmount={depositAmount}
+          notice={props.depositNotice}
+        />
+      ) : null}
+      {step === 'doctor' && depositAmount === 0n ? (
+        <DoctorStep
+          labels={props.labels}
+          hints={props.hints}
+          doctors={doctors}
+          doctorId={doctorId}
+          empty={props.doctorsEmpty}
+          onDoctor={setDoctorId}
+        />
+      ) : null}
+      {step === 'time' && depositAmount === 0n ? (
         <TimeStep
           labels={props.labels}
           hints={props.hints}
@@ -174,7 +229,7 @@ export function BookingWizard(props: WizardProps) {
           onTime={setLocalTime}
         />
       ) : null}
-      {step === 'details' ? (
+      {step === 'details' && depositAmount === 0n ? (
         <DetailsStep
           labels={props.labels}
           hints={props.hints}
@@ -192,76 +247,114 @@ export function BookingWizard(props: WizardProps) {
           onNote={setNote}
         />
       ) : null}
-      <div className="flex items-center justify-between gap-3">
-        {step === 'service' ? null : (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              setFailure(null)
-              setStep(STEP_ORDER[STEP_ORDER.indexOf(step) - 1] as Step)
-            }}
-          >
-            {props.actions.back}
-          </Button>
-        )}
-        {step === 'details' ? (
-          <Button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              setFailure(null)
-              startTransition(async () => {
-                const result = await bookPublicAppointment({
-                  serviceId,
-                  doctorId,
-                  localDate,
-                  localTime,
-                  firstName: firstName.trim(),
-                  lastName: lastName.trim(),
-                  mobile: normalizeMobile(mobile),
-                  note: note.trim(),
+      {depositAmount > 0n ? null : (
+        <div className="flex items-center justify-between gap-3">
+          {step === 'service' ? null : (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setFailure(null)
+                setStep(STEP_ORDER[STEP_ORDER.indexOf(step) - 1] as Step)
+              }}
+            >
+              {props.actions.back}
+            </Button>
+          )}
+          {step === 'details' ? (
+            <Button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setFailure(null)
+                startTransition(async () => {
+                  const result = await bookPublicAppointment({
+                    serviceId,
+                    doctorId,
+                    localDate,
+                    localTime,
+                    firstName: firstName.trim(),
+                    lastName: lastName.trim(),
+                    mobile: normalizeMobile(mobile),
+                    note: note.trim(),
+                  })
+                  if (result.ok) {
+                    setOutcome(result)
+                    router.refresh()
+                    return
+                  }
+                  setFailure(result.message)
                 })
-                if (result.ok) {
-                  setOutcome(result)
-                  return
+              }}
+            >
+              {pending ? props.actions.submitting : props.actions.confirm}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              disabled={!canAdvance(step, serviceId, doctorId, localTime)}
+              onClick={() => {
+                setFailure(null)
+                if (step === 'service') {
+                  void loadDeposit(serviceId, setDepositAmount, () => {
+                    void loadDoctors(serviceId, setDoctors, setFailure, props.formats.doctorsFailure).then(() => {
+                      setStep('doctor')
+                    })
+                  })
+                } else if (step === 'doctor') {
+                  void loadSlots(serviceId, doctorId, localDate, setSlots, setFailure, props.formats.slotsFailure).then(() => {
+                    setStep('time')
+                  })
+                } else {
+                  setStep('details')
                 }
-                setFailure(result.message)
-              })
-            }}
-          >
-            {pending ? props.actions.submitting : props.actions.confirm}
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            disabled={!canAdvance(step, serviceId, localTime)}
-            onClick={() => {
-              setFailure(null)
-              if (step === 'service') {
-                void loadSlots(serviceId, doctorId, localDate, setSlots, setFailure, props.formats.slotsFailure).then(() => {
-                  setStep('time')
-                })
-              } else {
-                setStep('details')
-              }
-            }}
-          >
-            {props.actions.next}
-          </Button>
-        )}
-      </div>
+              }}
+            >
+              {props.actions.next}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-function canAdvance(step: Step, serviceId: string, localTime: string): boolean {
+function canAdvance(step: Step, serviceId: string, doctorId: string, localTime: string): boolean {
   if (step === 'service') return serviceId !== ''
+  if (step === 'doctor') return doctorId !== ''
   if (step === 'time') return localTime !== ''
   return true
 }
 
-/** The slots for one service and one day, through the action and the real engine. */
+async function loadDeposit(
+  serviceId: string,
+  setDepositAmount: (amount: bigint) => void,
+  onZero: () => void,
+): Promise<void> {
+  try {
+    const amount = (await fetchServiceDeposit(serviceId)) ?? 0n
+    setDepositAmount(amount)
+    if (amount === 0n) onZero()
+  } catch {
+    setDepositAmount(0n)
+  }
+}
+
+async function loadDoctors(
+  serviceId: string,
+  setDoctors: (doctors: readonly PublicDoctorOption[]) => void,
+  setFailure: (message: string | null) => void,
+  failureMessage: string,
+): Promise<void> {
+  try {
+    setDoctors(await fetchDoctorsForService(serviceId))
+    setFailure(null)
+  } catch {
+    setDoctors([])
+    setFailure(failureMessage)
+  }
+}
+
 async function loadSlots(
   serviceId: string,
   doctorId: string,
@@ -363,6 +456,55 @@ function ServiceStep({
   )
 }
 
+function DoctorStep({
+  labels,
+  hints,
+  doctors,
+  doctorId,
+  empty,
+  onDoctor,
+}: {
+  readonly labels: WizardProps['labels']
+  readonly hints: WizardProps['hints']
+  readonly doctors: readonly PublicDoctorOption[]
+  readonly doctorId: string
+  readonly empty: string
+  readonly onDoctor: (id: string) => void
+}) {
+  if (doctors.length === 0) {
+    return (
+      <Field label={labels.doctor} hint={hints.pickDoctor}>
+        <p className="text-sm text-ink-2">{empty}</p>
+      </Field>
+    )
+  }
+  return (
+    <Field label={labels.doctor} hint={hints.pickDoctor}>
+      <div className="grid gap-2.5">
+        {doctors.map((doctor) => (
+          <label
+            key={doctor.id}
+            className={cx(
+              'flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3.5 text-sm transition-colors',
+              doctorId === doctor.id ? 'border-brand bg-brand-50' : 'border-line bg-white hover:border-line-2',
+            )}
+          >
+            <span className="font-semibold text-ink">{doctor.name}</span>
+            <input
+              type="radio"
+              name="doctor"
+              value={doctor.id}
+              checked={doctorId === doctor.id}
+              onChange={() => onDoctor(doctor.id)}
+              className="size-4 accent-brand"
+            />
+          </label>
+        ))}
+      </div>
+    </Field>
+  )
+}
+
 function TimeStep({
   labels,
   hints,
@@ -451,7 +593,7 @@ function DetailsStep({
   readonly labels: WizardProps['labels']
   readonly hints: WizardProps['hints']
   readonly service: WizardProps['services'][number] | undefined
-  readonly doctor: WizardProps['doctors'][number] | undefined
+  readonly doctor: PublicDoctorOption | undefined
   readonly localDate: LocalDate
   readonly localTime: string
   readonly firstName: string
@@ -511,6 +653,37 @@ function DetailsStep({
       <Field label={labels.note}>
         <TextArea value={note} onChange={(event) => onNote(event.target.value)} rows={3} />
       </Field>
+    </div>
+  )
+}
+
+function DepositNotice({
+  service,
+  depositAmount,
+  notice,
+}: {
+  readonly service: WizardProps['services'][number] | undefined
+  readonly depositAmount: bigint
+  readonly notice: WizardProps['depositNotice']
+}) {
+  return (
+    <div className="flex flex-col gap-4 rounded-lg border border-warn/30 bg-warn-bg p-5">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-warn/20 text-warn">
+          <Icon name="warning" size="card" />
+        </span>
+        <div className="flex flex-col gap-1">
+          <h3 className="font-bold text-ink">{notice.title}</h3>
+          <p className="text-sm text-ink-2">
+            {renderMessage(notice.body, {
+              amount: formatMoney(depositAmount),
+            })}
+          </p>
+          {service === undefined ? null : (
+            <p className="mt-1 text-xs text-ink-3">{service.name}</p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

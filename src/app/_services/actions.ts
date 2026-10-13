@@ -22,6 +22,14 @@
  * `null` to. A string that is not a number is a `ValidationError`, which is the
  * catalogue's own sentence about a name the form did not send.
  *
+ * ## Why the digits are normalised before the parse
+ *
+ * The form's fields are typed by a Persian speaker, and a Persian speaker types
+ * Persian digits (`۰۱۲۳۴۵۶۷۸۹`). The column stores Latin digits, and `BigInt` reads
+ * only Latin ones, so the two are normalised here — the one place a typed amount
+ * becomes a stored one. Without the normalisation a form that looked correct to its
+ * author would be refused by a regex that saw only half the world's digits.
+ *
  * ## Why every action ends in `revalidatePath`
  *
  * The catalogue is the booking picker's source and the public site's price list, and
@@ -37,6 +45,7 @@ import { revalidatePath } from 'next/cache'
 import { prisma, runInTenantScope } from '@/core/db'
 import type { TransactionClient } from '@/core/db/scope'
 import type { TenantContext } from '@/core/tenant'
+import { normalizeDigits } from '@/core/localization'
 import {
   activateService,
   assignServiceDoctors,
@@ -333,7 +342,7 @@ function parseOptionalMoney(value: string | undefined): Parsed<bigint | undefine
 
 /** One required count field, as the column's number. */
 function parseCount(value: string): Parsed<number> {
-  const parsed = Number.parseInt(value.trim(), 10)
+  const parsed = Number.parseInt(normalizeDigits(value.trim()), 10)
   if (Number.isNaN(parsed)) return { ok: false, message: SERVICES_PAGE.validation.count }
   return { ok: true, value: parsed }
 }
@@ -341,20 +350,22 @@ function parseCount(value: string): Parsed<number> {
 /** One optional count field, or the nothing the form sent. */
 function parseOptionalCount(value: string | undefined): Parsed<number | undefined> {
   if (value === undefined || value.trim() === '') return skip()
-  const parsed = Number.parseInt(value.trim(), 10)
+  const parsed = Number.parseInt(normalizeDigits(value.trim()), 10)
   if (Number.isNaN(parsed)) return { ok: false, message: SERVICES_PAGE.validation.count }
   return { ok: true, value: parsed }
 }
 
 /**
- * One money or count field, as a `bigint` the column takes or `null` for a string that
- * is not a non-negative integer.
+ * One money field, as a `bigint` the column takes or `null` for a string that is not
+ * a non-negative integer.
  *
- * The catalogue's own fields are whole rials and whole minutes — a decimal is a price
- * the clinic cannot charge — so the parse is an integer parse and not a float one.
+ * The catalogue's own fields are whole rials — a decimal is a price the clinic cannot
+ * charge — so the parse is an integer parse and not a float one. The digits are
+ * normalised first, so a Persian speaker's `۸۰۰۰۰۰` and a Latin `800000` are the same
+ * value.
  */
 function parseBigInt(value: string): bigint | null {
-  const trimmed = value.trim()
+  const trimmed = normalizeDigits(value.trim())
   if (!/^\d+$/.test(trimmed)) return null
   return BigInt(trimmed)
 }

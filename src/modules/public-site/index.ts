@@ -49,8 +49,10 @@ export {
 export {
   publicBeforeAfter,
   publicDoctors,
+  publicDoctorsForService,
   publicService,
   publicServiceBeforeAfter,
+  publicServiceDeposit,
   publicServices,
   publicSlotsForDay,
 } from './lib/reads'

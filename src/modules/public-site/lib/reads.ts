@@ -3,7 +3,7 @@
  */
 
 import type { LocalDate } from '@/core/localization'
-import { generateSlots, readBookingSettings, slotMinutesForDoctor } from '@/modules/appointments'
+import { readBookingSettings } from '@/modules/appointments'
 import type { TransactionClient } from '@/core/db/scope'
 import { jalaliWeekday } from '@/core/localization'
 
@@ -174,6 +174,22 @@ export async function publicServiceBeforeAfter(
 
 /**
  * The slots the booking wizard offers for one service on one day.
+ *
+ * ## Why the walk is per range and not per doctor
+ *
+ * A doctor's weekday is a set of ranges, and each range carries its own
+ * `slotMinutes`. A 10–12 range at 120 minutes offers a single slot (10:00); a
+ * 14–17 range at 45 minutes offers 14:00, 14:45, 15:30, 16:15. The public wizard
+ * must offer the same slots the desk's grid draws, so the walk here is the
+ * per-range walk the grid's own `doctorWindowsOnDay` performs — the same query,
+ * the same `workingRange` intersection, the same step.
+ *
+ * ## Why the service's duration is not the step
+ *
+ * The step is the range's own `slotMinutes`, not the service's `durationMinutes`.
+ * A service whose duration is longer than the step is a booking the desk confirms
+ * as shorter (`SHORTEN_POPUP`); on the public site, the step is what the visitor
+ * picks from, and the service's duration is the row the booking snapshots.
  */
 export async function publicSlotsForDay(args: {
   readonly tx: TransactionClient
@@ -184,36 +200,10 @@ export async function publicSlotsForDay(args: {
   readonly localDate: LocalDate
 }): Promise<readonly { readonly time: string; readonly durationMinutes: number }[]> {
   const settings = await readBookingSettings(args.tx, args.tenantId)
-  const service = await args.tx.service.findFirst({
-    where: { id: args.serviceId, tenantId: args.tenantId, isActive: true },
-    select: { durationMinutes: true },
-  })
-  if (service === null) return []
-
-  const day = await asSlotDay(args, service.durationMinutes)
-  const slots = generateSlots(day, settings)
-  return slots.filter((slot) => slot.available).map((slot) => ({
-    time: slot.time,
-    durationMinutes: slot.durationMinutes,
-  }))
-}
-
-/**
- * One day's facts, in the shape `generateSlots` takes.
- */
-async function asSlotDay(
-  args: {
-    readonly tx: TransactionClient
-    readonly tenantId: string
-    readonly clinicId: string | null
-    readonly doctorId: string
-    readonly localDate: LocalDate
-  },
-  durationMinutes: number,
-) {
   const weekday = jalaliWeekday(args.localDate)
-  const [shifts, workingHours, blocks, holiday, slotMinutes] = await Promise.all([
-    args.tx.clinicShift.findMany({
+
+  const [shift, workingHours, shiftRanges, rows, holiday] = await Promise.all([
+    args.tx.clinicShift.findFirst({
       where: { tenantId: args.tenantId, clinicId: args.clinicId ?? undefined, weekday },
       select: { startTime: true, endTime: true },
     }),
@@ -221,43 +211,114 @@ async function asSlotDay(
       where: { tenantId: args.tenantId, doctorId: args.doctorId, weekday },
       select: { startTime: true, endTime: true },
     }),
+    args.tx.doctorShiftRange.findMany({
+      where: { tenantId: args.tenantId, doctorId: args.doctorId, weekday },
+      select: { startTime: true, endTime: true, slotMinutes: true },
+      orderBy: { startTime: 'asc' },
+    }),
     args.tx.appointment.findMany({
       where: {
         tenantId: args.tenantId,
         doctorId: args.doctorId,
         localDate: args.localDate,
-        isSlotBlock: true,
       },
-      select: { localTime: true, durationMinutes: true },
+      select: { localTime: true, durationMinutes: true, isSlotBlock: true, status: true },
     }),
     args.tx.holiday.findFirst({
       where: { tenantId: args.tenantId, localDate: args.localDate },
       select: { id: true },
     }),
-    slotMinutesForDoctor({
-      tx: args.tx,
-      tenantId: args.tenantId,
-      doctorId: args.doctorId,
-      weekday,
-    }),
   ])
 
-  return {
-    doctorId: args.doctorId,
-    localDate: args.localDate,
-    shift: shifts[0] ?? null,
-    hours: workingHours[0] ?? null,
-    durationMinutes,
-    slotMinutes,
-    blocks: blocks.map((row) => ({
-      start: toMinutes(row.localTime),
-      end: toMinutes(row.localTime) + row.durationMinutes,
-    })),
-    isHoliday: holiday !== null,
+  if (shift === null) return []
+  if (holiday !== null && !settings.bookingOnHolidays) return []
+
+  const shiftStart = toMinutes(shift.startTime)
+  const shiftEnd = toMinutes(shift.endTime)
+
+  const occupied = rows
+    .filter((row) => row.isSlotBlock || (row.status !== 'CANCELLED' && row.status !== 'RESCHEDULED'))
+    .map((row) => {
+      const start = toMinutes(row.localTime)
+      return { start, end: start + row.durationMinutes }
+    })
+
+  const ranges: { start: number; end: number; step: number }[] =
+    shiftRanges.length > 0
+      ? shiftRanges.map((row) => ({
+          start: Math.max(shiftStart, toMinutes(row.startTime)),
+          end: Math.min(shiftEnd, toMinutes(row.endTime)),
+          step: row.slotMinutes,
+        }))
+      : workingHours.map((row) => ({
+          start: Math.max(shiftStart, toMinutes(row.startTime)),
+          end: Math.min(shiftEnd, toMinutes(row.endTime)),
+          step: 30,
+        }))
+
+  const free: { time: string; durationMinutes: number }[] = []
+  for (const range of ranges) {
+    if (range.end <= range.start) continue
+    let cursor = range.start
+    while (cursor + range.step <= range.end) {
+      const candidate = { start: cursor, end: cursor + range.step }
+      const taken = occupied.some(
+        (busy) => busy.start < candidate.end && busy.end > candidate.start,
+      )
+      if (!taken) {
+        const hours = Math.floor(cursor / 60)
+        const minutes = cursor % 60
+        free.push({
+          time: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
+          durationMinutes: range.step,
+        })
+      }
+      cursor += range.step
+    }
   }
+
+  return free.sort((a, b) => a.time.localeCompare(b.time))
 }
 
 function toMinutes(value: string): number {
   const [hours, minutes] = value.split(':').map(Number)
   return (hours ?? 0) * 60 + (minutes ?? 0)
+}
+
+/**
+ * The doctors who perform one service, as the public booking wizard offers them.
+ */
+export async function publicDoctorsForService(
+  tx: TransactionClient,
+  tenantId: string,
+  serviceId: string,
+): Promise<readonly PublicDoctor[]> {
+  const rows = await tx.serviceDoctor.findMany({
+    where: { tenantId, serviceId, doctor: { memberships: { some: { tenantId, isActive: true } } } },
+    select: {
+      doctor: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { doctor: { firstName: 'asc' } },
+  })
+
+  return rows.map((row) => ({
+    id: row.doctor.id,
+    name: [row.doctor.firstName, row.doctor.lastName].filter(Boolean).join(' '),
+    specialties: [],
+  }))
+}
+
+/**
+ * One service's deposit amount, for the public booking wizard's deposit notice.
+ */
+export async function publicServiceDeposit(
+  tx: TransactionClient,
+  tenantId: string,
+  serviceId: string,
+): Promise<bigint | null> {
+  const row = await tx.service.findFirst({
+    where: { id: serviceId, tenantId, isActive: true },
+    select: { depositAmount: true },
+  })
+  return row === null ? null : row.depositAmount
 }

@@ -141,9 +141,10 @@ export const PUBLIC_SERVICE_DETAIL = {
 
 export const PUBLIC_BOOKING = {
   title: 'رزرو نوبت آنلاین',
-  lead: 'در سه مرحله ساده نوبت خود را رزرو کن',
+  lead: 'در چهار مرحله ساده نوبت خود را رزرو کن',
   steps: {
     service: 'انتخاب خدمت',
+    doctor: 'انتخاب پزشک',
     time: 'انتخاب زمان',
     details: 'اطلاعات تماس',
   },
@@ -159,6 +160,7 @@ export const PUBLIC_BOOKING = {
   },
   hints: {
     mobile: 'با این شماره، پیامک‌های یادآوری برایت ارسال می‌شود.',
+    pickDoctor: 'یک پزشک را انتخاب کن.',
     pickDay: 'یک روز را انتخاب کن.',
     noSlots: 'برای این روز زمان خالی وجود ندارد. روز دیگری را انتخاب کن.',
     depositRequired: 'این خدمت برای رزرو آنلاین نیاز به پیش‌پرداخت دارد.',
@@ -173,6 +175,7 @@ export const PUBLIC_BOOKING = {
     duration: '{minutes} دقیقه',
     deposit: ' · پیش‌پرداخت {amount}',
     slotsFailure: 'خطا در دریافت زمان‌ها',
+    doctorsFailure: 'خطا در دریافت پزشکان',
   },
   result: {
     successTitle: 'نوبت تو رزرو شد!',
@@ -182,6 +185,18 @@ export const PUBLIC_BOOKING = {
     another: 'رزرو نوبت دیگر',
   },
   empty: 'هیچ خدمتی برای رزرو وجود ندارد.',
+  doctorsEmpty: 'برای این خدمت پزشکی تعریف نشده است.',
+  /**
+   * The sentence a service that requires a deposit shows, in place of the whole
+   * booking form. The public site has no payment gateway yet, so a service with a
+   * deposit cannot be booked online; the visitor is told so before picking a doctor,
+   * and the sentence names the amount the clinic will ask for.
+   */
+  depositNotice: {
+    title: 'این خدمت نیاز به پیش‌پرداخت دارد',
+    body: 'برای رزرو این خدمت لازم است مبلغ {amount} به‌عنوان پیش‌پرداخت پرداخت شود. رزرو آنلاین این خدمت به‌زودی فعال می‌شود. برای رزرو، لطفاً با کلینیک تماس بگیرید.',
+    callAction: 'تماس با کلینیک',
+  },
 } as const
 
 export const PUBLIC_DOCTORS = {
