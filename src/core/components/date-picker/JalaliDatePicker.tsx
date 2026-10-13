@@ -122,11 +122,14 @@ export function JalaliDatePicker({
 
   // The display month is derived from the value when there is one, so opening the
   // picker on a stored date opens it at that date's month; with no value it opens at
-  // today, which is where a new date most often is.
-  const anchor = value ?? todayLocalDate(realClock())
+  // today, which is where a new date most often is. The check is truthiness and not
+  // `??`, because a form that starts from `''` (an empty string) is the common case
+  // and `''` is not a date — it would put the picker at `0000-00-01`.
+  const anchor = value ? value : todayLocalDate(realClock())
   const [viewing, setViewing] = useState<string>(anchor)
 
-  const selected = value ?? null
+  // Truthiness again: `''` is "no selection", not "the empty date".
+  const selected = value ? value : null
   const viewingParts = jalaliParts(viewing as LocalDate)
   const weeks = jalaliMonthGrid(viewing as LocalDate)
 

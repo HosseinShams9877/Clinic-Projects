@@ -1,0 +1,1 @@
+export { PersianNumbers } from './PersianNumbers'

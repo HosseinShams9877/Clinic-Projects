@@ -3,7 +3,7 @@ import localFont from 'next/font/local'
 
 import { APP_DESCRIPTION, APP_NAME, APP_TITLE_TEMPLATE } from './catalog'
 import { THEME_COLOR } from './theme'
-
+import { PersianNumbers } from '@/core/components/persian-numbers'
 import './globals.css'
 
 /**
@@ -64,7 +64,8 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fa" dir="rtl" className={vazirmatn.variable}>
-      <body>{children}</body>
+      <body>
+         <PersianNumbers />{children}</body>
     </html>
   )
 }
