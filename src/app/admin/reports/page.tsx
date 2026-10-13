@@ -577,12 +577,12 @@ function DoctorComparisonCard({ doctors }: { readonly doctors: readonly DoctorCo
           <table className="w-full border-collapse text-sm">
             <caption className="sr-only">{REPORT_LABELS.doctorComparison.title}</caption>
             <thead>
-              <tr className="border-b border-line bg-surface-2 text-ink-3">
-                <Th>{DOCTOR_FIELDS.doctor}</Th>
-                <Th className="text-end">{ADMIN_REPORTS.sessionsThisMonth}</Th>
-                <Th className="text-end">{DOCTOR_FIELDS.noShowRate}</Th>
-                <Th className="text-end">{DOCTOR_FIELDS.completionRate}</Th>
-              </tr>
+             <tr className="border-b border-line bg-surface-2 text-ink-3">
+  <Th>{DOCTOR_FIELDS.doctor}</Th>
+  <Th align="end">{ADMIN_REPORTS.sessionsThisMonth}</Th>
+  <Th align="end">{DOCTOR_FIELDS.noShowRate}</Th>
+  <Th align="end">{DOCTOR_FIELDS.completionRate}</Th>
+</tr>
             </thead>
             <tbody>
               {doctors.map((doctor) => (
@@ -608,17 +608,21 @@ function DoctorComparisonCard({ doctors }: { readonly doctors: readonly DoctorCo
 }
 
 /** One column header, with the alignment the design system's tables keep. */
+/** One column header, aligned the same way as the cells beneath it. */
 function Th({
   children,
-  className,
+  align = 'start',
 }: {
   readonly children: React.ReactNode
-  readonly className?: string
+  readonly align?: 'start' | 'end'
 }) {
   return (
     <th
       scope="col"
-      className={cx('whitespace-nowrap px-4 py-3 text-start text-xs font-semibold', className)}
+      className={cx(
+        'whitespace-nowrap px-4 py-3 text-xs font-semibold',
+        align === 'end' ? 'text-end' : 'text-start',
+      )}
     >
       {children}
     </th>

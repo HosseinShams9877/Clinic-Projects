@@ -71,3 +71,5 @@ export type { FormErrorProps } from './FormError'
 
 export { useControlWiring } from './field-context'
 export type { ControlWiring } from './field-context'
+export { PersianPhoneInput } from './PersianPhoneInput'
+export type { PersianPhoneInputProps } from './PersianPhoneInput'

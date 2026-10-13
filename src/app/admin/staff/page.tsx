@@ -49,7 +49,7 @@
  */
 
 import type { Metadata } from 'next'
-
+import { formatPhone } from '@/core/localization'
 import { prisma, runInTenantScope } from '@/core/db'
 import { LeaveRequestStatus, PERMISSIONS, Permission, Role, isMember } from '@/core/constants'
 import {
@@ -191,11 +191,11 @@ function RoleMatrix() {
             <tr className="border-b border-line bg-surface-2 text-ink-3">
               <Th>{STAFF_PAGE.columns.permissions}</Th>
               <Th>{ADMIN_STAFF.matrixDescription}</Th>
-              {Object.values(Role).map((role) => (
-                <Th key={role} className="text-center">
-                  {ROLE_LABELS[role]}
-                </Th>
-              ))}
+             {Object.values(Role).map((role) => (
+  <Th key={role} align="center">
+    {ROLE_LABELS[role]}
+  </Th>
+))}
             </tr>
           </thead>
           <tbody>
@@ -303,9 +303,11 @@ function StaffList({
                     <span className="font-semibold text-ink">{staffName(row)}</span>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-ink-2 tabular-nums" dir="ltr">
-                  {row.user.mobile}
-                </td>
+                <td className="px-4 py-3 text-ink-2 tabular-nums">
+  <span dir="ltr" className="inline-block">
+    {formatPhone(row.user.mobile)}
+  </span>
+</td>
                 <td className="px-4 py-3">
                   <RoleBadge role={row.role} />
                 </td>
@@ -555,18 +557,21 @@ function roleLabel(role: string): string {
   return isMember(Role, role) ? ROLE_LABELS[role] : role
 }
 
-/** One column header, with the alignment the design system's tables keep. */
+/** One column header, aligned the same way as the cells beneath it. */
 function Th({
   children,
-  className,
+  align = 'start',
 }: {
   readonly children: React.ReactNode
-  readonly className?: string
+  readonly align?: 'start' | 'center' | 'end'
 }) {
   return (
     <th
       scope="col"
-      className={cx('whitespace-nowrap px-4 py-3 text-start text-xs font-semibold', className)}
+      className={cx(
+        'whitespace-nowrap px-4 py-3 text-xs font-semibold',
+        align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : 'text-start',
+      )}
     >
       {children}
     </th>

@@ -37,6 +37,15 @@
  * `node:async_hooks` — into the browser bundle, which Turbopack refuses. The page
  * (a Server Component) reads `TEMPLATE_PLACEHOLDERS` and hands it down as plain
  * data; the client only renders.
+ *
+ * ## Why the phone field uses `FormField` and not the local `Field`
+ *
+ * `PersianPhoneInput` is a core control and joins the shell's contract — it calls
+ * `useControlWiring`, which requires a `FieldContext` above it. The local `Field`
+ * in this file is a labelled `<input>` helper for the plain settings fields and
+ * does not provide that context. The phone field therefore uses the shell's own
+ * `Field` (imported as `FormField` to leave the local `Field` name free) so the
+ * control has a label, a described-by and an error slot.
  */
 
 'use client'
@@ -44,6 +53,7 @@
 import { useActionState } from 'react'
 
 import { Button } from '@/core/components/button'
+import { Field as FormField, PersianPhoneInput } from '@/core/components/form'
 import { CONTROL_CLASSES } from '@/core/components/form/control-classes'
 
 import { TemplateEditor } from './template-editor'
@@ -138,7 +148,9 @@ export function IdentityForm({
       <div className="grid grid-cols-1 gap-3 panel:grid-cols-2">
         <Field label={labels.tenantName} name="tenantName" defaultValue={tenantName} />
         <Field label={labels.clinicName} name="clinicName" defaultValue={clinicName} />
-        <Field label={labels.phone} name="phone" defaultValue={phone} />
+        <FormField label={labels.phone}>
+          <PersianPhoneInput name="phone" defaultValue={phone} />
+        </FormField>
         <Field label={labels.address} name="address" defaultValue={address} />
       </div>
       <FormAnswer result={result} />
@@ -147,7 +159,7 @@ export function IdentityForm({
   )
 }
 
-/** «نوبتدهی» — the booking mode, the lifecycle timings and the two policy values. */
+/** «نوبت‌دهی» — the booking mode, the lifecycle timings and the two policy values. */
 export function BookingForm({
   mode,
   slotDurationMinutes,

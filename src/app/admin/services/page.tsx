@@ -167,9 +167,9 @@ export default async function ServicesPage({
                 <tr className="border-b border-line bg-surface-2 text-ink-3">
                   <Th>{SERVICES_PAGE.columns.name}</Th>
                   <Th>{SERVICES_PAGE.columns.category}</Th>
-                  <Th className="text-end">{SERVICES_PAGE.columns.price}</Th>
-                  <Th className="text-end">{SERVICES_PAGE.columns.duration}</Th>
-                  <Th className="text-end">{SERVICES_PAGE.columns.deposit}</Th>
+                <Th align="end">{SERVICES_PAGE.columns.price}</Th>
+<Th align="end">{SERVICES_PAGE.columns.duration}</Th>
+<Th align="end">{SERVICES_PAGE.columns.deposit}</Th>
                   <Th>{SERVICES_PAGE.columns.doctors}</Th>
                   <Th>{SERVICES_PAGE.columns.status}</Th>
                   <Th>{SERVICES_PAGE.columns.actions}</Th>
@@ -253,18 +253,21 @@ function categoryLabel(category: string): string {
   return isMember(ServiceCategory, category) ? SERVICE_CATEGORY_LABELS[category] : category
 }
 
-/** One column header, with the alignment the design system's tables keep. */
+/** One column header, aligned the same way as the cells beneath it. */
 function Th({
   children,
-  className,
+  align = 'start',
 }: {
   readonly children: React.ReactNode
-  readonly className?: string
+  readonly align?: 'start' | 'center' | 'end'
 }) {
   return (
     <th
       scope="col"
-      className={cx('whitespace-nowrap px-4 py-3 text-start text-xs font-semibold', className)}
+      className={cx(
+        'whitespace-nowrap px-4 py-3 text-xs font-semibold',
+        align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : 'text-start',
+      )}
     >
       {children}
     </th>

@@ -181,8 +181,8 @@ export default async function AdminCustomersPage({
                   <Th>{ADMIN_CUSTOMERS.columns.birthday}</Th>
                   <Th>{ADMIN_CUSTOMERS.columns.source}</Th>
                   <Th>{ADMIN_CUSTOMERS.columns.lastVisit}</Th>
-                  <Th className="text-center">{ADMIN_CUSTOMERS.columns.visits}</Th>
-                  <Th className="text-end">{ADMIN_CUSTOMERS.columns.balance}</Th>
+                  <Th align="center">{ADMIN_CUSTOMERS.columns.visits}</Th>
+<Th align="center">{ADMIN_CUSTOMERS.columns.balance}</Th>
                   <Th>{ADMIN_CUSTOMERS.columns.message}</Th>
                   <Th>{ADMIN_CUSTOMERS.columns.profile}</Th>
                 </tr>
@@ -288,7 +288,7 @@ function CustomerRow({ row }: { readonly row: CustomerListRow }) {
       <td className="px-4 py-3 text-center font-semibold text-ink tabular-nums">
         {toPersianDigits(row.completedSessions)}
       </td>
-      <td className="px-4 py-3 text-end font-bold tabular-nums">
+      <td className="px-4 py-3 text-center font-bold tabular-nums">
         {balance <= 0 ? (
           <span className="text-ink-3">—</span>
         ) : (
@@ -341,18 +341,21 @@ function sourceTag(source: string | null): React.ReactNode {
   )
 }
 
-/** One column header, with the alignment the design system's tables keep. */
+/** One column header, aligned the same way as the cells beneath it. */
 function Th({
   children,
-  className,
+  align = 'start',
 }: {
   readonly children: React.ReactNode
-  readonly className?: string
+  readonly align?: 'start' | 'center' | 'end'
 }) {
   return (
     <th
       scope="col"
-      className={cx('whitespace-nowrap px-4 py-3 text-start text-xs font-semibold', className)}
+      className={cx(
+        'whitespace-nowrap px-4 py-3 text-xs font-semibold',
+        align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : 'text-start',
+      )}
     >
       {children}
     </th>
