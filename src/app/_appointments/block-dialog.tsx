@@ -3,9 +3,18 @@
  *
  * A slot block is the calendar holding a time so the engine does not offer it
  * (`blockHours` in the module). This is the desk's and manager's affordance for it:
- * opened from an empty cell the «+» would otherwise book, it asks a duration and an
- * optional reason and writes the block through `blockHoursAction`. The day and the
- * doctor come from the cell, so neither is typed.
+ * opened from an empty cell the «+» would otherwise book, it asks an optional
+ * reason and writes the block through `blockHoursAction`. The day, the doctor and
+ * the duration come from the cell, so none is typed.
+ *
+ * ## Why the time is not shown and the duration is not asked
+ *
+ * The desk already chose the slot by clicking the cell, so the time is a fact the
+ * popup has nothing to ask. The duration is the cell's own — the slot's step in
+ * the doctor's own range (`DoctorDayWindow.ranges[i].slotMinutes`), which is the
+ * fact the grid's axis was drawn against. A block is one slot of that axis, so the
+ * duration is the slot's length, not a number the desk should be inventing. Asking
+ * for it would let the desk write a block the grid cannot show.
  */
 
 'use client'
@@ -16,7 +25,7 @@ import type { MouseEvent, ReactNode } from 'react'
 import { Button } from '@/core/components/button'
 import { Field, TextInput } from '@/core/components/form'
 import { Icon } from '@/core/components/icons'
-import { formatTime, type LocalDate, type LocalTime } from '@/core/localization'
+import type { LocalDate } from '@/core/localization'
 
 import { BLOCK_POPUP } from './catalog'
 import { blockHoursAction, type ActionResult, type BlockInput } from './actions'
@@ -27,14 +36,12 @@ export interface BlockDialogProps {
   readonly localDate: LocalDate
   /** The slot the cell sits on, as a stored `HH:mm`. */
   readonly time: string
+  /** The slot's own length, in minutes — the step the grid drew the cell against. */
+  readonly durationMinutes: number
 }
-
-/** The block's default length, in minutes — one slot of the grid's own step. */
-const DEFAULT_DURATION = 30
 
 export function BlockDialog(props: BlockDialogProps) {
   const [open, setOpen] = useState(false)
-  const [duration, setDuration] = useState(String(DEFAULT_DURATION))
   const [reason, setReason] = useState('')
   const [result, setResult] = useState<ActionResult | null>(null)
   const [pending, setPending] = useState(false)
@@ -45,7 +52,6 @@ export function BlockDialog(props: BlockDialogProps) {
       <button
         type="button"
         onClick={() => {
-          setDuration(String(DEFAULT_DURATION))
           setReason('')
           setResult(null)
           setOpen(true)
@@ -64,7 +70,7 @@ export function BlockDialog(props: BlockDialogProps) {
       doctorId: props.doctorId,
       localDate: props.localDate,
       localTime: props.time,
-      durationMinutes: Number.parseInt(duration, 10) || DEFAULT_DURATION,
+      durationMinutes: props.durationMinutes,
       reason: reason === '' ? undefined : reason,
     }
     const outcome = await blockHoursAction(props.panel, input)
@@ -92,17 +98,12 @@ export function BlockDialog(props: BlockDialogProps) {
         </header>
 
         <div className="flex flex-col gap-4 p-5">
-          <p className="text-sm text-ink-2 tabular-nums">{formatTime(props.time as LocalTime)}</p>
-          <Field label={BLOCK_POPUP.duration} required>
-            <TextInput
-              type="number"
-              inputMode="numeric"
-              value={duration}
-              onChange={(event) => setDuration(event.target.value)}
-            />
-          </Field>
           <Field label={BLOCK_POPUP.reason}>
-            <TextInput type="text" value={reason} onChange={(event) => setReason(event.target.value)} />
+            <TextInput
+              type="text"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
           </Field>
           {result !== null && !result.ok ? (
             <p className="flex items-center gap-1 text-sm text-danger" role="alert">

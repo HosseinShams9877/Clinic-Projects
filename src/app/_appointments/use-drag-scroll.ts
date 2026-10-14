@@ -25,12 +25,22 @@ import { useEffect, useRef } from 'react'
  * the moment the pointer left the element. `down` is on the header; `move` and `up`
  * are on the window and only exist while the drag is in flight.
  *
- * ## Why the effect checks `scrollWidth > clientWidth` once
+ * ## Why the overflow check is observed, not sampled once
  *
- * A grid with one doctor has nothing to scroll, and a `grab` cursor on a header
- * that cannot be dragged is a lie the reader can feel. The check runs in the
- * effect's own body, so the listeners are only attached when the gesture is
- * available.
+ * The gesture is only available when the content is actually wider than the
+ * container — a grid with one doctor has nothing to scroll, and a `grab` cursor on
+ * a header that cannot be dragged is a lie the reader can feel. But the content
+ * arrives *after* the first effect run: the grid's columns, rows and cells are
+ * rendered from props the server hands down, and the first paint can happen before
+ * the table has laid out to its full width. A single `scrollWidth > clientWidth`
+ * read in the effect's own body therefore samples a container that is still narrow,
+ * concludes there is nothing to scroll, and never attaches the listeners — the
+ * cursor never becomes `grab`, and the drag silently does nothing.
+ *
+ * The check is therefore driven by a `ResizeObserver` on both the container and its
+ * first child (the table), so that the moment the content grows past the container,
+ * the listeners attach and the cursor appears — and the moment it shrinks back (a
+ * day with one doctor, a narrower breakpoint), they detach again.
  */
 export function useDragScroll<T extends HTMLElement>(): {
   readonly containerRef: React.RefObject<T | null>
@@ -42,7 +52,6 @@ export function useDragScroll<T extends HTMLElement>(): {
     if (container === null) return
     const header = container.querySelector<HTMLElement>('[data-drag-scroll]')
     if (header === null) return
-    if (container.scrollWidth <= container.clientWidth) return
 
     // Aliased to locals so the closures below see them as the non-null values the
     // two `if` statements above have already proven them to be. TypeScript narrows
@@ -54,6 +63,7 @@ export function useDragScroll<T extends HTMLElement>(): {
     let dragging = false
     let startX = 0
     let startScrollLeft = 0
+    let attached = false
 
     function onDown(event: MouseEvent): void {
       // Only the primary button starts a pan; a middle- or right-click is the
@@ -80,15 +90,47 @@ export function useDragScroll<T extends HTMLElement>(): {
       headerEl.style.userSelect = ''
     }
 
-    headerEl.style.cursor = 'grab'
-    headerEl.addEventListener('mousedown', onDown)
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    function attach(): void {
+      if (attached) return
+      attached = true
+      headerEl.style.cursor = 'grab'
+      headerEl.addEventListener('mousedown', onDown)
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    }
 
-    return () => {
+    function detach(): void {
+      if (!attached) return
+      attached = false
+      headerEl.style.cursor = ''
+      headerEl.style.userSelect = ''
       headerEl.removeEventListener('mousedown', onDown)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
+    }
+
+    function sync(): void {
+      const canScroll = containerEl.scrollWidth > containerEl.clientWidth
+      if (canScroll) attach()
+      else detach()
+    }
+
+    // The observer watches the container *and* its first child (the table), because
+    // the container's own `clientWidth` does not change when its content does — the
+    // table inside it is what grows.
+    const observer = new ResizeObserver(sync)
+    observer.observe(containerEl)
+    const firstChild = containerEl.firstElementChild
+    if (firstChild !== null) observer.observe(firstChild)
+
+    // One synchronous pass so a container that is *already* wide at effect time
+    // (a client-side navigation back into the page, a warm cache) attaches without
+    // waiting for the observer's first callback.
+    sync()
+
+    return () => {
+      observer.disconnect()
+      detach()
     }
   }, [])
 

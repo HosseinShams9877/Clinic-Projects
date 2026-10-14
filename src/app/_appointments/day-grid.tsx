@@ -86,7 +86,7 @@ export interface DayGridProps {
 const DEFAULT_SLOT_MINUTES = 30
 
 /** The minimum width of a doctor's column, in pixels — wide enough for its buttons. */
-const DOCTOR_COLUMN_MIN_WIDTH = 'min-w-[220px]'
+const DOCTOR_COLUMN_MIN_WIDTH = 'min-w-[200px]'
 
 /** The day grid, as the two breakpoints each render it. */
 export function DayGrid(props: DayGridProps) {
@@ -118,14 +118,14 @@ export function DayGrid(props: DayGridProps) {
     <>
       <div
         ref={containerRef}
-        className="hidden max-h-[70vh] overflow-auto panel:block"
+        className="hidden max-h-[70vh] overflow-auto rounded-lg border border-line bg-surface shadow-sh-1 panel:block"
       >
         <table className="min-w-max border-separate border-spacing-0 text-sm">
           <thead>
             <tr data-drag-scroll className="select-none">
               <th
                 scope="col"
-                className="sticky inset-inline-start-0 top-0 z-30 border-b border-e border-line bg-surface-sunken px-3 py-2 text-start text-xs font-semibold text-ink-3"
+                className="sticky inset-inline-start-0 top-0 z-30 w-[68px] border-b border-e border-line-2 bg-surface-sunken px-2 py-2.5 text-center align-middle text-[11px] font-semibold tracking-wide text-ink-3"
               >
                 {APPOINTMENTS_PAGE.timeColumn}
               </th>
@@ -136,18 +136,27 @@ export function DayGrid(props: DayGridProps) {
                     key={doctor.id}
                     scope="col"
                     className={cx(
-                      'sticky top-0 z-10 border-b border-e border-line bg-surface px-3 py-2 text-start align-bottom',
+                      'sticky top-0 z-10 border-b border-e border-line-2 bg-surface-sunken px-3 py-2.5 text-start align-middle',
                       DOCTOR_COLUMN_MIN_WIDTH,
                     )}
                   >
-                    <span className="block font-semibold text-ink">{doctor.name}</span>
-                    {window === null ? null : (
-                      <span className="mt-1 block text-xs text-ink-3 tabular-nums">
-                        {formatTime(minutesToTime(window.startMinute))}
-                        {` ${APPOINTMENTS_PAGE.windowTo} `}
-                        {formatTime(minutesToTime(window.endMinute))}
+                    <span className="flex items-center gap-2">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-pill bg-brand-50 text-[11px] font-bold text-brand-700">
+                        {doctor.name.trim().charAt(0)}
                       </span>
-                    )}
+                      <span className="flex min-w-0 flex-col leading-tight">
+                        <span className="truncate text-[13px] font-semibold text-ink">
+                          {doctor.name}
+                        </span>
+                        {window === null ? null : (
+                          <span className="text-[11px] font-medium text-ink-3 tabular-nums">
+                            {formatTime(minutesToTime(window.startMinute))}
+                            {` ${APPOINTMENTS_PAGE.windowTo} `}
+                            {formatTime(minutesToTime(window.endMinute))}
+                          </span>
+                        )}
+                      </span>
+                    </span>
                   </th>
                 )
               })}
@@ -160,7 +169,7 @@ export function DayGrid(props: DayGridProps) {
                   <tr key={minute} className="brk">
                     <td
                       colSpan={columns.length + 1}
-                      className="border-b border-line bg-surface-sunken px-3 py-2 text-center text-xs text-ink-3"
+                      className="border-b border-line bg-surface-sunken px-3 py-1.5 text-center text-[11px] font-medium text-ink-3"
                     >
                       {APPOINTMENTS_PAGE.controls.blockHours}
                     </td>
@@ -171,7 +180,7 @@ export function DayGrid(props: DayGridProps) {
                 <tr key={minute}>
                   <th
                     scope="row"
-                    className="sticky inset-inline-start-0 z-20 border-b border-e border-line bg-surface-sunken px-3 py-2 text-start font-semibold text-ink-2 tabular-nums"
+                    className="sticky inset-inline-start-0 z-20 w-[68px] border-b border-e border-line bg-surface-sunken px-2 py-2 text-center align-top text-[12px] font-semibold text-ink-2 tabular-nums"
                   >
                     {formatTime(minutesToTime(minute))}
                   </th>
@@ -186,7 +195,7 @@ export function DayGrid(props: DayGridProps) {
                         key={doctor.id}
                         rowSpan={span}
                         className={cx(
-                          'border-b border-e border-line p-2 align-top',
+                          'border-b border-e border-line bg-surface p-1.5 align-top transition-colors',
                           DOCTOR_COLUMN_MIN_WIDTH,
                         )}
                       >
@@ -205,6 +214,7 @@ export function DayGrid(props: DayGridProps) {
                             doctor={doctor}
                             localDate={props.localDate}
                             time={minutesToTime(minute)}
+                            durationMinutes={slotMinutesAt(window, minute)}
                             services={props.services}
                             customers={props.customers}
                             panel={props.panel}
@@ -226,13 +236,18 @@ export function DayGrid(props: DayGridProps) {
 
       <ul className="flex flex-col gap-3 panel:hidden">
         {props.rows.map((row) => (
-          <li key={row.id} className="rounded-md border border-line bg-surface p-3">
+          <li key={row.id} className="rounded-md border border-line bg-surface p-3 shadow-sh-1">
             <div className="flex items-baseline justify-between gap-2">
               <span className="font-semibold text-ink tabular-nums">{formatTime(timeAsLocal(row.localTime))}</span>
               <StatusChip status={row.status} />
             </div>
             <p className="mt-1 text-ink-2">{rowDescription(row)}</p>
             <p className="mt-1 text-xs text-ink-3">{row.doctorName}</p>
+            {row.isSlotBlock && row.cancelReason !== null && row.cancelReason !== '' ? (
+              <p className="mt-1 rounded-xs bg-surface-2 px-2 py-1 text-xs text-ink-2">
+                {row.cancelReason}
+              </p>
+            ) : null}
             {props.writable ? (
               <div className="mt-3">
                 <RowActions
@@ -266,7 +281,7 @@ function BookedCell({
   return (
     <div
       className={cx(
-        'flex h-full flex-col gap-2 rounded-sm p-2 [border-inline-start:3px_solid]',
+        'flex h-full flex-col gap-2 rounded-sm p-2 transition-shadow [border-inline-start:3px_solid] hover:shadow-sh-1',
         CELL_BG[row.status] ?? CELL_BG.default,
         BORDER_CLASSES[row.status] ?? BORDER_CLASSES.default,
       )}
@@ -290,6 +305,7 @@ function FreeCell({
   doctor,
   localDate,
   time,
+  durationMinutes,
   services,
   customers,
   panel,
@@ -301,6 +317,7 @@ function FreeCell({
   readonly doctor: DoctorColumn
   readonly localDate: LocalDate
   readonly time: string
+  readonly durationMinutes: number
   readonly services: readonly ServiceOption[]
   readonly customers: readonly CustomerOption[]
   readonly panel: BookingDialogProps['panel']
@@ -311,14 +328,14 @@ function FreeCell({
 }) {
   if (!writable) {
     return (
-      <span className="grid h-full min-h-9 place-items-center rounded-sm [border:1px_dashed_var(--line-2)] text-ink-3">
+      <span className="grid h-full min-h-9 place-items-center rounded-sm border border-dashed border-line-2 bg-surface-2 text-ink-3">
         <Icon name="add" size="compact" />
       </span>
     )
   }
   const lockedSlot: LockedSlot = { localDate, localTime: time }
   return (
-    <span className="block h-full [&_button]:h-full [&_button]:w-full [&_button]:justify-center [&_button]:[border-style:dashed]">
+    <span className="group/free block h-full rounded-sm transition-colors [&_button]:flex [&_button]:h-full [&_button]:w-full [&_button]:items-center [&_button]:justify-center [&_button]:border-dashed [&_button]:border-line-2 [&_button]:bg-surface-2 [&_button]:text-ink-3 [&_button]:transition-colors hover:[&_button]:border-brand-300 hover:[&_button]:bg-brand-50 hover:[&_button]:text-brand-700">
       <BookingDialog
         variant="book"
         panel={panel}
@@ -337,7 +354,13 @@ function FreeCell({
         slotMinutes={slotMinutesByDoctorId?.[doctor.id] ?? null}
       />
       <span className="[&_button]:[border-style:solid]">
-        <BlockDialog panel={panel} doctorId={doctor.id} localDate={localDate} time={time} />
+        <BlockDialog
+          panel={panel}
+          doctorId={doctor.id}
+          localDate={localDate}
+          time={time}
+          durationMinutes={durationMinutes}
+        />
       </span>
     </span>
   )
@@ -346,7 +369,7 @@ function FreeCell({
 function OffScheduleCell() {
   return (
     <span
-      className="grid h-full min-h-9 place-items-center rounded-sm text-xs text-ink-3 [background:repeating-linear-gradient(135deg,var(--neutral-bg),var(--neutral-bg)_6px,transparent_6px,transparent_12px)]"
+      className="grid h-full min-h-9 place-items-center rounded-sm border border-dashed border-line text-[11px] font-medium text-ink-3 [background:repeating-linear-gradient(135deg,var(--surface-sunken),var(--surface-sunken)_6px,transparent_6px,transparent_12px)]"
     >
       {APPOINTMENTS_PAGE.offSchedule}
     </span>
@@ -380,7 +403,16 @@ function Cell({
         <span className="text-xs text-ink-3">{row.serviceName}</span>
       )}
       {row.isSlotBlock ? (
-        <span className="text-xs text-ink-3">{APPOINTMENTS_PAGE.controls.blockHours}</span>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-ink-3">
+            {APPOINTMENTS_PAGE.controls.blockHours}
+          </span>
+          {row.cancelReason === null || row.cancelReason === '' ? null : (
+            <span className="rounded-xs bg-surface-2 px-2 py-1 text-xs text-ink-2">
+              {row.cancelReason}
+            </span>
+          )}
+        </div>
       ) : null}
       {writable ? (
         <RowActions
@@ -428,6 +460,22 @@ function inAnyRange(window: DoctorDayWindow, minute: number): boolean {
   return window.ranges.some((r) => minute >= r.startMinute && minute < r.endMinute)
 }
 
+/**
+ * The slot step in effect at `minute`, for the doctor's own day.
+ *
+ * The cell the desk clicks is one range's own slot, so the block it writes is that
+ * range's own length — the same `slotMinutes` the axis was walked at, and the same
+ * step `rowSpanAt` read to size the cell. A minute that falls outside every range
+ * falls back to the grid's default, which is what the axis uses when a range has no
+ * step of its own.
+ */
+function slotMinutesAt(window: DoctorDayWindow | null, minute: number): number {
+  const range = window?.ranges.find(
+    (r) => minute >= r.startMinute && minute < r.endMinute,
+  )
+  return range?.slotMinutes || DEFAULT_SLOT_MINUTES
+}
+
 function isBreakRow(
   doctors: readonly DoctorColumn[],
   windowOf: ReadonlyMap<string, DoctorDayWindow>,
@@ -451,7 +499,7 @@ function StatusChip({ status }: { readonly status: string }) {
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1 rounded-pill px-2 py-[2px] text-xs font-semibold',
+        'inline-flex items-center gap-1 rounded-pill px-2 py-[2px] text-[11px] font-semibold',
         CHIP_CLASSES[status] ?? CHIP_CLASSES.default,
       )}
     >
