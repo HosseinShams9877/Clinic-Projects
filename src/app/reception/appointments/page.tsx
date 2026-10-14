@@ -171,17 +171,18 @@ export default async function ReceptionAppointmentsPage({
           </header>
           <div className="overflow-x-auto p-4">
             <DayGrid
-              localDate={localDate}
-              doctors={data.day.doctors}
-              windows={data.day.windows}
-              rows={data.day.rows}
-              services={data.day.services}
-              customers={data.day.customers}
-              servicesByDoctorId={data.day.servicesByDoctorId}
-              workingDaysByDoctorId={data.day.workingDaysByDoctorId}
-              panel="reception"
-              writable
-            />
+  localDate={localDate}
+  doctors={data.day.doctors}
+  windows={data.day.windows}
+  rows={data.day.rows}
+  services={data.day.services}
+  customers={data.day.customers}
+  servicesByDoctorId={data.day.servicesByDoctorId}
+  workingDaysByDoctorId={data.day.workingDaysByDoctorId}
+  freeSlotsByDoctorId={data.day.freeSlotsByDoctorId}
+  panel="reception"
+  writable
+/>
           </div>
           <div className="flex flex-wrap items-center gap-5 border-t border-line px-4 py-3 text-xs text-ink-3">
             <span className="flex items-center gap-1">

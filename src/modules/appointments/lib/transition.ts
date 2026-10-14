@@ -12,11 +12,27 @@
  *   the transition that creates a treatment cycle — the specification calls this out
  *   as *the* point, and the cycle itself belongs to the `cycles` module in Phase 4.
  *   This module records the fact the cycle is built from (the completed session) and
- *   leaves the cycle to the module that owns it.
+ *   leaves the cycle to the module that owns it. It also carries an optional
+ *   `resultNote` — the sentence the doctor or secretary writes about the session's
+ *   outcome — which is a *third* column beside `cancelReason` and `noShowReason`,
+ *   because a completed session is a third outcome and one column shared between
+ *   three would lose which is which.
  * - `NO_SHOW` needs `record_appointment_result` and carries a reason, and the reason
  *   is a free-text Persian sentence the receptionist types — which is why it is
  *   trimmed here and not on the form, so the stored sentence is the one the report
  *   counts regardless of the form that wrote it.
+ *
+ * ## Why the loader no longer filters `isSlotBlock: false`
+ *
+ * A slot block shares the `BOOKED` status with a real booking, and the desk may
+ * legitimately mark it as `ARRIVED` — the block is the receptionist saying "this
+ * hour is spoken for", and the arrival is the desk saying "the customer is here" in
+ * the same hour. The filter that used to exclude blocks here was the reason "arrived"
+ * on a block produced a `NotFoundError`; removing it is what lets the arrival and the
+ * result land on a block as they do on a booking. A block reaches `COMPLETED`
+ * without a cycle (its `customerId` and `serviceId` are `null`, so the caller's
+ * cycle path is skipped by its own guard), which is the honest fact: no session was
+ * performed, and there is nothing for a cycle to count.
  *
  * ## Why every function reloads the row
  *
@@ -47,6 +63,7 @@ const TRANSITION_SELECT = {
   cycleId: true,
   scheduledAt: true,
   resultRecordedAt: true,
+  resultNote: true,
 } as const
 
 /** One row as the transition guards and the cycle builder need it. */
@@ -61,13 +78,19 @@ export interface TransitionRow {
   /** The slot's instant, which the cycle's `startedAt` and due dates are built from. */
   readonly scheduledAt: Date
   readonly resultRecordedAt: Date | null
+  /** The sentence recorded about the outcome, distinct from a cancel or no-show reason. */
+  readonly resultNote: string | null
 }
 
 /**
  * Loads the row a transition is about to run, as the caller's tenant sees it.
  *
- * @throws NotFoundError — the row is outside the caller's tenant (`09-security.md`
- *   §6.3's 404-not-403 rule).
+ * A slot block is a row this function *does* return — see the file header for why
+ * the `isSlotBlock: false` filter that used to sit here was removed. The tenant
+ * predicate is the only filter left, and it is the one `09-security.md` §6.3's
+ * 404-not-403 rule requires.
+ *
+ * @throws NotFoundError — the row is outside the caller's tenant.
  */
 export async function loadTransitionRow(
   tx: TransactionClient,
@@ -75,7 +98,7 @@ export async function loadTransitionRow(
   appointmentId: string,
 ): Promise<TransitionRow> {
   const row = await tx.appointment.findFirst({
-    where: { id: appointmentId, tenantId: ctx.tenantId, isSlotBlock: false },
+    where: { id: appointmentId, tenantId: ctx.tenantId },
     select: TRANSITION_SELECT,
   })
   if (row === null) {
@@ -123,16 +146,21 @@ export async function recordArrival(args: {
  * state has a recorded result by construction, which is what makes the alarm
  * self-clearing rather than something a person has to dismiss.
  *
+ * `note` is the free-text sentence the doctor or secretary records about the
+ * session's outcome. It is optional and trimmed here — not on the form — so the
+ * stored sentence is the one the profile reads regardless of which form wrote it.
+ *
  * **This is the transition that creates a treatment cycle** (`03-data-model.md`
- * §2.2). The cycle belongs to the `cycles` module, which is Phase 4; what this
- * module contributes is the completed session the cycle is built from, returned here
- * so the caller hands it to the module that owns the cycle rather than the two
- * modules reaching into each other's tables.
+ * §2.2). The cycle belongs to the `cycles` module; what this module contributes is
+ * the completed session the cycle is built from, returned here so the caller hands
+ * it to the module that owns the cycle rather than the two modules reaching into
+ * each other's tables.
  */
 export async function recordResult(args: {
   readonly tx: TransactionClient
   readonly ctx: TenantContext
   readonly appointmentId: string
+  readonly note?: string
   readonly now: Date
 }): Promise<TransitionRow> {
   requirePermission(args.ctx, 'record_appointment_result')
@@ -140,15 +168,23 @@ export async function recordResult(args: {
   const row = await loadTransitionRow(args.tx, args.ctx, args.appointmentId)
   assertTransition(asStatus(row.status), AppointmentStatus.Completed)
 
+  const resultNote = args.note === undefined ? null : args.note.trim()
+
   await args.tx.appointment.update({
     where: { id: row.id },
     data: {
       status: AppointmentStatus.Completed,
       resultRecordedAt: args.now,
+      resultNote,
     },
   })
 
-  return { ...row, status: AppointmentStatus.Completed, resultRecordedAt: args.now }
+  return {
+    ...row,
+    status: AppointmentStatus.Completed,
+    resultRecordedAt: args.now,
+    resultNote,
+  }
 }
 
 /**

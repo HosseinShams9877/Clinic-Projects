@@ -206,6 +206,7 @@ export function DayGrid(props: DayGridProps) {
                             panel={props.panel}
                             services={props.services}
                             doctorOptions={columns}
+                            servicesByDoctorId={props.servicesByDoctorId}
                           />
                         ) : offSchedule ? (
                           <OffScheduleCell />
@@ -248,13 +249,19 @@ export function DayGrid(props: DayGridProps) {
                 {row.cancelReason}
               </p>
             ) : null}
+            {row.resultNote !== null && row.resultNote !== '' ? (
+              <p className="mt-1 rounded-xs bg-surface-2 px-2 py-1 text-xs text-ink-2">
+                {row.resultNote}
+              </p>
+            ) : null}
             {props.writable ? (
               <div className="mt-3">
                 <RowActions
                   appointmentId={row.id}
                   status={row.status}
                   panel={props.panel}
-                  edit={editContext(row, props.services, columns)}
+                  isSlotBlock={row.isSlotBlock}
+                  edit={editContext(row, props.services, columns, props.servicesByDoctorId)}
                 />
               </div>
             ) : null}
@@ -271,12 +278,14 @@ function BookedCell({
   panel,
   services,
   doctorOptions,
+  servicesByDoctorId,
 }: {
   readonly row: AppointmentRow
   readonly writable: boolean
   readonly panel: BookingDialogProps['panel']
   readonly services: readonly ServiceOption[]
   readonly doctorOptions: readonly DoctorColumn[]
+  readonly servicesByDoctorId?: Readonly<Record<string, readonly string[]>>
 }) {
   return (
     <div
@@ -286,7 +295,14 @@ function BookedCell({
         BORDER_CLASSES[row.status] ?? BORDER_CLASSES.default,
       )}
     >
-      <Cell row={row} writable={writable} panel={panel} services={services} doctorOptions={doctorOptions} />
+      <Cell
+        row={row}
+        writable={writable}
+        panel={panel}
+        services={services}
+        doctorOptions={doctorOptions}
+        servicesByDoctorId={servicesByDoctorId}
+      />
     </div>
   )
 }
@@ -382,12 +398,14 @@ function Cell({
   panel,
   services,
   doctorOptions,
+  servicesByDoctorId,
 }: {
   readonly row: AppointmentRow
   readonly writable: boolean
   readonly panel: BookingDialogProps['panel']
   readonly services: readonly ServiceOption[]
   readonly doctorOptions: readonly DoctorColumn[]
+  readonly servicesByDoctorId?: Readonly<Record<string, readonly string[]>>
 }) {
   const srcIcon = sourceIcon(row.source)
   return (
@@ -414,12 +432,18 @@ function Cell({
           )}
         </div>
       ) : null}
+      {row.resultNote !== null && row.resultNote !== '' ? (
+        <span className="rounded-xs bg-surface-2 px-2 py-1 text-xs text-ink-2">
+          {row.resultNote}
+        </span>
+      ) : null}
       {writable ? (
         <RowActions
           appointmentId={row.id}
           status={row.status}
           panel={panel}
-          edit={editContext(row, services, doctorOptions)}
+          isSlotBlock={row.isSlotBlock}
+          edit={editContext(row, services, doctorOptions, servicesByDoctorId)}
         />
       ) : null}
     </div>
@@ -430,6 +454,7 @@ function editContext(
   row: AppointmentRow,
   services: readonly ServiceOption[],
   doctorOptions: readonly DoctorColumn[],
+  servicesByDoctorId?: Readonly<Record<string, readonly string[]>>,
 ): RowEditContext {
   return {
     doctorId: row.doctorId,
@@ -439,6 +464,7 @@ function editContext(
     isSlotBlock: row.isSlotBlock,
     services,
     doctorOptions,
+    servicesByDoctorId,
   }
 }
 

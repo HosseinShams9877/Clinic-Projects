@@ -15,6 +15,20 @@
  * the refusal would still be a sentence on the row, and the honest answer is to not
  * show the affordance at all.
  *
+ * ## Why a slot block's "arrived" opens the note dialog
+ *
+ * A slot block is a closed hour, not a booking: it has no customer, no service, and
+ * no arrival stage to walk through. The desk closes it in one step — `BOOKED` →
+ * `COMPLETED` — and the note the dialog collects is the only fact the desk records
+ * about it. The button is therefore labelled «حاضر شد» (the block's own word for
+ * "this hour is over") and it opens `ResultDialog`, which writes the same
+ * `resultNote` a real booking's completion would.
+ *
+ * A real booking keeps the two-step path: «حاضر شد» on `BOOKED` is the plain arrival
+ * transition, and «ثبت نتیجه» on `ARRIVED` is the note dialog. The two rows mean two
+ * different things by "arrived", and the `isSlotBlock` flag is what tells them
+ * apart.
+ *
  * ## Why the actions are not optimistic
  *
  * The row is revalidated by the action (`revalidatePath`), so the grid the person
@@ -41,9 +55,9 @@ import {
   cancelAppointmentAction,
   markArrivedAction,
   markNoShowAction,
-  recordResultAction,
   type ActionResult,
 } from './actions'
+import { ResultDialog } from './result-dialog'
 
 /** The panel the actions resolve, which is the caller's own. */
 type ActionPanel = 'reception' | 'doctor' | 'admin'
@@ -57,6 +71,13 @@ export interface RowEditContext {
   readonly isSlotBlock: boolean
   readonly services: readonly ServiceOption[]
   readonly doctorOptions: readonly DoctorOption[]
+  /**
+   * The service ids each doctor offers, keyed by doctor id — the same map the
+   * booking popup reads. Optional, because a surface that does not read the day
+   * grid (the cartable) has no map to hand, and the edit dialog's own fallback
+   * (the whole catalogue) is the right one there.
+   */
+  readonly servicesByDoctorId?: Readonly<Record<string, readonly string[]>>
 }
 
 /** The row's own props: its id, its status, which panel is acting, and the edit context. */
@@ -64,12 +85,18 @@ export interface RowActionsProps {
   readonly appointmentId: string
   readonly status: string
   readonly panel: ActionPanel
+  /**
+   * Whether the row is a slot block — a closed hour. A block shares the `BOOKED`
+   * status with a real booking, so the state machine alone cannot tell them apart;
+   * this flag is what lets the row render the actions a block may actually take.
+   */
+  readonly isSlotBlock?: boolean
   /** The edit popup's data; omitted on surfaces that do not offer an edit (the cartable). */
   readonly edit?: RowEditContext
 }
 
 /** The actions one row offers, as the state machine permits them. */
-export function RowActions({ appointmentId, status, panel, edit }: RowActionsProps) {
+export function RowActions({ appointmentId, status, panel, isSlotBlock = false, edit }: RowActionsProps) {
   const [pending, startTransition] = useTransition()
   const [message, setMessage] = useState<string | null>(null)
   const [confirmingCancel, setConfirmingCancel] = useState(false)
@@ -84,16 +111,24 @@ export function RowActions({ appointmentId, status, panel, edit }: RowActionsPro
     })
   }
 
-  const canArrive = canTransition(status as AppointmentStatus, AppointmentStatus.AwaitingArrival)
+  // A slot block closes in one step: it shows «حاضر شد» as the trigger for the note
+  // dialog, and the dialog writes `BOOKED` → `COMPLETED` with the note. A real
+  // booking walks the two-step path — «حاضر شد» is the plain arrival, and «ثبت
+  // نتیجه» is the note dialog from `ARRIVED`. The two rows mean different things
+  // by "arrived", and this is where they part ways.
+  const canArriveAsBooking =
+    !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.Arrived)
   const canComplete = canTransition(status as AppointmentStatus, AppointmentStatus.Completed)
-  const canNoShow = canTransition(status as AppointmentStatus, AppointmentStatus.NoShow)
+  const canNoShow = !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.NoShow)
   const canCancel = canTransition(status as AppointmentStatus, AppointmentStatus.Cancelled)
+  // A block's "arrived" is the dialog trigger, not a plain transition.
+  const canCloseBlock = isSlotBlock && canComplete
   // An edit is offered on a live booking only — a row the machine would still let the
   // desk cancel, that holds a service (not a slot block). A terminal row offers none.
   const canEdit =
-    edit !== undefined && !edit.isSlotBlock && edit.serviceId !== null && (canArrive || canCancel)
+    edit !== undefined && !edit.isSlotBlock && edit.serviceId !== null && (canArriveAsBooking || canCancel)
 
-  if (!canArrive && !canComplete && !canNoShow && !canCancel && !canEdit) {
+  if (!canArriveAsBooking && !canComplete && !canNoShow && !canCancel && !canEdit && !canCloseBlock) {
     // A terminal row offers nothing. Rendering an empty group would still claim the
     // row's end cell, so the component returns nothing instead.
     return null
@@ -102,53 +137,56 @@ export function RowActions({ appointmentId, status, panel, edit }: RowActionsPro
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1">
-      {canArrive ? (
-        <ActionButton
-          label={APPOINTMENTS_PAGE.controls.arrived}
-          icon="confirm"
-          disabled={pending}
-          onClick={() => run(markArrivedAction)}
-        />
-      ) : null}
-      {canComplete ? (
-        <ActionButton
-          label={APPOINTMENTS_PAGE.controls.result}
-          icon="confirm"
-          disabled={pending}
-          onClick={() => run(recordResultAction)}
-        />
-      ) : null}
-      {canNoShow ? (
-        <ActionButton
-          label={APPOINTMENTS_PAGE.controls.noShow}
-          icon="blocked"
-          disabled={pending}
-          onClick={() => run(markNoShowAction)}
-        />
-      ) : null}
-      {canEdit && edit !== undefined ? (
-        <EditDialog
-          appointmentId={appointmentId}
-          panel={panel}
-          services={edit.services}
-          doctorOptions={edit.doctorOptions}
-          canChangeDoctor={panel === 'admin'}
-          current={{
-            doctorId: edit.doctorId,
-            serviceId: edit.serviceId ?? '',
-            localDate: edit.localDate,
-            localTime: edit.localTime,
-          }}
-        />
-      ) : null}
-      {canCancel ? (
-        <ActionButton
-          label={APPOINTMENTS_PAGE.controls.cancel}
-          icon="close"
-          disabled={pending}
-          onClick={() => setConfirmingCancel(true)}
-        />
-      ) : null}
+        {canArriveAsBooking ? (
+          <ActionButton
+            label={APPOINTMENTS_PAGE.controls.arrived}
+            icon="confirm"
+            disabled={pending}
+            onClick={() => run(markArrivedAction)}
+          />
+        ) : null}
+        {canCloseBlock ? (
+          <ResultDialog
+            panel={panel}
+            appointmentId={appointmentId}
+            triggerLabel={APPOINTMENTS_PAGE.controls.arrived}
+          />
+        ) : null}
+        {canComplete && !isSlotBlock ? (
+          <ResultDialog panel={panel} appointmentId={appointmentId} />
+        ) : null}
+        {canNoShow ? (
+          <ActionButton
+            label={APPOINTMENTS_PAGE.controls.noShow}
+            icon="blocked"
+            disabled={pending}
+            onClick={() => run(markNoShowAction)}
+          />
+        ) : null}
+        {canEdit && edit !== undefined ? (
+          <EditDialog
+            appointmentId={appointmentId}
+            panel={panel}
+            services={edit.services}
+            doctorOptions={edit.doctorOptions}
+            canChangeDoctor={panel === 'admin'}
+            servicesByDoctorId={edit.servicesByDoctorId}
+            current={{
+              doctorId: edit.doctorId,
+              serviceId: edit.serviceId ?? '',
+              localDate: edit.localDate,
+              localTime: edit.localTime,
+            }}
+          />
+        ) : null}
+        {canCancel ? (
+          <ActionButton
+            label={APPOINTMENTS_PAGE.controls.cancel}
+            icon="close"
+            disabled={pending}
+            onClick={() => setConfirmingCancel(true)}
+          />
+        ) : null}
       </div>
 
       {confirmingCancel ? (

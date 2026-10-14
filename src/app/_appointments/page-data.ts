@@ -302,20 +302,28 @@ export async function loadAppointmentsPage(args: {
  *    starting earlier is checked by its own duration.
  * 4. A candidate whose minute is inside a previous slot's span is dropped by the
  *    step walk itself, because the walk advances by the step.
+ * 5. A row named by `excludeAppointmentId` is not treated as occupied. The edit
+ *    dialog is the one caller that passes it — the row the desk is correcting is
+ *    the row whose own slot must stay in the list, because the desk is editing
+ *    *that* slot and the slot it is holding is the slot it was holding.
  *
  * The output is keyed by doctor and sorted ascending, and it is what the popup's
  * time step renders as its options.
  */
-function buildFreeSlots(args: {
+export function buildFreeSlots(args: {
   readonly windows: readonly DoctorDayWindow[]
   readonly rows: DayGridData['rows']
   readonly slotMinutesByDoctorId: Readonly<Record<string, number | null>>
+  /** A row to treat as free — the edit dialog's own appointment, when editing. */
+  readonly excludeAppointmentId?: string
 }): Readonly<Record<string, readonly string[]>> {
   const map: Record<string, readonly string[]> = {}
 
   for (const window of args.windows) {
     const step = args.slotMinutesByDoctorId[window.id] ?? DEFAULT_SLOT_MINUTES
-    const doctorRows = args.rows.filter((row) => row.doctorId === window.id)
+    const doctorRows = args.rows.filter(
+      (row) => row.doctorId === window.id && row.id !== args.excludeAppointmentId,
+    )
 
     // The occupied ranges of this doctor's day, as [start, end) minutes.
     const occupied = doctorRows.map((row) => {

@@ -91,6 +91,7 @@ interface AppointmentWithRelations {
   readonly priceAtBooking: bigint
   readonly depositAmount: bigint
   readonly cancelReason: string | null
+  readonly resultNote: string | null
   readonly source: string | null
 }
 
@@ -123,6 +124,7 @@ export interface AppointmentRow {
   readonly priceAtBooking: bigint
   readonly depositAmount: bigint
   readonly cancelReason: string | null
+  readonly resultNote: string | null
   readonly source: string | null
 }
 
@@ -152,6 +154,7 @@ function asRow(raw: AppointmentWithRelations): AppointmentRow {
     priceAtBooking: raw.priceAtBooking,
     depositAmount: raw.depositAmount,
     cancelReason: raw.cancelReason,
+    resultNote: raw.resultNote,
     source: raw.source,
   }
 }

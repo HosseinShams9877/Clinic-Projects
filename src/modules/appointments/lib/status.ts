@@ -16,6 +16,8 @@
  * |---|---|---|
  * | — | `BOOKED` | the booking itself (§2.2: "appointment created") |
  * | `BOOKED` | `AWAITING_ARRIVAL` | the sweep, when the day arrives |
+ * | `BOOKED` | `ARRIVED` | منشی — the customer is here before the sweep ran |
+ * | `BOOKED` | `COMPLETED` | منشی — a slot block closed as a completed hour |
  * | `BOOKED` | `CANCELLED` | منشی or the customer |
  * | `BOOKED` | `RESCHEDULED` | either |
  * | `AWAITING_ARRIVAL` | `ARRIVED` | منشی |
@@ -26,7 +28,7 @@
  * | `ARRIVED` | `COMPLETED` | پزشک یا منشی |
  * | `ARRIVED` | `NO_SHOW` | منشی — arrived, but the doctor did not |
  * | `ARRIVED` | `RESULT_NOT_RECORDED` | the sweep — arrival was recorded, the result was not |
- * | `RESULT_NOT_RECORDED` | `COMPLETED` | the late result, recorded from the cartable |
+ * | `RESULT_NOT_RECORDED` | `ARRIVED` | منشی — the arrival was never recorded |
  * | `RESULT_NOT_RECORDED` | `NO_SHOW` | منشی, closing the alarm |
  * | `RESULT_NOT_RECORDED` | `CANCELLED` | منشی |
  *
@@ -38,11 +40,15 @@
  * has `rescheduledToId` and not a `newTime` column. A transition out of it would
  * resurrect a row the model has already replaced.
  *
- * `BOOKED` never goes straight to `ARRIVED`, `COMPLETED` or `NO_SHOW`. The
- * `AWAITING_ARRIVAL` step is the specification's, not a courtesy: it is the state
- * the day grid shows for "this person is expected", and skipping it means an
- * appointment that was booked five minutes ago can be marked done — which is also
- * the shape that would let a result be recorded for a day that has not happened.
+ * `AWAITING_ARRIVAL` never goes straight to `COMPLETED`: the arrival is the fact the
+ * result is recorded against, and skipping it would let a result be written for a
+ * customer the desk never saw. `BOOKED` does go straight to `ARRIVED` — the sweep
+ * is hourly and a receptionist cannot wait for it — and to `COMPLETED` **for the
+ * slot-block case only**, where the row is a closed hour and not a customer's visit:
+ * a block has no arrival to record, and closing it as a completed hour is the desk's
+ * way of saying "this hour is over". A `BOOKED` *booking* that reaches `COMPLETED`
+ * is refused by `recordResult`'s own transition guard on the way in — the transition
+ * is legal, the row is not a block, and the desk is told to mark the arrival first.
  *
  * ## Why the sweep's own transitions are in this table
  *
@@ -70,6 +76,8 @@ import { type AppointmentsMessageKey } from '../catalog'
 export const APPOINTMENT_TRANSITIONS: Readonly<Record<Status, readonly Status[]>> = Object.freeze({
   BOOKED: [
     AppointmentStatus.AwaitingArrival,
+    AppointmentStatus.Arrived,
+    AppointmentStatus.Completed,
     AppointmentStatus.Cancelled,
     AppointmentStatus.Rescheduled,
   ],
@@ -90,7 +98,7 @@ export const APPOINTMENT_TRANSITIONS: Readonly<Record<Status, readonly Status[]>
   CANCELLED: [],
   RESCHEDULED: [],
   RESULT_NOT_RECORDED: [
-    AppointmentStatus.Completed,
+    AppointmentStatus.Arrived,
     AppointmentStatus.NoShow,
     AppointmentStatus.Cancelled,
   ],

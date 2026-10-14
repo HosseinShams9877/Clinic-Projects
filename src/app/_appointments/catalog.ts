@@ -78,10 +78,27 @@ export const LOCKED_SLOT = {
  * doctor's own free slots as buttons rather than a free-text time field. Every
  * label here is the picker's own, and the "no slots" sentence is what the desk
  * reads when the day has none left.
+ *
+ * `error` is the read's own refusal, used by the edit dialog's remote-slot read
+ * (`loadFreeSlotsAction`) when the transaction fails for a reason the catalog has
+ * no more specific sentence for. It is the picker's own because the picker is the
+ * only surface that renders it.
  */
 export const SLOT_PICKER = {
   label: 'ساعت‌های آزاد',
   empty: 'برای این پزشک در این روز ساعت آزادی نمانده است. روز یا پزشک دیگری را انتخاب کنید.',
   loading: 'در حال خواندن ساعت‌های آزاد…',
   doctorFirst: 'ابتدا پزشک و روز را انتخاب کنید تا ساعت‌های آزاد نمایش داده شود.',
+  error: 'خطا در خواندن ساعت‌های آزاد.',
+} as const
+
+/** The «ثبت نتیجه» popup: a completed session's outcome note. */
+export const RESULT_POPUP = {
+  trigger: 'ثبت نتیجه',
+  title: 'ثبت نتیجه نوبت',
+  note: 'یادداشت نتیجه (اختیاری)',
+  notePlaceholder: 'مثلاً: جلسه چهارم، پوست واکنش خوبی نشان داد.',
+  save: 'ثبت نتیجه',
+  cancel: 'انصراف',
+  close: 'بستن',
 } as const

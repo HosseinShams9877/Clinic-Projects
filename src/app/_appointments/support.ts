@@ -12,11 +12,23 @@
  *
  * `appointments`'s catalog owns the `appointment.*` keys, `roles-permissions`'s owns
  * the `permission.*` ones a `requirePermission` refusal raises, `customers`'s owns
- * the `customer.*` ones a dedupe refusal raises, and `core` owns the two `error.*`
- * sentences that are the honest apology when no catalog names what happened. A key is
- * looked up in that order because that is the order the modules are called in, and
- * the fallback is last rather than absent because a failure the catalogs do not name
- * is a failure that still has to say something in Persian.
+ * the `customer.*` ones a dedupe refusal raises, `cycles`'s owns the `cycle.*` ones
+ * the completed-session path raises, and `core` owns the two `error.*` sentences
+ * that are the honest apology when no catalog names what happened. A key is looked
+ * up in that order because that is the order the modules are called in — a result
+ * recording runs through `appointments`, then `cycles` — and the fallback is last
+ * rather than absent because a failure the catalogs do not name is a failure that
+ * still has to say something in Persian.
+ *
+ * ## Why `cycles` was missing, and what it cost
+ *
+ * `recordResultAction` calls `recordCompletedSession` after the transition, and that
+ * function raises `cycle.noInterval` when the service has no `defaultIntervalDays`.
+ * Without a `cycles` branch here, that key fell through to the apology — so the desk
+ * read "unexpected error" for a fixable configuration gap, and the sentence that
+ * names the fix (`cycle.noInterval`) was never rendered. The branch below is the fix,
+ * and the order it sits in mirrors the call order: a cycle error arrives *after* the
+ * appointment's own checks have passed.
  *
  * ## Why nothing else is translated here
  *
@@ -42,6 +54,10 @@ import {
   MESSAGES as CUSTOMER_MESSAGES,
   type CustomersMessageKey,
 } from '@/modules/customers'
+import {
+  MESSAGES as CYCLES_MESSAGES,
+  type CyclesMessageKey,
+} from '@/modules/cycles'
 
 /**
  * The Persian sentence for a failure the appointments module raised, or the
@@ -55,6 +71,7 @@ export function appointmentsFailureMessage(error: unknown): string {
   if (isAppointmentKey(error.messageKey)) return APPOINTMENT_MESSAGES[error.messageKey]
   if (isCustomersKey(error.messageKey)) return CUSTOMER_MESSAGES[error.messageKey]
   if (isRolesKey(error.messageKey)) return ROLES_MESSAGES[error.messageKey]
+  if (isCyclesKey(error.messageKey)) return CYCLES_MESSAGES[error.messageKey]
   return UNEXPECTED
 }
 
@@ -74,6 +91,11 @@ function isCustomersKey(key: string): key is CustomersMessageKey {
 /** Whether the key is one `roles-permissions`'s catalog holds a sentence for. */
 function isRolesKey(key: string): key is RolesPermissionsMessageKey {
   return key in ROLES_MESSAGES
+}
+
+/** Whether the key is one `cycles`'s catalog holds a sentence for. */
+function isCyclesKey(key: string): key is CyclesMessageKey {
+  return key in CYCLES_MESSAGES
 }
 
 /**

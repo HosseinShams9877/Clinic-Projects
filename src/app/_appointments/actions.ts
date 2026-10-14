@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache'
 
 import { prisma, runInTenantScope } from '@/core/db'
 import { AppointmentSource } from '@/core/constants'
-import { asLocalDate, asLocalTime } from '@/core/localization'
+import { asLocalDate, asLocalTime, jalaliWeekday } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import type { TenantContext } from '@/core/tenant'
 import { ValidationError } from '@/core/types'
@@ -17,11 +17,16 @@ import {
   bookAppointment,
   bookOwnAppointment,
   cancelAppointment,
+  clinicDay,
+  doctorWindowsOnDay,
   recordArrival,
   recordNoShow,
   recordResult,
+  slotMinutesForDoctor,
   updateAppointment,
 } from '@/modules/appointments'
+import { buildFreeSlots } from './page-data'
+import { SLOT_PICKER } from './catalog'
 import { attributeAppointmentToCampaign } from '@/modules/campaigns'
 import { loadBookableService } from '@/modules/services'
 import { noteCycleBooking, recordCompletedSession } from '@/modules/cycles'
@@ -242,23 +247,45 @@ export async function markArrivedAction(panel: Panel, appointmentId: string): Pr
 export async function recordResultAction(
   panel: Panel,
   appointmentId: string,
+  note?: string,
 ): Promise<ActionResult> {
   const result = await inTenantScope(panel, async ({ tx, ctx }) => {
-    const completed = await recordResult({ tx, ctx, appointmentId, now: realClock() })
+    const completed = await recordResult({
+      tx,
+      ctx,
+      appointmentId,
+      note,
+      now: realClock(),
+    })
 
     if (completed.customerId !== null && completed.serviceId !== null) {
-      await recordCompletedSession({
-        tx,
-        ctx,
-        facts: {
-          appointmentId: completed.id,
-          customerId: completed.customerId,
-          serviceId: completed.serviceId,
-          doctorId: completed.doctorId,
-          scheduledAt: completed.scheduledAt,
-        },
-        now: realClock(),
+      // The cycle is a *consequence* of the completed session, not a condition of
+      // it. A service the clinic never configured an interval for
+      // (`defaultIntervalDays <= 0`) anchors no spacing, so `recordCompletedSession`
+      // would refuse with `cycle.noInterval` — and refusing the *completion* for a
+      // missing catalogue field would leave the appointment in `ARRIVED` while the
+      // session was, in fact, completed. The check is therefore here, on the
+      // completion's own path, so the appointment reaches `COMPLETED` whatever the
+      // catalogue holds; the interval is the manager's to fix afterwards, and
+      // `recordCompletedSession` keeps its own refusal for every other caller.
+      const service = await tx.service.findFirst({
+        where: { id: completed.serviceId, tenantId: ctx.tenantId },
+        select: { defaultIntervalDays: true },
       })
+      if (service !== null && service.defaultIntervalDays > 0) {
+        await recordCompletedSession({
+          tx,
+          ctx,
+          facts: {
+            appointmentId: completed.id,
+            customerId: completed.customerId,
+            serviceId: completed.serviceId,
+            doctorId: completed.doctorId,
+            scheduledAt: completed.scheduledAt,
+          },
+          now: realClock(),
+        })
+      }
     }
     return completed
   })
@@ -323,4 +350,62 @@ export async function updateAppointmentAction(panel: Panel, input: EditInput): P
   revalidateAppointments()
   revalidateCycles()
   return { ok: true, appointmentId: result.id }
+}
+
+/**
+ * The free slots of one doctor's day, for the edit dialog's time field.
+ *
+ * The edit dialog cannot use the day grid's own `freeSlotsByDoctorId` map for a
+ * day the desk has moved to: that map is computed for **one day** (the grid's
+ * anchor), and re-reading it would be a second server round trip the dialog does
+ * not have. This action is that round trip, made explicit.
+ *
+ * `excludeAppointmentId` is the appointment the desk is editing. Without it, the
+ * row's own slot would be treated as occupied — `buildFreeSlots` drops a candidate
+ * that any row already holds, and the row the desk is editing is on the day
+ * already — so the slot the desk is holding would vanish from the list it is
+ * choosing from. The exclusion is what keeps the current slot in the list.
+ */
+export async function loadFreeSlotsAction(
+  panel: Panel,
+  doctorId: string,
+  localDate: string,
+  excludeAppointmentId?: string,
+): Promise<
+  | { readonly ok: true; readonly slots: readonly string[] }
+  | { readonly ok: false; readonly message: string }
+> {
+  const result = await inTenantScope(panel, async ({ tx, ctx }) => {
+    const date = asLocalDate(localDate)
+    const weekday = jalaliWeekday(date)
+
+    const [windows, rows, slotMinutes] = await Promise.all([
+      doctorWindowsOnDay({
+        tx,
+        tenantId: ctx.tenantId,
+        clinicId: ctx.clinicId,
+        weekday,
+      }),
+      clinicDay({ tx, ctx, clinicId: ctx.clinicId, localDate: date }),
+      slotMinutesForDoctor({
+        tx,
+        tenantId: ctx.tenantId,
+        doctorId,
+        weekday,
+      }),
+    ])
+
+    const map = buildFreeSlots({
+      windows,
+      rows,
+      slotMinutesByDoctorId: { [doctorId]: slotMinutes },
+      excludeAppointmentId,
+    })
+
+    return map[doctorId] ?? []
+  })
+
+  if (Array.isArray(result)) return { ok: true, slots: result }
+  if (typeof result === 'object' && result !== null && 'message' in result) return result
+  return { ok: false, message: SLOT_PICKER.error }
 }

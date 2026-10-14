@@ -1,20 +1,37 @@
 /**
  * The «ویرایش نوبت» popup — a booking's in-place correction, from a day cell's menu.
  *
- * Where `BookingDialog` is the three-step create, this is the one-screen edit: the
- * fields a booking already has, changed and saved onto the same row through
- * `updateAppointmentAction`. The doctor select is rendered only when the caller may
- * move the booking between doctors — the manager — because the desk's secretary
- * corrects the service, day, time and duration of the doctor already on the row
- * (the `SECRETARY_EDIT_PRICE` rule's sibling: a secretary does not reassign a doctor).
+ * ## Why the slots are read for the row's own day too
  *
- * No price field: the module re-snapshots the price from the chosen service, so there
- * is nothing here for a caller to type and the price rule is honoured by construction.
+ * The dialog always reads its slots through `loadFreeSlotsAction`, with the row's
+ * own id in `excludeAppointmentId`. That is what keeps the slot the desk is
+ * holding in the list: `buildFreeSlots` drops any candidate a row already holds,
+ * and the row the desk is editing *is* a row on the day already — without the
+ * exclusion, the slot it is holding would vanish from the list it is choosing
+ * from. The grid's own `freeSlotsByDoctorId` map cannot do this, because it is
+ * computed for every row on the day and has no notion of "except this one".
+ *
+ * The remote read is issued from the dialog's own opening click and from the two
+ * handlers that change its keys (the day strip and the doctor select) — never
+ * from an effect. A `setState` inside an effect is what the lint rule
+ * `react-hooks/set-state-in-effect` forbids, and the click is where the state
+ * change actually originates; the effect is kept only to drop the in-flight
+ * request's result once the dialog closes.
+ *
+ * ## Why the service list is filtered by the chosen doctor
+ *
+ * The same reason the booking popup filters it: a doctor offers the services the
+ * clinic assigned them, not the whole catalogue. The map `servicesByDoctorId`
+ * carries the assignment, and the select renders only the ids the chosen doctor
+ * holds — the doctor is the column the row sits in, and the service is what that
+ * doctor can perform. A doctor the map has no entry for (a doctor assigned
+ * nothing) offers the whole catalogue, which is the same fallback the booking
+ * popup's `allowedServiceIds` applies.
  */
 
 'use client'
 
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 
 import { Button } from '@/core/components/button'
@@ -24,16 +41,23 @@ import { Icon } from '@/core/components/icons'
 import { cx } from '@/core/lib'
 import {
   asLocalDate,
+  formatTime,
   jalaliParts,
   jalaliWeekday,
   toPersianDigits,
   weekdayName,
   type LocalDate,
+  type LocalTime,
 } from '@/core/localization'
 import { weekDays } from '@/modules/appointments'
 
-import { EDIT_POPUP } from './catalog'
-import { updateAppointmentAction, type ActionResult, type EditInput } from './actions'
+import { EDIT_POPUP, SLOT_PICKER } from './catalog'
+import {
+  loadFreeSlotsAction,
+  updateAppointmentAction,
+  type ActionResult,
+  type EditInput,
+} from './actions'
 import type { ServiceOption } from './booking-dialog'
 
 /** One doctor the manager may move a booking to. */
@@ -45,13 +69,15 @@ export interface DoctorOption {
 export interface EditDialogProps {
   readonly appointmentId: string
   readonly panel: 'reception' | 'doctor' | 'admin'
-  /** The services the first field offers — the catalogue the page already read. */
   readonly services: readonly ServiceOption[]
-  /** The doctors the manager may reassign to; rendered only when `canChangeDoctor`. */
   readonly doctorOptions: readonly DoctorOption[]
-  /** Whether the doctor select is shown — the manager's panel only. */
   readonly canChangeDoctor: boolean
-  /** The row's own current values, which the fields open on. */
+  /**
+   * The service ids each doctor offers, keyed by doctor id — the same map the
+   * booking popup reads. A doctor the map has no entry for offers the whole
+   * catalogue (the booking popup's own fallback).
+   */
+  readonly servicesByDoctorId?: Readonly<Record<string, readonly string[]>>
   readonly current: {
     readonly doctorId: string
     readonly serviceId: string
@@ -73,7 +99,37 @@ export function EditDialog(props: EditDialogProps) {
   const [values, setValues] = useState<EditValues>(() => initialValues(props))
   const [result, setResult] = useState<ActionResult | null>(null)
   const [pending, setPending] = useState(false)
+  const [slots, setSlots] = useState<readonly string[] | null>(null)
+  const [slotsLoading, setSlotsLoading] = useState(false)
   const titleId = useId()
+  /** The in-flight remote read, so a click that supersedes it can cancel it. */
+  const requestRef = useRef(0)
+
+  const offeredServices = servicesForDoctor(props.services, props.servicesByDoctorId, values.doctorId)
+
+  /**
+   * The read for the day and doctor the form is on.
+   *
+   * Called from the opening click and from the two handlers that change its keys.
+   * The request id guards against a slower read overwriting a faster one: a read
+   * that is no longer the latest is dropped, not applied.
+   */
+  function fetchSlots(doctorId: string, localDate: LocalDate): void {
+    const request = requestRef.current + 1
+    requestRef.current = request
+    setSlotsLoading(true)
+    setSlots(null)
+    void loadFreeSlotsAction(
+      props.panel,
+      doctorId,
+      localDate,
+      props.appointmentId,
+    ).then((outcome) => {
+      if (requestRef.current !== request) return
+      setSlotsLoading(false)
+      setSlots(outcome.ok ? outcome.slots : [])
+    })
+  }
 
   if (!open) {
     return (
@@ -82,9 +138,12 @@ export function EditDialog(props: EditDialogProps) {
         variant="neutral"
         leadingIcon="settings"
         onClick={() => {
-          setValues(initialValues(props))
+          const initial = initialValues(props)
+          setValues(initial)
           setResult(null)
+          setSlots(null)
           setOpen(true)
+          fetchSlots(initial.doctorId, initial.localDate)
         }}
       >
         {EDIT_POPUP.trigger}
@@ -110,6 +169,8 @@ export function EditDialog(props: EditDialogProps) {
     setResult(outcome)
   }
 
+  const visibleSlots = slots ?? []
+
   return (
     <Overlay onClose={() => setOpen(false)}>
       <div
@@ -131,7 +192,11 @@ export function EditDialog(props: EditDialogProps) {
               <select
                 className={CONTROL_CLASSES}
                 value={values.doctorId}
-                onChange={(event) => setValues({ ...values, doctorId: event.target.value })}
+                onChange={(event) => {
+                  const doctorId = event.target.value
+                  setValues({ ...values, doctorId, serviceId: '', localTime: '' })
+                  fetchSlots(doctorId, values.localDate)
+                }}
               >
                 {props.doctorOptions.map((option) => (
                   <option key={option.id} value={option.id}>
@@ -149,7 +214,7 @@ export function EditDialog(props: EditDialogProps) {
               onChange={(event) => setValues({ ...values, serviceId: event.target.value })}
             >
               <option value="">{EDIT_POPUP.chooseService}</option>
-              {props.services.map((option) => (
+              {offeredServices.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.name}
                 </option>
@@ -165,7 +230,10 @@ export function EditDialog(props: EditDialogProps) {
                   key={day}
                   type="button"
                   aria-pressed={day === values.localDate}
-                  onClick={() => setValues({ ...values, localDate: day })}
+                  onClick={() => {
+                    setValues({ ...values, localDate: day, localTime: '' })
+                    fetchSlots(values.doctorId, day)
+                  }}
                   className={cx(
                     'rounded-xs border px-2 py-2 text-xs',
                     day === values.localDate
@@ -179,13 +247,45 @@ export function EditDialog(props: EditDialogProps) {
             </div>
           </fieldset>
 
-          <Field label={EDIT_POPUP.localTime} required>
-            <TextInput
-              type="time"
-              value={values.localTime}
-              onChange={(event) => setValues({ ...values, localTime: event.target.value })}
-            />
-          </Field>
+          {slotsLoading ? (
+            <p className="text-xs text-ink-3">{SLOT_PICKER.loading}</p>
+          ) : visibleSlots.length > 0 ? (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-semibold text-ink-2">{SLOT_PICKER.label}</legend>
+              <div className="grid grid-cols-3 gap-2 panel:grid-cols-5">
+                {visibleSlots.map((slot) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    aria-pressed={slot === values.localTime}
+                    onClick={() => setValues({ ...values, localTime: slot })}
+                    className={cx(
+                      'rounded-xs border px-2 py-2 text-xs tabular-nums',
+                      slot === values.localTime
+                        ? 'border-brand bg-brand-50 font-semibold text-brand-700'
+                        : 'border-line-2 bg-surface text-ink-2 hover:bg-surface-2',
+                    )}
+                  >
+                    {formatTime(slot as LocalTime)}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <p className="flex items-center gap-1 text-sm text-warn" role="status">
+                <Icon name="warning" size="compact" />
+                {SLOT_PICKER.empty}
+              </p>
+              <Field label={EDIT_POPUP.localTime} required>
+                <TextInput
+                  type="time"
+                  value={values.localTime}
+                  onChange={(event) => setValues({ ...values, localTime: event.target.value })}
+                />
+              </Field>
+            </div>
+          )}
 
           {result !== null && !result.ok ? (
             <p className="flex items-center gap-1 text-sm text-danger" role="alert">
@@ -208,7 +308,23 @@ export function EditDialog(props: EditDialogProps) {
   )
 }
 
-/** The form's opening values, with the stored day branded for the week strip. */
+/**
+ * The services the chosen doctor offers — the catalogue filtered by the
+ * doctor's own assignment. A doctor with no entry in the map offers the whole
+ * catalogue, which is the booking popup's own fallback.
+ */
+function servicesForDoctor(
+  services: readonly ServiceOption[],
+  servicesByDoctorId: Readonly<Record<string, readonly string[]>> | undefined,
+  doctorId: string,
+): readonly ServiceOption[] {
+  if (servicesByDoctorId === undefined) return services
+  const allowed = servicesByDoctorId[doctorId]
+  if (allowed === undefined) return services
+  const set = new Set(allowed)
+  return services.filter((option) => set.has(option.id))
+}
+
 function initialValues(props: EditDialogProps): EditValues {
   return {
     doctorId: props.current.doctorId,
@@ -218,7 +334,6 @@ function initialValues(props: EditDialogProps): EditValues {
   }
 }
 
-/** The dimmed backdrop a click outside and an Escape both close. */
 function Overlay({ children, onClose }: { readonly children: ReactNode; readonly onClose: () => void }) {
   return (
     <div
@@ -236,7 +351,6 @@ function Overlay({ children, onClose }: { readonly children: ReactNode; readonly
   )
 }
 
-/** Swallows a click so the backdrop does not close on a click inside the panel. */
 function stopPropagation(event: MouseEvent): void {
   event.stopPropagation()
 }
