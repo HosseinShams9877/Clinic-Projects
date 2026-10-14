@@ -7,6 +7,13 @@
  * day's reminders, and the debts past due, and composes them into four KPIs, a
  * task cartable, a reminders panel, and a free-slots card.
  *
+ * ## The KPI row
+ *
+ * Four numbers, in the order the desk reads them: the money owed first (it is the
+ * number the manager asks about), then the calls, the day's appointments, and the
+ * debtors behind the money. The first KPI is a link — a click on «مانده حساب»
+ * takes the desk to `/reception/debts`, which is where the money is worked.
+ *
  * ## The reminders panel
  *
  * `RemindersPanel` is the same component `reception/appointments` used to render
@@ -75,7 +82,7 @@ export default async function DeskPage() {
         doctorWindowsOnDay({ tx, tenantId: session.tenantId, clinicId: null, weekday: jalaliWeekday(today) }),
       ])
 
-      // ── The four KPI numbers ────────────────────────────────────────────
+      // ── The KPI numbers ─────────────────────────────────────────────────
       const appointmentsCount = dayAppointments.filter(
         (row) => row.status !== 'CANCELLED' && row.status !== 'RESCHEDULED',
       ).length
@@ -95,8 +102,6 @@ export default async function DeskPage() {
         (row) => row.status === 'ARRIVED' || row.status === 'AWAITING_ARRIVAL',
       ).length
       const callsCount = heldMessages.length + arrivalsToday
-
-      const urgentCount = unrecorded.length + overdueDebts.length
 
       // ── The reminders panel's cards ─────────────────────────────────────
       // The panel the appointments page used to render, built from the same
@@ -212,10 +217,10 @@ export default async function DeskPage() {
           />
 
           <KpiRow
-            urgent={urgentCount}
+            debtRial={debtTotalRial}
+            debtHref="/reception/debts"
             calls={callsCount}
             appointments={appointmentsCount}
-            debtRial={debtTotalRial}
             debtors={debtorsCount}
           />
 
