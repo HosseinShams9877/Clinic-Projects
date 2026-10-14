@@ -15,6 +15,15 @@
  * fact the grid's axis was drawn against. A block is one slot of that axis, so the
  * duration is the slot's length, not a number the desk should be inventing. Asking
  * for it would let the desk write a block the grid cannot show.
+ *
+ * ## The visual language
+ *
+ * The dialog opens under the same one-pixel brand bar the booking popup uses, with
+ * the title's icon in a `bg-brand-50` disc beside it, and the one field is the
+ * shell's own. The trigger is a small dashed block — the shape a free cell draws
+ * the action in — and the footer's confirm is the danger variant, because closing
+ * an hour is a change to the day's availability and the desk should read that
+ * before pressing it.
  */
 
 'use client'
@@ -56,7 +65,7 @@ export function BlockDialog(props: BlockDialogProps) {
           setResult(null)
           setOpen(true)
         }}
-        className="mt-1 inline-flex w-full items-center justify-center gap-1 rounded-sm border border-line-2 px-2 py-1 text-[11px] text-ink-3 hover:bg-surface-2"
+        className="mt-1 inline-flex w-full items-center justify-center gap-1 rounded-sm border border-dashed border-line-2 bg-surface px-2 py-1 text-[11px] text-ink-3 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
       >
         <Icon name="blocked" size="compact" />
         {BLOCK_POPUP.trigger}
@@ -90,11 +99,22 @@ export function BlockDialog(props: BlockDialogProps) {
         aria-labelledby={titleId}
         className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[460px]"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
+        <div className="h-1 rounded-t-xl bg-brand" aria-hidden="true" />
+
+        <header className="flex items-center justify-between gap-4 px-5 py-4">
+          <h2 id={titleId} className="flex items-center gap-2 text-lg font-bold text-ink">
+            <span className="grid size-8 shrink-0 place-items-center rounded-pill bg-brand-50 text-brand-700">
+              <Icon name="blocked" size="card" />
+            </span>
             {BLOCK_POPUP.title}
           </h2>
-          <Button size="icon" variant="ghost" icon="close" aria-label={BLOCK_POPUP.close} onClick={() => setOpen(false)} />
+          <Button
+            size="icon"
+            variant="ghost"
+            icon="close"
+            aria-label={BLOCK_POPUP.close}
+            onClick={() => setOpen(false)}
+          />
         </header>
 
         <div className="flex flex-col gap-4 p-5">
@@ -106,7 +126,10 @@ export function BlockDialog(props: BlockDialogProps) {
             />
           </Field>
           {result !== null && !result.ok ? (
-            <p className="flex items-center gap-1 text-sm text-danger" role="alert">
+            <p
+              className="flex items-center gap-2 rounded-md bg-danger-bg px-3 py-2 text-sm text-danger"
+              role="alert"
+            >
               <Icon name="error" size="compact" />
               {result.message}
             </p>
@@ -117,7 +140,12 @@ export function BlockDialog(props: BlockDialogProps) {
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
             {BLOCK_POPUP.cancel}
           </Button>
-          <Button variant="danger" loading={pending} onClick={() => void submit()}>
+          <Button
+            variant="danger"
+            leadingIcon="blocked"
+            loading={pending}
+            onClick={() => void submit()}
+          >
             {BLOCK_POPUP.save}
           </Button>
         </footer>

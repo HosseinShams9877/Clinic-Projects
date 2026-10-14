@@ -25,19 +25,13 @@
  * modules' rows; reading them in the same transaction is what keeps the two from
  * being a profile rendered against a membership that just changed.
  *
- * ## Why there are two doctor-name reads and not one
+ * ## Why the injections are read here and not on their own tab
  *
- * `loadDoctorNames` keys by **membership id**, because `Customer.primaryDoctorId`
- * points at a `Membership`. `loadDoctorNamesByUserId` keys by **user id**, because
- * `Appointment.doctorId` (which `DebtRow.doctorId` and `CycleRow.doctorId` carry)
- * points at a `User`. The two ids are one person described by two tables, and a
- * lookup that used the wrong one returns `{}` for every id — which is why the debts
- * page's doctor column read «پزشک» before the second read existed.
- *
- * ## What is deliberately not here
- *
- * A row. Nothing here writes, because a page is a read and a write is an action
- * (`actions.ts`).
+ * The profile is one page and its two tabs are two views of it. Reading the
+ * injections alongside the profile, the courses and the messages is what keeps the
+ * whole record one transaction: a tab that opened its own read would be a second
+ * scope the profile page did not need, and the KPI band it renders would be a
+ * second place the same four counts are computed.
  */
 
 import type { TenantContext } from '@/core/tenant'
@@ -54,6 +48,12 @@ import {
   type LeadCounts,
   type LeadRow,
 } from '@/modules/customers'
+import {
+  customerInjections,
+  injectionCounts,
+  type InjectionCounts,
+  type InjectionRow,
+} from '@/modules/injections'
 
 /** Either customer read permission; the page names which one it is rendering under. */
 export type CustomerScope = 'all' | 'own'
@@ -71,11 +71,15 @@ export interface LeadsCartableData {
   readonly counts: LeadCounts
 }
 
-/** The profile, plus the two names its row carries as ids. */
+/** The profile, plus the two names its row carries as ids, and its injections. */
 export interface CustomerProfileData {
   readonly profile: CustomerProfile
   readonly primaryDoctorName: string | null
   readonly primaryClinicName: string | null
+  /** The customer's injections, newest first — the «نقشه تزریق» tab's own read. */
+  readonly injections: readonly InjectionRow[]
+  /** The four counts above the injection table. */
+  readonly injectionCounts: InjectionCounts
 }
 
 /**
@@ -127,7 +131,8 @@ export async function loadLeadsCartable(args: {
 }
 
 /**
- * One customer's profile, with the two names the row's ids point at.
+ * One customer's profile, with the two names the row's ids point at and its
+ * injections.
  *
  * @throws NotFoundError — the customer is outside the caller's tenant, or is another
  *   doctor's patient and the caller cannot see all customers (`09-security.md` §6.3).
@@ -143,16 +148,24 @@ export async function loadCustomerProfile(args: {
     customerId: args.customerId,
   })
 
-  const [doctor, clinic] = await Promise.all([
+  const [doctor, clinic, injections, counts] = await Promise.all([
     profile.primaryDoctorId === null
       ? Promise.resolve(null)
       : membershipName(args.tx, args.ctx.tenantId, profile.primaryDoctorId),
     profile.primaryClinicId === null
       ? Promise.resolve(null)
       : clinicName(args.tx, args.ctx.tenantId, profile.primaryClinicId),
+    customerInjections({ tx: args.tx, ctx: args.ctx, customerId: args.customerId }),
+    injectionCounts({ tx: args.tx, ctx: args.ctx, customerId: args.customerId }),
   ])
 
-  return { profile, primaryDoctorName: doctor, primaryClinicName: clinic }
+  return {
+    profile,
+    primaryDoctorName: doctor,
+    primaryClinicName: clinic,
+    injections,
+    injectionCounts: counts,
+  }
 }
 
 /**

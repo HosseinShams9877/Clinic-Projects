@@ -368,3 +368,110 @@ export function isMember<T extends string>(
   const members: readonly T[] = Array.isArray(set) ? set : (Object.values<string>(set) as T[])
   return typeof value === 'string' && (members as readonly string[]).includes(value)
 }
+export const InjectionArea = {
+  RightCheek: 'RIGHT_CHEEK',
+  LeftCheek: 'LEFT_CHEEK',
+  RightEyeHollow: 'RIGHT_EYE_HOLLOW',
+  LeftEyeHollow: 'LEFT_EYE_HOLLOW',
+  Glabella: 'GLABELLA',
+  Forehead: 'FOREHEAD',
+  RightCrowFeet: 'RIGHT_CROW_FEET',
+  LeftCrowFeet: 'LEFT_CROW_FEET',
+  UpperLip: 'UPPER_LIP',
+  LowerLip: 'LOWER_LIP',
+  Chin: 'CHIN',
+  RightJawline: 'RIGHT_JAWLINE',
+  LeftJawline: 'LEFT_JAWLINE',
+  RightTemple: 'RIGHT_TEMPLE',
+  LeftTemple: 'LEFT_TEMPLE',
+  NoseTip: 'NOSE_TIP',
+  NasolabialRight: 'NASOLABIAL_RIGHT',
+  NasolabialLeft: 'NASOLABIAL_LEFT',
+} as const
+export type InjectionArea = (typeof InjectionArea)[keyof typeof InjectionArea]
+
+/** The injection map's own order, region by region, as the form lists it. */
+export const INJECTION_AREAS = [
+  InjectionArea.Forehead,
+  InjectionArea.Glabella,
+  InjectionArea.RightTemple,
+  InjectionArea.LeftTemple,
+  InjectionArea.RightCrowFeet,
+  InjectionArea.LeftCrowFeet,
+  InjectionArea.RightEyeHollow,
+  InjectionArea.LeftEyeHollow,
+  InjectionArea.NoseTip,
+  InjectionArea.RightCheek,
+  InjectionArea.LeftCheek,
+  InjectionArea.NasolabialRight,
+  InjectionArea.NasolabialLeft,
+  InjectionArea.UpperLip,
+  InjectionArea.LowerLip,
+  InjectionArea.Chin,
+  InjectionArea.RightJawline,
+  InjectionArea.LeftJawline,
+] as const satisfies readonly InjectionArea[]
+
+/** What was injected. */
+export const InjectionMaterial = {
+  HyaluronicAcid: 'HYALURONIC_ACID',
+  Botox: 'BOTOX',
+  FatGraft: 'FAT_GRAFT',
+  Mesotherapy: 'MESOTHERAPY',
+  Thread: 'THREAD',
+  Prp: 'PRP',
+  Sculptra: 'SCULPTRA',
+} as const
+export type InjectionMaterial = (typeof InjectionMaterial)[keyof typeof InjectionMaterial]
+
+export const INJECTION_MATERIALS = [
+  InjectionMaterial.HyaluronicAcid,
+  InjectionMaterial.Botox,
+  InjectionMaterial.FatGraft,
+  InjectionMaterial.Mesotherapy,
+  InjectionMaterial.Thread,
+  InjectionMaterial.Prp,
+  InjectionMaterial.Sculptra,
+] as const satisfies readonly InjectionMaterial[]
+
+/** How deep the needle went. */
+export const InjectionDepth = {
+  SupraPeriosteal: 'SUPRA_PERIOSTEAL',
+  Subcutaneous: 'SUBCUTANEOUS',
+  MidDermis: 'MID_DERMIS',
+  Intramuscular: 'INTRAMUSCULAR',
+  DeepDermis: 'DEEP_DERMIS',
+} as const
+export type InjectionDepth = (typeof InjectionDepth)[keyof typeof InjectionDepth]
+
+export const INJECTION_DEPTHS = [
+  InjectionDepth.SupraPeriosteal,
+  InjectionDepth.DeepDermis,
+  InjectionDepth.Subcutaneous,
+  InjectionDepth.MidDermis,
+  InjectionDepth.Intramuscular,
+] as const satisfies readonly InjectionDepth[]
+
+/** What carried the material in. */
+export const InjectionTechnique = {
+  Cannula: 'CANNULA',
+  Needle: 'NEEDLE',
+} as const
+export type InjectionTechnique = (typeof InjectionTechnique)[keyof typeof InjectionTechnique]
+
+export const INJECTION_TECHNIQUES = [
+  InjectionTechnique.Cannula,
+  InjectionTechnique.Needle,
+] as const satisfies readonly InjectionTechnique[]
+
+/** What the amount is measured in — cubic centimetres, or the toxin's own units. */
+export const InjectionUnit = {
+  Cc: 'CC',
+  Unit: 'UNIT',
+} as const
+export type InjectionUnit = (typeof InjectionUnit)[keyof typeof InjectionUnit]
+
+export const INJECTION_UNITS = [
+  InjectionUnit.Cc,
+  InjectionUnit.Unit,
+] as const satisfies readonly InjectionUnit[]

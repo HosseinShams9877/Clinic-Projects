@@ -94,6 +94,7 @@ model Tenant {
   auditLogs      AuditLog[]
   otpChallenges  OtpChallenge[]
   notificationReads NotificationRead[]
+   injectionRecords  InjectionRecord[]
 
   @@map("tenants")
 }
@@ -221,6 +222,7 @@ model User {
   leaveRequests      LeaveRequest[]    @relation("LeaveRequester")
   leavesApproved     LeaveRequest[]    @relation("LeaveApprover")
   auditLogs          AuditLog[]
+  injections         InjectionRecord[]
 
   @@unique([tenantId, mobile], map: "user_tenant_mobile_key")
   @@map("users")
@@ -482,6 +484,7 @@ model Customer {
   messageSends   MessageSend[]
   otpChallenges  OtpChallenge[]
   sessions       Session[]
+  injectionRecords  InjectionRecord[]
 
   @@unique([tenantId, mobile], map: "customer_mobile_key")
   @@index([tenantId, lastVisitAt], map: "customer_tenant_lastvisit_idx")
@@ -540,6 +543,37 @@ model BeforeAfterImage {
 
   @@index([tenantId, customerId], map: "image_tenant_customer_idx")
   @@map("before_after_images")
+}
+
+model InjectionRecord {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  doctorId   String
+  doctor     User     @relation(fields: [doctorId], references: [id])
+
+  area      String
+  material  String
+  brand     String?
+  amount    String?
+  amountUnit String?
+  depth     String?
+  technique String?
+  batchNumber String?
+  note      String?
+
+  sessionAt DateTime
+  localDate String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, customerId, sessionAt(sort: Desc)], map: "injection_tenant_customer_session_idx")
+  @@index([tenantId, customerId, area], map: "injection_tenant_customer_area_idx")
+  @@map("injection_records")
 }
 
 // ── Scheduling ───────────────────────────────────────────────────────────────

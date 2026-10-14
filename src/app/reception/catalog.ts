@@ -98,6 +98,7 @@ export const RECEPTION_LEADS = {
 } as const
 
 /** The customers page's reception-specific copy — the lifecycle chips and the detail route. */
+/** The customers page's reception-specific copy — the lifecycle chips and the detail route. */
 export const RECEPTION_CUSTOMERS = {
   /** The lifecycle chip filter above the directory table. */
   filter: {
@@ -108,6 +109,11 @@ export const RECEPTION_CUSTOMERS = {
   /** The read-only detail route's own copy. */
   detail: {
     back: 'بازگشت به فهرست مشتریان',
+  },
+  /** The read-only record's two tabs. */
+  tabs: {
+    summary: 'خلاصه پرونده',
+    injections: 'نقشه تزریق',
   },
   /** The «افزودن مشتری» dialog. */
   add: {

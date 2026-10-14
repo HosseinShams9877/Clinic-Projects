@@ -8,6 +8,14 @@
  * without the edit, consent, or clinical-note writes — those stay the manager's at
  * `/admin/customer/[id]`.
  *
+ * ## The two tabs, and what each holds
+ *
+ * The record carries the same two tabs the manager's profile carries — «خلاصه
+ * پرونده» and «نقشه تزریق» — and the injection tab is the read-only rendering of
+ * the same table the manager's tab renders. The desk can add an injection from the
+ * tab (the write path is the module's, and the permission it holds is the one the
+ * record's own writes use), so the tab is the same component.
+ *
  * The read is `loadCustomerProfile`, the same tenant-scoped loader the manager page
  * uses; it throws when the customer is outside the caller's tenant, which this page
  * turns into a 404 rather than an error screen.
@@ -33,6 +41,8 @@ import { AcquisitionSource, isMember } from '@/core/constants'
 
 import { CUSTOMER_PROFILE_PAGE, CUSTOMERS_PAGE, RECEPTION_CUSTOMERS } from '@/app/catalog'
 import { loadCustomerProfile } from '@/app/_customers/page-data'
+import { CustomerTabs, tabFromParam } from '@/app/_customers/customer-tabs'
+import { InjectionTab } from '@/app/_injections'
 import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import {
   ACQUISITION_SOURCE_LABELS,
@@ -55,7 +65,9 @@ export default async function ReceptionCustomerDetailPage({
 }) {
   const session = await requireStaffPanel('reception')
   const { id } = await params
-  const page = pageFromParam((await searchParams).page)
+  const query = await searchParams
+  const tab = tabFromParam(query.tab)
+  const page = pageFromParam(query.page)
 
   const data = await runInTenantScope(session.permissions, prisma(), async (tx) => {
     try {
@@ -66,11 +78,12 @@ export default async function ReceptionCustomerDetailPage({
   })
   if (data === null) notFound()
 
-  const { profile, primaryDoctorName, primaryClinicName } = data
+  const { profile, primaryDoctorName, primaryClinicName, injections, injectionCounts } = data
   const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
   const appts = paginate(profile.appointments, page)
   const apptsHrefFor = (next: number): string =>
     next > 1 ? `/reception/customers/${id}?page=${String(next)}` : `/reception/customers/${id}`
+  const basePath = `/reception/customers/${id}`
 
   return (
     <div className="flex flex-col gap-6">
@@ -92,68 +105,86 @@ export default async function ReceptionCustomerDetailPage({
         </Link>
       </div>
 
-      <section className="rounded-md border border-line bg-surface p-4">
-        <h2 className="mb-3 font-bold text-ink">{CUSTOMER_PROFILE_PAGE.sections.details}</h2>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 panel:grid-cols-2">
-          <Detail label={CUSTOMER_PROFILE_PAGE.fields.mobile} value={formatPhone(profile.mobile)} ltr />
-          <Detail label={CUSTOMERS_PAGE.columns.lifecycle} value={lifecycleLabel(profile.lifecycle)} />
-          <Detail label={CUSTOMER_PROFILE_PAGE.fields.acquisitionSource} value={sourceLabel(profile.acquisitionSource)} />
-          <Detail
-            label={CUSTOMER_PROFILE_PAGE.fields.birthDate}
-            value={profile.birthDate === null ? null : formatDate(profile.birthDate as LocalDate, 'long')}
-          />
-          <Detail label={CUSTOMER_PROFILE_PAGE.fields.primaryDoctor} value={primaryDoctorName} />
-          <Detail label={CUSTOMER_PROFILE_PAGE.fields.primaryClinic} value={primaryClinicName} />
-          <Detail
-            label={CUSTOMER_PROFILE_PAGE.fields.firstVisit}
-            value={profile.firstVisitAt === null ? null : formatDate(dateToLocalDate(profile.firstVisitAt), 'long')}
-          />
-          <Detail
-            label={CUSTOMER_PROFILE_PAGE.fields.lastVisit}
-            value={profile.lastVisitAt === null ? null : formatDate(dateToLocalDate(profile.lastVisitAt), 'long')}
-          />
-          <Detail label={CUSTOMER_PROFILE_PAGE.fields.completedSessions} value={toPersianDigits(profile.completedSessions)} />
-        </dl>
-      </section>
+      <CustomerTabs
+        basePath={basePath}
+        active={tab}
+        summaryLabel={RECEPTION_CUSTOMERS.tabs.summary}
+        injectionsLabel={RECEPTION_CUSTOMERS.tabs.injections}
+      />
 
-      <section className="rounded-md border border-line bg-surface">
-        <h2 className="border-b border-line px-4 py-3 font-bold text-ink">{CUSTOMER_PROFILE_PAGE.sections.appointments}</h2>
-        {profile.appointments.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-ink-3">{CUSTOMER_PROFILE_PAGE.empty.appointments}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-line-2 bg-surface-2 text-ink-3">
-                  <Th>{CUSTOMER_PROFILE_PAGE.history.date}</Th>
-                  <Th>{CUSTOMER_PROFILE_PAGE.history.service}</Th>
-                  <Th>{CUSTOMER_PROFILE_PAGE.history.doctor}</Th>
-                  <Th>{CUSTOMER_PROFILE_PAGE.history.status}</Th>
-                  <Th className="text-end">{CUSTOMER_PROFILE_PAGE.history.price}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {appts.slice.map((row) => (
-                  <tr key={row.id} className="border-b border-line last:border-b-0">
-                    <td className="px-4 py-3 text-ink-2 tabular-nums">
-                      {formatDate(asLocalDate(row.localDate), 'short')} {formatTime(asLocalTime(row.localTime))}
-                    </td>
-                    <td className="px-4 py-3 text-ink-2">{row.serviceName ?? '—'}</td>
-                    <td className="px-4 py-3 text-ink-2">{row.doctorName ?? '—'}</td>
-                    <td className="px-4 py-3 text-ink-2">
-                      {APPOINTMENT_STATUS_LABELS[row.status as keyof typeof APPOINTMENT_STATUS_LABELS] ?? row.status}
-                    </td>
-                    <td className="px-4 py-3 text-end text-ink-2 tabular-nums">{formatMoney(row.priceAtBooking)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="border-t border-line px-4 py-3">
-              <Pagination page={page} totalPages={appts.totalPages} hrefFor={apptsHrefFor} />
-            </div>
-          </div>
-        )}
-      </section>
+      {tab === 'injections' ? (
+        <InjectionTab
+          rows={injections}
+          counts={injectionCounts}
+          panel="reception"
+          customerId={profile.id}
+        />
+      ) : (
+        <>
+          <section className="rounded-md border border-line bg-surface p-4">
+            <h2 className="mb-3 font-bold text-ink">{CUSTOMER_PROFILE_PAGE.sections.details}</h2>
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 panel:grid-cols-2">
+              <Detail label={CUSTOMER_PROFILE_PAGE.fields.mobile} value={formatPhone(profile.mobile)} ltr />
+              <Detail label={CUSTOMERS_PAGE.columns.lifecycle} value={lifecycleLabel(profile.lifecycle)} />
+              <Detail label={CUSTOMER_PROFILE_PAGE.fields.acquisitionSource} value={sourceLabel(profile.acquisitionSource)} />
+              <Detail
+                label={CUSTOMER_PROFILE_PAGE.fields.birthDate}
+                value={profile.birthDate === null ? null : formatDate(profile.birthDate as LocalDate, 'long')}
+              />
+              <Detail label={CUSTOMER_PROFILE_PAGE.fields.primaryDoctor} value={primaryDoctorName} />
+              <Detail label={CUSTOMER_PROFILE_PAGE.fields.primaryClinic} value={primaryClinicName} />
+              <Detail
+                label={CUSTOMER_PROFILE_PAGE.fields.firstVisit}
+                value={profile.firstVisitAt === null ? null : formatDate(dateToLocalDate(profile.firstVisitAt), 'long')}
+              />
+              <Detail
+                label={CUSTOMER_PROFILE_PAGE.fields.lastVisit}
+                value={profile.lastVisitAt === null ? null : formatDate(dateToLocalDate(profile.lastVisitAt), 'long')}
+              />
+              <Detail label={CUSTOMER_PROFILE_PAGE.fields.completedSessions} value={toPersianDigits(profile.completedSessions)} />
+            </dl>
+          </section>
+
+          <section className="rounded-md border border-line bg-surface">
+            <h2 className="border-b border-line px-4 py-3 font-bold text-ink">{CUSTOMER_PROFILE_PAGE.sections.appointments}</h2>
+            {profile.appointments.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-ink-3">{CUSTOMER_PROFILE_PAGE.empty.appointments}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-line-2 bg-surface-2 text-ink-3">
+                      <Th>{CUSTOMER_PROFILE_PAGE.history.date}</Th>
+                      <Th>{CUSTOMER_PROFILE_PAGE.history.service}</Th>
+                      <Th>{CUSTOMER_PROFILE_PAGE.history.doctor}</Th>
+                      <Th>{CUSTOMER_PROFILE_PAGE.history.status}</Th>
+                      <Th className="text-end">{CUSTOMER_PROFILE_PAGE.history.price}</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {appts.slice.map((row) => (
+                      <tr key={row.id} className="border-b border-line last:border-b-0">
+                        <td className="px-4 py-3 text-ink-2 tabular-nums">
+                          {formatDate(asLocalDate(row.localDate), 'short')} {formatTime(asLocalTime(row.localTime))}
+                        </td>
+                        <td className="px-4 py-3 text-ink-2">{row.serviceName ?? '—'}</td>
+                        <td className="px-4 py-3 text-ink-2">{row.doctorName ?? '—'}</td>
+                        <td className="px-4 py-3 text-ink-2">
+                          {APPOINTMENT_STATUS_LABELS[row.status as keyof typeof APPOINTMENT_STATUS_LABELS] ?? row.status}
+                        </td>
+                        <td className="px-4 py-3 text-end text-ink-2 tabular-nums">{formatMoney(row.priceAtBooking)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="border-t border-line px-4 py-3">
+                  <Pagination page={page} totalPages={appts.totalPages} hrefFor={apptsHrefFor} />
+                </div>
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </div>
   )
 }

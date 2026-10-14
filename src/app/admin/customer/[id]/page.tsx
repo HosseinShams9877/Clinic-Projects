@@ -8,12 +8,12 @@
  * person — which is what `02-architecture.md` §6 puts composition in `src/app/` for:
  * the profile is the one page a customer's whole record is one page on.
  *
- * ## Why the two columns and not the eight sections
+ * ## The two tabs, and what each holds
  *
- * The demo composes the page from a wide column that holds the two histories and a
- * narrow one that holds the facts and the two things the manager acts on — the
- * audience the campaigns already reach and the clinical note. The two columns are the
- * order the manager reads in: what happened, then what to do about it.
+ * The page carries two tabs — «خلاصه پرونده» (the two columns below) and
+ * «نقشه تزریق» (the injection map's table and its four counts). The tab is a
+ * `?tab=` search param and the strip is a link, not a client state, so the URL
+ * is the memory and a bookmark lands on the tab it names.
  *
  * ## Why the badges are evaluated and not stored
  *
@@ -76,6 +76,8 @@ import { ADMIN_CUSTOMER_PROFILE } from '@/app/admin/catalog'
 import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import { CUSTOMER_PROFILE_PAGE } from '@/app/catalog'
 import { loadCustomerProfile } from '@/app/_customers/page-data'
+import { CustomerTabs, tabFromParam } from '@/app/_customers/customer-tabs'
+import { InjectionTab } from '@/app/_injections'
 import {
   PAYMENT_KIND_LABELS,
   PAYMENT_METHOD_LABELS,
@@ -114,12 +116,13 @@ export default async function CustomerProfilePage({
   const session = await requireStaffPanel('admin')
   const { id } = await params
   const query = await searchParams
+  const tab = tabFromParam(query.tab)
   const apptsPage = pageFromParam(query[APPTS_PAGE_PARAM])
   const paysPage = pageFromParam(query[PAYS_PAGE_PARAM])
 
   const data = await loadProfile(session.permissions, id)
 
-  const { profile, cycles, messages, groups } = data
+  const { profile, cycles, messages, groups, injections, injectionCounts } = data
   const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
   const balance = profile.chargedTotal - profile.paidTotal
   const activeCycles = cycles.filter((row) => row.status === CycleStatus.Active || row.status === CycleStatus.Due || row.status === CycleStatus.AtRisk)
@@ -162,88 +165,106 @@ export default async function CustomerProfilePage({
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
-        <KpiTile
-          label={ADMIN_CUSTOMER_PROFILE.kpi.visits}
-          value={toPersianDigits(profile.completedSessions)}
-          icon="appointment"
-          tone="bg-info-bg text-info"
-        />
-        <KpiTile
-          label={ADMIN_CUSTOMER_PROFILE.kpi.activeCycles}
-          value={toPersianDigits(activeCycles.length)}
-          icon="treatment"
-          tone="bg-ok-bg text-ok"
-        />
-        <KpiTile
-          label={ADMIN_CUSTOMER_PROFILE.kpi.balance}
-          value={formatMoney(balance)}
-          icon="debt"
-          tone="bg-warn-bg text-warn"
-        />
-        <KpiTile
-          label={ADMIN_CUSTOMER_PROFILE.kpi.totalPaid}
-          value={formatMoney(profile.paidTotal)}
-          icon="payment"
-          tone="bg-brand-50 text-brand"
-        />
-      </div>
+      <CustomerTabs
+        basePath={basePath}
+        active={tab}
+        summaryLabel={ADMIN_CUSTOMER_PROFILE.tabs.summary}
+        injectionsLabel={ADMIN_CUSTOMER_PROFILE.tabs.injections}
+      />
 
-      <div className="grid grid-cols-1 gap-6 panel:grid-cols-[1fr_320px] panel:items-start">
-        <div className="flex flex-col gap-6">
-          <Card title={ADMIN_CUSTOMER_PROFILE.cards.cycles}>
-            <CyclesTable rows={cycles} />
-          </Card>
-
-          <Card
-            title={ADMIN_CUSTOMER_PROFILE.cards.visits}
-            note={`${toPersianDigits(profile.appointments.length)} ${ADMIN_CUSTOMER_PROFILE.recentSuffix}`}
-          >
-            <AppointmentHistory
-              rows={appts.slice}
-              page={apptsPage}
-              totalPages={appts.totalPages}
-              hrefFor={(next) => historyHref({ appts: next, pays: paysPage })}
+      {tab === 'injections' ? (
+        <InjectionTab
+          rows={injections}
+          counts={injectionCounts}
+          panel="admin"
+          customerId={profile.id}
+        />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
+            <KpiTile
+              label={ADMIN_CUSTOMER_PROFILE.kpi.visits}
+              value={toPersianDigits(profile.completedSessions)}
+              icon="appointment"
+              tone="bg-info-bg text-info"
             />
-          </Card>
-
-          <Card title={ADMIN_CUSTOMER_PROFILE.cards.payments}>
-            <PaymentHistory
-              rows={pays.slice}
-              page={paysPage}
-              totalPages={pays.totalPages}
-              hrefFor={(next) => historyHref({ appts: apptsPage, pays: next })}
+            <KpiTile
+              label={ADMIN_CUSTOMER_PROFILE.kpi.activeCycles}
+              value={toPersianDigits(activeCycles.length)}
+              icon="treatment"
+              tone="bg-ok-bg text-ok"
             />
-          </Card>
-        </div>
-
-        <div className="flex flex-col gap-6">
-          <Card title={ADMIN_CUSTOMER_PROFILE.cards.details} action={<ProfileEdit customerId={profile.id} firstName={profile.firstName} lastName={profile.lastName} birthDate={profile.birthDate} residenceArea={profile.residenceArea} />}>
-            <DetailsDl profile={profile} doctorName={data.primaryDoctorName} />
-          </Card>
-
-          <Card title={ADMIN_CUSTOMER_PROFILE.cards.campaign}>
-            <GroupBadges groups={groups} />
-            <ConsentForm
-              customerId={profile.id}
-              flags={{
-                sms: profile.consentSms,
-                whatsApp: profile.consentWhatsApp,
-                phone: profile.consentPhone,
-                beforeAfter: profile.consentBeforeAfter,
-              }}
+            <KpiTile
+              label={ADMIN_CUSTOMER_PROFILE.kpi.balance}
+              value={formatMoney(balance)}
+              icon="debt"
+              tone="bg-warn-bg text-warn"
             />
-          </Card>
+            <KpiTile
+              label={ADMIN_CUSTOMER_PROFILE.kpi.totalPaid}
+              value={formatMoney(profile.paidTotal)}
+              icon="payment"
+              tone="bg-brand-50 text-brand"
+            />
+          </div>
 
-          <Card title={ADMIN_CUSTOMER_PROFILE.cards.messages}>
-            <MessageList rows={messages} />
-          </Card>
+          <div className="grid grid-cols-1 gap-6 panel:grid-cols-[1fr_320px] panel:items-start">
+            <div className="flex flex-col gap-6">
+              <Card title={ADMIN_CUSTOMER_PROFILE.cards.cycles}>
+                <CyclesTable rows={cycles} />
+              </Card>
 
-          <Card title={CUSTOMER_PROFILE_PAGE.sections.medical}>
-            <DoctorNoteForm customerId={profile.id} note={profile.doctorNote} />
-          </Card>
-        </div>
-      </div>
+              <Card
+                title={ADMIN_CUSTOMER_PROFILE.cards.visits}
+                note={`${toPersianDigits(profile.appointments.length)} ${ADMIN_CUSTOMER_PROFILE.recentSuffix}`}
+              >
+                <AppointmentHistory
+                  rows={appts.slice}
+                  page={apptsPage}
+                  totalPages={appts.totalPages}
+                  hrefFor={(next) => historyHref({ appts: next, pays: paysPage })}
+                />
+              </Card>
+
+              <Card title={ADMIN_CUSTOMER_PROFILE.cards.payments}>
+                <PaymentHistory
+                  rows={pays.slice}
+                  page={paysPage}
+                  totalPages={pays.totalPages}
+                  hrefFor={(next) => historyHref({ appts: apptsPage, pays: next })}
+                />
+              </Card>
+            </div>
+
+            <div className="flex flex-col gap-6">
+              <Card title={ADMIN_CUSTOMER_PROFILE.cards.details} action={<ProfileEdit customerId={profile.id} firstName={profile.firstName} lastName={profile.lastName} birthDate={profile.birthDate} residenceArea={profile.residenceArea} />}>
+                <DetailsDl profile={profile} doctorName={data.primaryDoctorName} />
+              </Card>
+
+              <Card title={ADMIN_CUSTOMER_PROFILE.cards.campaign}>
+                <GroupBadges groups={groups} />
+                <ConsentForm
+                  customerId={profile.id}
+                  flags={{
+                    sms: profile.consentSms,
+                    whatsApp: profile.consentWhatsApp,
+                    phone: profile.consentPhone,
+                    beforeAfter: profile.consentBeforeAfter,
+                  }}
+                />
+              </Card>
+
+              <Card title={ADMIN_CUSTOMER_PROFILE.cards.messages}>
+                <MessageList rows={messages} />
+              </Card>
+
+              <Card title={CUSTOMER_PROFILE_PAGE.sections.medical}>
+                <DoctorNoteForm customerId={profile.id} note={profile.doctorNote} />
+              </Card>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -415,12 +436,6 @@ function CycleRow({ row }: { readonly row: CycleRow }) {
   )
 }
 
-/**
- * The bar a bounded course draws under its session count.
- *
- * The width is the row's own fraction and not a token: a course three quarters done
- * is three quarters full, and the only honest value is the computed one.
- */
 /** The course's own spacing, as the week or the day the interval counts. */
 function intervalLabel(intervalDays: number): string {
   if (intervalDays % 7 === 0) {

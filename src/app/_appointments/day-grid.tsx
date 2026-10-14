@@ -19,6 +19,41 @@
  * other range. The step is therefore a property of the *range* — the field the
  * schema already stores — and the grid reads it there.
  *
+ * ## Why the table is `min-w-full w-max table-fixed`
+ *
+ * Three utilities, three jobs, and each one is load-bearing:
+ *
+ * - **`table-fixed`** makes every declared width the column's width, so a doctor
+ *   whose name is long and a doctor whose name is short render the same column —
+ *   the grid's columns are a set and not a reflection of their content.
+ * - **`w-max`** lets the table grow past the container when the columns' widths
+ *   add up to more than the viewport, so the container's `overflow-auto` scrolls
+ *   horizontally instead of the columns shrinking to fit.
+ * - **`min-w-full`** keeps the table at least as wide as its container when the
+ *   columns' widths add up to *less* — with one doctor, an unqualified `w-max`
+ *   would leave a strip of empty container beside a narrow table.
+ *
+ * ## The width lives on the header, not on every cell
+ *
+ * `table-fixed` reads each column's width from the first row's cells — the header —
+ * and gives every body cell that width. Declaring a width on every `<td>` would be
+ * redundant at best and, because a `min-w` on a `<td>` competes with the header's
+ * own width in the engine's sizing pass, actively wrong: one doctor's column grew
+ * because one `<td>` under her name carried content the fixed layout could not
+ * ignore. The header carries the width, and the body inherits it.
+ *
+ * ## Why every cell is the same height
+ *
+ * The desk reads the grid row by row, and a cell that is taller because its doctor
+ * happens to have a booking on that minute and shorter because the next doctor does
+ * not is a cell whose height is a fact about its content. `min-h-[96px]` on the
+ * three cell variants — a booking, a free slot, an off-schedule gap — makes the
+ * height a fact about the grid: every cell is at least 96px whatever is in it, and
+ * the columns line up down the page. A cell whose content is taller than the floor
+ * still grows — the booking card's four action buttons are the one thing that does
+ * — and its neighbours in the same row grow with it, because a table row is one
+ * height for every cell in it.
+ *
  * ## Why the table is `border-separate`
  *
  * `position: sticky` on a `<th>` does not work inside a `<table>` with
@@ -85,8 +120,28 @@ export interface DayGridProps {
 /** The default slot length, in minutes. */
 const DEFAULT_SLOT_MINUTES = 30
 
-/** The minimum width of a doctor's column, in pixels — wide enough for its buttons. */
-const DOCTOR_COLUMN_MIN_WIDTH = 'min-w-[200px]'
+/**
+ * The width of every doctor's column, in pixels.
+ *
+ * An exact width and not a `min-w`: with `table-fixed`, the header row's cell is
+ * the column's width and the fixed layout distributes the table's slack across the
+ * columns. Four doctors at 240px each plus the hour column's 68px is 1028px, which
+ * fills a typical panel viewport — below four the columns share the slack, above
+ * four the table grows and the container scrolls.
+ */
+const DOCTOR_COLUMN_WIDTH = 'w-[320px]'
+
+/**
+ * The minimum height of every cell, in pixels.
+ *
+ * The floor is what a booking card reaches with its customer name, its service
+ * name and its four action buttons — 96px with the design system's own spacing —
+ * so a free cell or an off-schedule gap beside it is the same height as the booking
+ * it sits next to, and the row reads as one line. A cell whose content is taller
+ * still grows; its row grows with it, because a table row is one height for every
+ * cell in it.
+ */
+const CELL_MIN_HEIGHT = 'min-h-[96px]'
 
 /** The day grid, as the two breakpoints each render it. */
 export function DayGrid(props: DayGridProps) {
@@ -120,7 +175,7 @@ export function DayGrid(props: DayGridProps) {
         ref={containerRef}
         className="hidden max-h-[70vh] overflow-auto rounded-lg border border-line bg-surface shadow-sh-1 panel:block"
       >
-        <table className="min-w-max border-separate border-spacing-0 text-sm">
+        <table className="min-w-full w-max table-fixed border-separate border-spacing-0 text-sm">
           <thead>
             <tr data-drag-scroll className="select-none">
               <th
@@ -137,7 +192,7 @@ export function DayGrid(props: DayGridProps) {
                     scope="col"
                     className={cx(
                       'sticky top-0 z-10 border-b border-e border-line-2 bg-surface-sunken px-3 py-2.5 text-start align-middle',
-                      DOCTOR_COLUMN_MIN_WIDTH,
+                      DOCTOR_COLUMN_WIDTH,
                     )}
                   >
                     <span className="flex items-center gap-2">
@@ -194,10 +249,7 @@ export function DayGrid(props: DayGridProps) {
                       <td
                         key={doctor.id}
                         rowSpan={span}
-                        className={cx(
-                          'border-b border-e border-line bg-surface p-1.5 align-top transition-colors',
-                          DOCTOR_COLUMN_MIN_WIDTH,
-                        )}
+                        className="border-b border-e border-line bg-surface p-1.5 align-top transition-colors"
                       >
                         {row !== null ? (
                           <BookedCell
@@ -291,6 +343,7 @@ function BookedCell({
     <div
       className={cx(
         'flex h-full flex-col gap-2 rounded-sm p-2 transition-shadow [border-inline-start:3px_solid] hover:shadow-sh-1',
+        CELL_MIN_HEIGHT,
         CELL_BG[row.status] ?? CELL_BG.default,
         BORDER_CLASSES[row.status] ?? BORDER_CLASSES.default,
       )}
@@ -344,15 +397,20 @@ function FreeCell({
 }) {
   if (!writable) {
     return (
-      <span className="grid h-full min-h-9 place-items-center rounded-sm border border-dashed border-line-2 bg-surface-2 text-ink-3">
+      <span
+        className={cx(
+          'grid h-full place-items-center rounded-sm border border-dashed border-line-2 bg-surface-2 text-ink-3',
+          CELL_MIN_HEIGHT,
+        )}
+      >
         <Icon name="add" size="compact" />
       </span>
     )
   }
   const lockedSlot: LockedSlot = { localDate, localTime: time }
   return (
-    <span className="group/free block h-full rounded-sm transition-colors">
-      <span className="contents [&>button]:flex [&>button]:h-full [&>button]:w-full [&>button]:items-center [&>button]:justify-center [&>button]:border-dashed [&>button]:border-line-2 [&>button]:bg-surface-2 [&>button]:text-ink-3 [&>button]:transition-colors hover:[&>button]:border-brand-300 hover:[&>button]:bg-brand-50 hover:[&>button]:text-brand-700">
+    <span className={cx('flex h-full flex-col gap-1.5', CELL_MIN_HEIGHT)}>
+      <span className="flex flex-1 [&>button]:flex [&>button]:h-full [&>button]:w-full [&>button]:items-center [&>button]:justify-center [&>button]:border-dashed [&>button]:border-line-2 [&>button]:bg-surface-2 [&>button]:text-ink-3 [&>button]:transition-colors hover:[&>button]:border-brand-300 hover:[&>button]:bg-brand-50 hover:[&>button]:text-brand-700">
         <BookingDialog
           variant="book"
           panel={panel}
@@ -387,7 +445,10 @@ function FreeCell({
 function OffScheduleCell() {
   return (
     <span
-      className="grid h-full min-h-9 place-items-center rounded-sm border border-dashed border-line text-[11px] font-medium text-ink-3 [background:repeating-linear-gradient(135deg,var(--surface-sunken),var(--surface-sunken)_6px,transparent_6px,transparent_12px)]"
+      className={cx(
+        'grid h-full place-items-center rounded-sm border border-dashed border-line text-[11px] font-medium text-ink-3 [background:repeating-linear-gradient(135deg,var(--surface-sunken),var(--surface-sunken)_6px,transparent_6px,transparent_12px)]',
+        CELL_MIN_HEIGHT,
+      )}
     >
       {APPOINTMENTS_PAGE.offSchedule}
     </span>

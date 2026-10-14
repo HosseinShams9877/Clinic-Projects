@@ -52,15 +52,16 @@
  * nothing more: a mobile alone is not a booking, and a mobile with a name is the
  * pair `createOrFindCustomer` reads.
  *
- * ## Why the customer search matches on both mobile and name
+ * ## The visual language
  *
- * The desk's own habit is to type whichever fact the customer gave them first: the
- * mobile number read off a form, or the name said across the counter. The field
- * therefore accepts both, and the search matches either. The match on the name is
- * a substring against the full name ("فاطمه کریمی" and "کریمی" both find her), and
- * the match on the mobile is a substring against the normalised mobile, so the
- * first digits are enough. The two are tried independently, and a row that matches
- * either is shown.
+ * The dialog is the booking flow's own surface, and the design system's tokens are
+ * the vocabulary: the brand bar at the top is `bg-brand`, the current step's disc
+ * is `bg-brand` with `shadow-brand`, a completed step's disc is `bg-ok-bg` with a
+ * check, and a day or a slot that is selected is filled rather than outlined —
+ * `bg-brand text-ink-inverse shadow-brand` — so the reader's eye lands on the
+ * choice, not on the border around it. The error and the two empty states are
+ * cards, not bare sentences: a failure is `bg-danger-bg`, an empty picker is
+ * `bg-surface-2`, and both carry an icon the eye can find before it reads.
  */
 
 'use client'
@@ -220,10 +221,6 @@ export function BookingDialog(props: BookingDialogProps) {
   const freeSlots = freeSlotsFor(props, values.doctorId, values.localDate)
 
   async function submit() {
-    // The whole form's own gate, in order: every step the desk has walked past is
-    // re-checked before the write, so a submit that slips past a step the caller
-    // rendered (a locked slot that skipped step 2's own gate, a customer step that
-    // never saw the earlier one) still fails loudly rather than silently.
     const gate = wholeFormError(values)
     if (gate !== null) {
       setResult({ ok: false, message: gate })
@@ -278,8 +275,15 @@ export function BookingDialog(props: BookingDialogProps) {
           aria-labelledby={titleId}
           className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[680px]"
         >
-          <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
-            <h2 id={titleId} className="text-lg font-bold text-ink">
+          {/* The brand bar — one hairline that tells the reader this is a booking
+              surface before the eye reads a single word. */}
+          <div className="h-1 rounded-t-xl bg-brand" aria-hidden="true" />
+
+          <header className="flex items-center justify-between gap-4 px-5 py-4">
+            <h2 id={titleId} className="flex items-center gap-2 text-lg font-bold text-ink">
+              <span className="grid size-8 shrink-0 place-items-center rounded-pill bg-brand-50 text-brand-700">
+                <Icon name="appointment" size="card" />
+              </span>
               {BOOKING_POPUP.titles[titleForStep(step)]}
             </h2>
             <Button
@@ -291,7 +295,7 @@ export function BookingDialog(props: BookingDialogProps) {
             />
           </header>
 
-          <ol className="flex flex-wrap items-center gap-2 p-5 pb-0" aria-hidden="true">
+          <ol className="flex flex-wrap items-center gap-2 px-5 pb-1" aria-hidden="true">
             {stepNames().map((name, index) => {
               const number = (index + 1) as Step
               const reached = step >= number
@@ -299,7 +303,12 @@ export function BookingDialog(props: BookingDialogProps) {
               return (
                 <li key={name} className="flex items-center gap-2">
                   {index === 0 ? null : (
-                    <span className="h-[2px] w-[26px] rounded-[2px] bg-line-2" />
+                    <span
+                      className={cx(
+                        'h-[2px] w-[26px] rounded-[2px]',
+                        done ? 'bg-brand-300' : 'bg-line-2',
+                      )}
+                    />
                   )}
                   <span
                     className={cx(
@@ -313,11 +322,11 @@ export function BookingDialog(props: BookingDialogProps) {
                         done
                           ? 'bg-ok-bg text-ok'
                           : number === step
-                            ? 'bg-brand text-ink-inverse'
-                            : 'bg-surface-sunken text-ink-3',
+                            ? 'bg-brand text-ink-inverse shadow-brand'
+                            : 'border border-dashed border-line-2 bg-surface text-ink-3',
                       )}
                     >
-                      {formatNumber(number)}
+                      {done ? <Icon name="confirm" size="compact" /> : formatNumber(number)}
                     </span>
                     {name}
                   </span>
@@ -333,10 +342,6 @@ export function BookingDialog(props: BookingDialogProps) {
                   className={CONTROL_CLASSES}
                   value={values.serviceId}
                   onChange={(event) => {
-                    // A service change clears the doctor on the normal path (the
-                    // doctors a service offers are its own); a locked popup keeps
-                    // the doctor the grid settled, because that doctor *is* the
-                    // column the desk clicked. See the header.
                     const keepDoctor = props.doctorId ?? ''
                     setValues({
                       ...values,
@@ -392,7 +397,8 @@ export function BookingDialog(props: BookingDialogProps) {
                   </Field>
                 )}
                 <fieldset className="flex flex-col gap-2">
-                  <legend className="text-sm font-semibold text-ink-2">
+                  <legend className="flex items-center gap-1.5 text-sm font-semibold text-ink-2">
+                    <Icon name="calendar" size="compact" />
                     {BOOKING_POPUP.fields.localDate}
                   </legend>
                   <div className="grid grid-cols-4 gap-2 panel:grid-cols-7">
@@ -411,34 +417,35 @@ export function BookingDialog(props: BookingDialogProps) {
                 </fieldset>
 
                 {lockedSlot !== null ? (
-                  <Field label={BOOKING_POPUP.fields.localTime} required>
-                    <div className="flex items-center gap-2">
-                      <TextInput
-                        type="time"
-                        value={values.localTime}
-                        readOnly
-                        disabled
-                      />
-                      <span
-                        className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-brand-50 px-2 py-[3px] text-[11px] font-semibold text-brand-700"
-                        title={LOCKED_SLOT.hint}
-                      >
+                  <div className="flex flex-col gap-2 rounded-md border border-brand-300 bg-brand-50 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-sm font-semibold text-brand-700">
                         <Icon name="lock" size="compact" />
+                        {BOOKING_POPUP.fields.localTime}
+                      </span>
+                      <span className="rounded-pill bg-brand-100 px-2 py-[3px] text-[11px] font-semibold text-brand-700">
                         {LOCKED_SLOT.badge}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-ink-3">{LOCKED_SLOT.hint}</p>
-                  </Field>
+                    <span className="text-lg font-bold text-ink tabular-nums" dir="ltr">
+                      {formatTime(values.localTime as LocalTime)}
+                    </span>
+                    <p className="text-xs text-brand-700">{LOCKED_SLOT.hint}</p>
+                  </div>
                 ) : values.doctorId === '' ? (
-                  <p className="text-xs text-ink-3">{SLOT_PICKER.doctorFirst}</p>
+                  <p className="flex items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-ink-3">
+                    <Icon name="info" size="compact" />
+                    {SLOT_PICKER.doctorFirst}
+                  </p>
                 ) : freeSlots.length === 0 ? (
-                  <p className="flex items-center gap-1 text-sm text-warn" role="status">
+                  <p className="flex items-center gap-2 rounded-md bg-warn-bg px-3 py-2 text-sm text-warn" role="status">
                     <Icon name="warning" size="compact" />
                     {SLOT_PICKER.empty}
                   </p>
                 ) : (
                   <fieldset className="flex flex-col gap-2">
-                    <legend className="text-sm font-semibold text-ink-2">
+                    <legend className="flex items-center gap-1.5 text-sm font-semibold text-ink-2">
+                      <Icon name="clock" size="compact" />
                       {SLOT_PICKER.label}
                     </legend>
                     <div className="grid grid-cols-3 gap-2 panel:grid-cols-5">
@@ -469,7 +476,7 @@ export function BookingDialog(props: BookingDialogProps) {
                 <CustomerSearch
                   customers={props.customers}
                   selectedId={values.customerId}
-                  query={values.mobile}
+                  mobile={values.mobile}
                   firstName={values.firstName}
                   lastName={values.lastName}
                   onChange={(patch) => setValues({ ...values, ...patch })}
@@ -483,14 +490,14 @@ export function BookingDialog(props: BookingDialogProps) {
             ) : null}
 
             {result !== null && !result.ok ? (
-              <p className="flex items-center gap-1 text-sm text-danger" role="alert">
+              <p className="flex items-center gap-2 rounded-md bg-danger-bg px-3 py-2 text-sm text-danger" role="alert">
                 <Icon name="error" size="compact" />
                 {result.message}
               </p>
             ) : null}
 
             {stepError === null ? null : (
-              <p className="flex items-center gap-1 text-sm text-danger" role="alert">
+              <p className="flex items-center gap-2 rounded-md bg-danger-bg px-3 py-2 text-sm text-danger" role="alert">
                 <Icon name="error" size="compact" />
                 {stepError}
               </p>
@@ -505,6 +512,7 @@ export function BookingDialog(props: BookingDialogProps) {
               {step > 1 ? (
                 <Button
                   variant="neutral"
+                 
                   onClick={() => setStep((step - 1) as Step)}
                   disabled={pending}
                 >
@@ -514,6 +522,7 @@ export function BookingDialog(props: BookingDialogProps) {
               {step < 3 ? (
                 <Button
                   variant="primary"
+
                   onClick={() => {
                     if (stepErrorMessage(step, values, props) === null) setStep((step + 1) as Step)
                   }}
@@ -521,7 +530,12 @@ export function BookingDialog(props: BookingDialogProps) {
                   {BOOKING_POPUP.actions.next}
                 </Button>
               ) : (
-                <Button variant="primary" loading={pending} onClick={() => void submit()}>
+                <Button
+                  variant="primary"
+                  leadingIcon="confirm"
+                  loading={pending}
+                  onClick={() => void submit()}
+                >
                   {BOOKING_POPUP.actions.confirm}
                 </Button>
               )}
@@ -593,12 +607,6 @@ function doctorNameOf(
 
 /**
  * The free slots the time step offers, for the doctor and day the popup is on.
- *
- * The map is keyed by doctor and by the date the value carries (the page read is
- * for one day, and a popup cannot ask for a different day's slots without a new
- * server round trip), so the lookup is the two keys the caller already has. A
- * missing doctor, a missing day, or a doctor with no slots left all produce the
- * same empty list, which the step renders as the picker's own empty sentence.
  */
 function freeSlotsFor(
   props: BookingDialogProps,
@@ -654,16 +662,6 @@ function stepErrorMessage(
   return null
 }
 
-/**
- * The whole form's own gate, checked on submit rather than only on the step the
- * desk happens to be standing on.
- *
- * A locked slot skips step 2's own "next" gate by design, and the customer step is
- * the last screen the desk sees — so a submit that reaches the server without the
- * three facts it needs is a booking that fails silently, and silence is the one
- * failure mode a desk cannot act on. The order here is the order the steps are
- * walked: service, then doctor, then day-and-time, then customer.
- */
 function wholeFormError(values: BookingValues): string | null {
   if (values.serviceId === '') return BOOKING_POPUP.chooseService
   if (values.doctorId === '') return BOOKING_POPUP.chooseDoctor
@@ -714,22 +712,23 @@ function DayButton({
       aria-pressed={selected}
       aria-disabled={disabled}
       className={cx(
-        'rounded-xs border px-2 py-2 text-xs',
+        'flex flex-col items-center gap-0.5 rounded-md border px-2 py-2 text-xs transition-all',
         selected
-          ? 'border-brand bg-brand-50 font-semibold text-brand-700'
-          : 'border-line-2 bg-surface text-ink-2',
-        disabled ? 'cursor-not-allowed opacity-60' : null,
+          ? 'border-brand bg-brand font-bold text-ink-inverse shadow-brand'
+          : 'border-line-2 bg-surface text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700',
+        disabled ? 'cursor-not-allowed opacity-50' : null,
       )}
     >
-      {`${weekdayName(jalaliWeekday(day))} ${toPersianDigits(jalaliParts(day).day)}`}
+      <span className={cx('text-[11px]', selected ? 'text-ink-inverse/80' : 'text-ink-3')}>
+        {weekdayName(jalaliWeekday(day))}
+      </span>
+      <span className="text-sm font-bold tabular-nums">
+        {toPersianDigits(jalaliParts(day).day)}
+      </span>
     </button>
   )
 }
 
-/**
- * One free time, as a button — the same control the day strip is made of, so the
- * desk reads "a slot" the same way in both halves of the step.
- */
 function SlotButton({
   time,
   selected,
@@ -745,10 +744,10 @@ function SlotButton({
       onClick={onSelect}
       aria-pressed={selected}
       className={cx(
-        'rounded-xs border px-2 py-2 text-xs tabular-nums',
+        'rounded-md border px-2 py-2.5 text-sm font-semibold tabular-nums transition-all',
         selected
-          ? 'border-brand bg-brand-50 font-semibold text-brand-700'
-          : 'border-line-2 bg-surface text-ink-2 hover:bg-surface-2',
+          ? 'border-brand bg-brand text-ink-inverse shadow-brand'
+          : 'border-line-2 bg-surface text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700',
       )}
     >
       {formatTime(time as LocalTime)}
@@ -759,19 +758,19 @@ function SlotButton({
 function CustomerSearch({
   customers,
   selectedId,
-  query,
+  mobile,
   firstName,
   lastName,
   onChange,
 }: {
   readonly customers: readonly CustomerOption[]
   readonly selectedId: string
-  readonly query: string
+  readonly mobile: string
   readonly firstName: string
   readonly lastName: string
   readonly onChange: (patch: Partial<BookingValues>) => void
 }) {
-  const matches = query.trim() === '' ? [] : searchCustomers(customers, query)
+  const matches = mobile === '' ? [] : searchCustomers(customers, mobile)
   const chosen =
     selectedId === '' ? null : customers.find((option) => option.id === selectedId) ?? null
 
@@ -781,7 +780,7 @@ function CustomerSearch({
         <TextInput
           type="text"
           inputMode="search"
-          value={query}
+          value={mobile}
           placeholder={BOOKING_POPUP.fields.mobile}
           onChange={(event) => {
             onChange({ mobile: event.target.value, customerId: '' })
@@ -804,10 +803,10 @@ function CustomerSearch({
                   })
                 }
                 className={cx(
-                  'inline-size-full rounded-xs border px-3 py-2 text-start text-sm',
+                  'inline-size-full rounded-md border px-3 py-2 text-start text-sm transition-all',
                   chosen?.id === option.id
-                    ? 'border-brand bg-brand-50'
-                    : 'border-line-2 bg-surface hover:bg-surface-2',
+                    ? 'border-brand bg-brand-50 shadow-brand'
+                    : 'border-line-2 bg-surface hover:border-brand-300 hover:bg-brand-50',
                 )}
               >
                 <span className="font-semibold text-ink">{customerName(option)}</span>
@@ -819,8 +818,11 @@ function CustomerSearch({
       )}
 
       {chosen === null ? (
-        <div className="rounded-sm border border-line-2 bg-surface-2 p-4">
-          <p className="text-sm font-semibold text-ink-2">{BOOKING_POPUP.newCustomer.label}</p>
+        <div className="rounded-md border border-dashed border-line-2 bg-surface-2 p-4">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-ink-2">
+            
+            {BOOKING_POPUP.newCustomer.label}
+          </p>
           <p className="mt-1 text-xs text-ink-3">{BOOKING_POPUP.newCustomer.lead}</p>
           <div className="mt-4 flex flex-col gap-4">
             <div className="flex flex-col gap-4 panel:flex-row">
@@ -842,7 +844,8 @@ function CustomerSearch({
           </div>
         </div>
       ) : (
-        <p className="rounded-sm bg-ok-bg px-3 py-2 text-sm text-ok">
+        <p className="flex items-center gap-2 rounded-md bg-ok-bg px-3 py-2 text-sm text-ok">
+          <Icon name="confirm" size="compact" />
           {customerName(chosen)} — {chosen.mobile}
         </p>
       )}
@@ -860,7 +863,7 @@ function Summary({
   readonly doctorName: string
 }) {
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-sm bg-surface-2 p-4 text-sm">
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-surface-2 p-4 text-sm">
       <SummaryRow label={BOOKING_POPUP.summary.service} value={service?.name ?? ''} />
       <SummaryRow label={BOOKING_POPUP.summary.doctor} value={doctorName} />
       <SummaryRow label={BOOKING_POPUP.summary.time} value={summaryTime(values)} />
@@ -885,16 +888,6 @@ function customerName(option: CustomerOption): string {
   return option.lastName === null ? option.firstName : `${option.firstName} ${option.lastName}`
 }
 
-/**
- * The customer search — a substring match on both the mobile and the name.
- *
- * The desk types whichever fact the customer gave first: the mobile number read
- * off a form, or the name said across the counter. The field therefore accepts
- * both, and a row is shown when either matches. The mobile match is against the
- * *normalised* mobile, so the first digits are enough and Persian digits in the
- * query find the Latin digits in the row; the name match is a substring against
- * the full name, so "کریمی" finds "فاطمه کریمی" and "فاطمه" finds her too.
- */
 function searchCustomers(
   customers: readonly CustomerOption[],
   query: string,

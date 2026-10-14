@@ -77,6 +77,12 @@
           <div class="kpi-value" style="font-size:var(--fs-lg)">۳۱٬۴۰۰٬۰۰۰</div></div></div>
       </div>
 
+      <div class="tabs mb-4" style="display:inline-flex" data-tabs-host>
+        <button class="active" data-tab="cf1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg> خلاصه پرونده</button>
+        <button data-tab="cf2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg> نقشه تزریق</button>
+      </div>
+
+      <div data-pane="cf1">
       <div class="grid g-2-1">
         <div class="col">
           <div class="card">
@@ -174,6 +180,529 @@
           </div>
         </div>
       </div>
+      </div>
+
+      <div class="hide" data-pane="cf2">
+      <div class="card fm" id="fm">
+        <div class="card-head">
+          <h4><span class="card-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg></span> نقشه تزریق
+            <span class="badge brand no-dot"><span id="fm-n">۱۳</span> مورد</span></h4>
+          <div class="row">
+            <button class="btn btn-sm" id="fm-zoom"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg> بزرگ‌نمایی</button>
+            <button class="btn btn-primary" id="fm-add"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> افزودن تزریق</button>
+          </div>
+        </div>
+
+        <div class="fm-bar">
+          <div class="chips" id="fm-sess">
+            <button class="active" data-s="">همه جلسات <span class="n"></span></button>
+            <button data-s="s3">۲۹ شهریور ۱۴۰۵</button><button data-s="s2">۰۱ شهریور ۱۴۰۵</button><button data-s="s1">۲۸ مرداد ۱۴۰۵</button>
+          </div>
+          <label class="check sm" id="fm-ghost-wrap">
+            <input type="checkbox" id="fm-ghost"><span>جلسات قبلی کم‌رنگ</span></label>
+        </div>
+
+        <div class="fm-grid">
+          <div class="fm-stage" id="fm-stage">
+            <div class="fm-hint hide" id="fm-tip-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>
+              <span id="fm-hint-z">روی هر نقطه‌ای از تصویر کلیک کنید</span></div>
+            
+    <svg class="fm-svg" viewBox="0 0 900 1367" xmlns="http://www.w3.org/2000/svg"
+         role="img" aria-label="نقشه تزریق">
+      <image href="../assets/img/face-chart-front.png" x="0" y="0" width="900" height="1367"
+             preserveAspectRatio="xMidYMid meet"/>
+      <rect class="fm-canvas" x="0" y="0" width="900" height="1367" fill="transparent"/>
+      <g class="fm-pins"><g class="fm-pin" data-i="1" data-s="s1" data-m="ha" data-z="گونه راست" data-amt="۰٫۵ سی‌سی" data-brand="رستیلن لیفت" data-lot="RL-۲۴۷۸۱" data-det="عمقی (سوپراپریوستئال)‏ · ‏کانولا" data-date="۲۸ مرداد ۱۴۰۵" style="--c:#A8294A" transform="translate(265 758) scale(2)"><circle r="13"></circle><text dy="4">۱</text></g><g class="fm-pin" data-i="2" data-s="s1" data-m="ha" data-z="گونه چپ" data-amt="۰٫۵ سی‌سی" data-brand="رستیلن لیفت" data-lot="RL-۲۴۷۸۱" data-det="عمقی (سوپراپریوستئال)‏ · ‏کانولا" data-date="۲۸ مرداد ۱۴۰۵" style="--c:#A8294A" transform="translate(635 758) scale(2)"><circle r="13"></circle><text dy="4">۲</text></g><g class="fm-pin" data-i="3" data-s="s1" data-m="ha" data-z="گودی زیر چشم راست" data-amt="۰٫۳ سی‌سی" data-brand="تئوسیال ردنسیتی" data-lot="TR-۹۰۳۳۲" data-det="زیرجلدی‏ · ‏کانولا" data-date="۲۸ مرداد ۱۴۰۵" style="--c:#A8294A" transform="translate(290 665) scale(2)"><circle r="13"></circle><text dy="4">۳</text></g><g class="fm-pin" data-i="4" data-s="s1" data-m="ha" data-z="گودی زیر چشم چپ" data-amt="۰٫۳ سی‌سی" data-brand="تئوسیال ردنسیتی" data-lot="TR-۹۰۳۳۲" data-det="زیرجلدی‏ · ‏کانولا" data-date="۲۸ مرداد ۱۴۰۵" style="--c:#A8294A" transform="translate(610 665) scale(2)"><circle r="13"></circle><text dy="4">۴</text></g><g class="fm-pin" data-i="5" data-s="s2" data-m="btx" data-z="خط اخم" data-amt="۲۰ واحد" data-brand="دیسپورت" data-lot="DP-۵۵۱۰۴" data-det="داخل عضلانی‏ · ‏سوزن" data-date="۰۱ شهریور ۱۴۰۵" style="--c:#3E8FD4" transform="translate(450 512) scale(2)"><rect x="-12" y="-12" width="24" height="24" rx="6"></rect><text dy="4">۵</text></g><g class="fm-pin" data-i="6" data-s="s2" data-m="btx" data-z="پیشانی" data-amt="۱۰ واحد" data-brand="دیسپورت" data-lot="DP-۵۵۱۰۴" data-det="داخل عضلانی‏ · ‏سوزن" data-date="۰۱ شهریور ۱۴۰۵" style="--c:#3E8FD4" transform="translate(450 420) scale(2)"><rect x="-12" y="-12" width="24" height="24" rx="6"></rect><text dy="4">۶</text></g><g class="fm-pin" data-i="7" data-s="s2" data-m="btx" data-z="پنجه کلاغی راست" data-amt="۸ واحد" data-brand="دیسپورت" data-lot="DP-۵۵۱۰۴" data-det="درم میانی‏ · ‏سوزن" data-date="۰۱ شهریور ۱۴۰۵" style="--c:#3E8FD4" transform="translate(185 600) scale(2)"><rect x="-12" y="-12" width="24" height="24" rx="6"></rect><text dy="4">۷</text></g><g class="fm-pin" data-i="8" data-s="s2" data-m="btx" data-z="پنجه کلاغی چپ" data-amt="۸ واحد" data-brand="دیسپورت" data-lot="DP-۵۵۱۰۴" data-det="درم میانی‏ · ‏سوزن" data-date="۰۱ شهریور ۱۴۰۵" style="--c:#3E8FD4" transform="translate(715 600) scale(2)"><rect x="-12" y="-12" width="24" height="24" rx="6"></rect><text dy="4">۸</text></g><g class="fm-pin" data-i="9" data-s="s3" data-m="ha" data-z="لب بالا" data-amt="۰٫۵ سی‌سی" data-brand="جوویدرم ولبلا" data-lot="JV-۷۱۲۴۰" data-det="زیرجلدی‏ · ‏سوزن" data-date="۲۹ شهریور ۱۴۰۵" style="--c:#A8294A" transform="translate(450 888) scale(2)"><circle r="13"></circle><text dy="4">۹</text></g><g class="fm-pin" data-i="10" data-s="s3" data-m="ha" data-z="لب پایین" data-amt="۰٫۵ سی‌سی" data-brand="جوویدرم ولبلا" data-lot="JV-۷۱۲۴۰" data-det="زیرجلدی‏ · ‏سوزن" data-date="۲۹ شهریور ۱۴۰۵" style="--c:#A8294A" transform="translate(450 934) scale(2)"><circle r="13"></circle><text dy="4">۱۰</text></g><g class="fm-pin" data-i="11" data-s="s3" data-m="ha" data-z="چانه" data-amt="۰٫۸ سی‌سی" data-brand="جوویدرم ولوما" data-lot="JV-۸۸۰۱۶" data-det="عمقی (سوپراپریوستئال)‏ · ‏کانولا" data-date="۲۹ شهریور ۱۴۰۵" style="--c:#A8294A" transform="translate(450 1005) scale(2)"><circle r="13"></circle><text dy="4">۱۱</text></g><g class="fm-pin" data-i="12" data-s="s3" data-m="ha" data-z="خط فک راست" data-amt="۰٫۷ سی‌سی" data-brand="جوویدرم ولوما" data-lot="JV-۸۸۰۱۶" data-det="عمقی (سوپراپریوستئال)‏ · ‏کانولا" data-date="۲۹ شهریور ۱۴۰۵" style="--c:#A8294A" transform="translate(288 975) scale(2)"><circle r="13"></circle><text dy="4">۱۲</text></g><g class="fm-pin" data-i="13" data-s="s3" data-m="ha" data-z="خط فک چپ" data-amt="۰٫۷ سی‌سی" data-brand="جوویدرم ولوما" data-lot="JV-۸۸۰۱۶" data-det="عمقی (سوپراپریوستئال)‏ · ‏کانولا" data-date="۲۹ شهریور ۱۴۰۵" style="--c:#A8294A" transform="translate(612 975) scale(2)"><circle r="13"></circle><text dy="4">۱۳</text></g></g>
+    </svg>
+            <div class="fm-tip hide" id="fm-tip"></div>
+            <div class="fm-orient">نما از دید معاینه‌کننده — سمت راست بیمار در چپ تصویر</div>
+          </div>
+
+          <div class="fm-aside">
+            <div class="fm-sum">
+          <div class="fm-tot" data-k="ha" data-v="4.8" style="--c:#A8294A">
+            <svg viewBox="-18 -18 36 36" class="fm-gl"><circle r="13"></circle></svg>
+            <span><b>۴٫۸</b> <i>سی‌سی</i>
+              <div class="xs mute-2">ژل هیالورونیک اسید</div></span>
+          </div>
+          <div class="fm-tot" data-k="btx" data-v="46" style="--c:#3E8FD4">
+            <svg viewBox="-18 -18 36 36" class="fm-gl"><rect x="-12" y="-12" width="24" height="24" rx="6"></rect></svg>
+            <span><b>۴۶</b> <i>واحد</i>
+              <div class="xs mute-2">بوتاکس</div></span>
+          </div></div>
+            <div class="fm-block">
+              <div class="fm-bt">تفکیک ماده</div>
+              <div class="fm-legend" id="fm-legend"><button class="fm-lg" data-m="ha" style="--c:#A8294A"><svg viewBox="-18 -18 36 36" class="fm-gl"><circle r="13"></circle></svg><span>ژل هیالورونیک اسید</span></button><button class="fm-lg" data-m="btx" style="--c:#3E8FD4"><svg viewBox="-18 -18 36 36" class="fm-gl"><rect x="-12" y="-12" width="24" height="24" rx="6"></rect></svg><span>بوتاکس</span></button><button class="fm-lg" data-m="fat" style="--c:#B06A12"><svg viewBox="-18 -18 36 36" class="fm-gl"><path d="M0 -14.5L13.5 9.5H-13.5Z"></path></svg><span>تزریق چربی</span></button><button class="fm-lg" data-m="meso" style="--c:#36A073"><svg viewBox="-18 -18 36 36" class="fm-gl"><path d="M0 -15L15 0L0 15L-15 0Z"></path></svg><span>مزوتراپی</span></button><button class="fm-lg" data-m="thr" style="--c:#5B3F8C"><svg viewBox="-18 -18 36 36" class="fm-gl"><path d="M0 -14.5L12.6 -7.2V7.2L0 14.5L-12.6 7.2V-7.2Z"></path></svg><span>نخ</span></button></div>
+            </div>
+            <div class="fm-block">
+              <div class="fm-bt">بیشترین حجم بر اساس ناحیه</div>
+              <div class="col" style="gap:var(--s-2)"><div class="row-between"><span class="small">خط اخم</span><span class="small"><b>۲۰</b> <span class="mute-2">واحد</span></span></div><div class="row-between"><span class="small">پیشانی</span><span class="small"><b>۱۰</b> <span class="mute-2">واحد</span></span></div><div class="row-between"><span class="small">پنجه کلاغی راست</span><span class="small"><b>۸</b> <span class="mute-2">واحد</span></span></div><div class="row-between"><span class="small">پنجه کلاغی چپ</span><span class="small"><b>۸</b> <span class="mute-2">واحد</span></span></div><div class="row-between"><span class="small">چانه</span><span class="small"><b>۰٫۸</b> <span class="mute-2">سی‌سی</span></span></div><div class="row-between"><span class="small">خط فک راست</span><span class="small"><b>۰٫۷</b> <span class="mute-2">سی‌سی</span></span></div></div>
+            </div>
+            <div class="fm-block">
+              <div class="fm-bt">آخرین جلسه</div>
+              <div class="small"><b>۲۹ شهریور ۱۴۰۵</b>
+                <div class="xs mute-2">دکتر کیانی — حجم‌دهی لب و چانه</div></div>
+            </div>
+            <div class="fm-block">
+              <div class="row-between"><span class="small">رضایت‌نامه تزریق</span>
+                <span class="badge ok no-dot">امضا شده</span></div>
+              <div class="xs mute-2 mt-2">۲۸ مرداد ۱۴۰۵ — نسخه ۲ فرم رضایت</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table fm-table" id="fm-rows">
+            <thead><tr><th style="width:52px">#</th><th>ناحیه</th><th>ماده و برند</th>
+              <th>مقدار</th><th>عمق و تکنیک</th><th>شماره بچ</th><th>جلسه</th>
+              <th></th></tr></thead>
+            <tbody>
+          <tr data-i="1" data-s="s1" data-m="ha">
+            <td class="num"><span class="fm-dot" style="--c:#A8294A">۱</span></td>
+            <td class="t-title">گونه راست</td>
+            <td><span class="fm-mat" style="--c:#A8294A">ژل هیالورونیک اسید</span>
+              <div class="xs mute-2">رستیلن لیفت</div></td>
+            <td class="num bold">۰٫۵ <span class="mute-2 xs">سی‌سی</span></td>
+            <td class="small mute">عمقی (سوپراپریوستئال)<div class="xs mute-2">کانولا</div></td>
+            <td class="num mute ltr" style="text-align:right">RL-۲۴۷۸۱</td>
+            <td class="num mute">۲۸ مرداد ۱۴۰۵<div class="xs mute-2">دکتر نادری</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="2" data-s="s1" data-m="ha">
+            <td class="num"><span class="fm-dot" style="--c:#A8294A">۲</span></td>
+            <td class="t-title">گونه چپ</td>
+            <td><span class="fm-mat" style="--c:#A8294A">ژل هیالورونیک اسید</span>
+              <div class="xs mute-2">رستیلن لیفت</div></td>
+            <td class="num bold">۰٫۵ <span class="mute-2 xs">سی‌سی</span></td>
+            <td class="small mute">عمقی (سوپراپریوستئال)<div class="xs mute-2">کانولا</div></td>
+            <td class="num mute ltr" style="text-align:right">RL-۲۴۷۸۱</td>
+            <td class="num mute">۲۸ مرداد ۱۴۰۵<div class="xs mute-2">دکتر نادری</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="3" data-s="s1" data-m="ha">
+            <td class="num"><span class="fm-dot" style="--c:#A8294A">۳</span></td>
+            <td class="t-title">گودی زیر چشم راست</td>
+            <td><span class="fm-mat" style="--c:#A8294A">ژل هیالورونیک اسید</span>
+              <div class="xs mute-2">تئوسیال ردنسیتی</div></td>
+            <td class="num bold">۰٫۳ <span class="mute-2 xs">سی‌سی</span></td>
+            <td class="small mute">زیرجلدی<div class="xs mute-2">کانولا</div></td>
+            <td class="num mute ltr" style="text-align:right">TR-۹۰۳۳۲</td>
+            <td class="num mute">۲۸ مرداد ۱۴۰۵<div class="xs mute-2">دکتر نادری</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="4" data-s="s1" data-m="ha">
+            <td class="num"><span class="fm-dot" style="--c:#A8294A">۴</span></td>
+            <td class="t-title">گودی زیر چشم چپ</td>
+            <td><span class="fm-mat" style="--c:#A8294A">ژل هیالورونیک اسید</span>
+              <div class="xs mute-2">تئوسیال ردنسیتی</div></td>
+            <td class="num bold">۰٫۳ <span class="mute-2 xs">سی‌سی</span></td>
+            <td class="small mute">زیرجلدی<div class="xs mute-2">کانولا</div></td>
+            <td class="num mute ltr" style="text-align:right">TR-۹۰۳۳۲</td>
+            <td class="num mute">۲۸ مرداد ۱۴۰۵<div class="xs mute-2">دکتر نادری</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="5" data-s="s2" data-m="btx">
+            <td class="num"><span class="fm-dot" style="--c:#3E8FD4">۵</span></td>
+            <td class="t-title">خط اخم</td>
+            <td><span class="fm-mat" style="--c:#3E8FD4">بوتاکس</span>
+              <div class="xs mute-2">دیسپورت</div></td>
+            <td class="num bold">۲۰ <span class="mute-2 xs">واحد</span></td>
+            <td class="small mute">داخل عضلانی<div class="xs mute-2">سوزن</div></td>
+            <td class="num mute ltr" style="text-align:right">DP-۵۵۱۰۴</td>
+            <td class="num mute">۰۱ شهریور ۱۴۰۵<div class="xs mute-2">دکتر کیانی</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="6" data-s="s2" data-m="btx">
+            <td class="num"><span class="fm-dot" style="--c:#3E8FD4">۶</span></td>
+            <td class="t-title">پیشانی</td>
+            <td><span class="fm-mat" style="--c:#3E8FD4">بوتاکس</span>
+              <div class="xs mute-2">دیسپورت</div></td>
+            <td class="num bold">۱۰ <span class="mute-2 xs">واحد</span></td>
+            <td class="small mute">داخل عضلانی<div class="xs mute-2">سوزن</div></td>
+            <td class="num mute ltr" style="text-align:right">DP-۵۵۱۰۴</td>
+            <td class="num mute">۰۱ شهریور ۱۴۰۵<div class="xs mute-2">دکتر کیانی</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="7" data-s="s2" data-m="btx">
+            <td class="num"><span class="fm-dot" style="--c:#3E8FD4">۷</span></td>
+            <td class="t-title">پنجه کلاغی راست</td>
+            <td><span class="fm-mat" style="--c:#3E8FD4">بوتاکس</span>
+              <div class="xs mute-2">دیسپورت</div></td>
+            <td class="num bold">۸ <span class="mute-2 xs">واحد</span></td>
+            <td class="small mute">درم میانی<div class="xs mute-2">سوزن</div></td>
+            <td class="num mute ltr" style="text-align:right">DP-۵۵۱۰۴</td>
+            <td class="num mute">۰۱ شهریور ۱۴۰۵<div class="xs mute-2">دکتر کیانی</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="8" data-s="s2" data-m="btx">
+            <td class="num"><span class="fm-dot" style="--c:#3E8FD4">۸</span></td>
+            <td class="t-title">پنجه کلاغی چپ</td>
+            <td><span class="fm-mat" style="--c:#3E8FD4">بوتاکس</span>
+              <div class="xs mute-2">دیسپورت</div></td>
+            <td class="num bold">۸ <span class="mute-2 xs">واحد</span></td>
+            <td class="small mute">درم میانی<div class="xs mute-2">سوزن</div></td>
+            <td class="num mute ltr" style="text-align:right">DP-۵۵۱۰۴</td>
+            <td class="num mute">۰۱ شهریور ۱۴۰۵<div class="xs mute-2">دکتر کیانی</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="9" data-s="s3" data-m="ha">
+            <td class="num"><span class="fm-dot" style="--c:#A8294A">۹</span></td>
+            <td class="t-title">لب بالا</td>
+            <td><span class="fm-mat" style="--c:#A8294A">ژل هیالورونیک اسید</span>
+              <div class="xs mute-2">جوویدرم ولبلا</div></td>
+            <td class="num bold">۰٫۵ <span class="mute-2 xs">سی‌سی</span></td>
+            <td class="small mute">زیرجلدی<div class="xs mute-2">سوزن</div></td>
+            <td class="num mute ltr" style="text-align:right">JV-۷۱۲۴۰</td>
+            <td class="num mute">۲۹ شهریور ۱۴۰۵<div class="xs mute-2">دکتر کیانی</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="10" data-s="s3" data-m="ha">
+            <td class="num"><span class="fm-dot" style="--c:#A8294A">۱۰</span></td>
+            <td class="t-title">لب پایین</td>
+            <td><span class="fm-mat" style="--c:#A8294A">ژل هیالورونیک اسید</span>
+              <div class="xs mute-2">جوویدرم ولبلا</div></td>
+            <td class="num bold">۰٫۵ <span class="mute-2 xs">سی‌سی</span></td>
+            <td class="small mute">زیرجلدی<div class="xs mute-2">سوزن</div></td>
+            <td class="num mute ltr" style="text-align:right">JV-۷۱۲۴۰</td>
+            <td class="num mute">۲۹ شهریور ۱۴۰۵<div class="xs mute-2">دکتر کیانی</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="11" data-s="s3" data-m="ha">
+            <td class="num"><span class="fm-dot" style="--c:#A8294A">۱۱</span></td>
+            <td class="t-title">چانه</td>
+            <td><span class="fm-mat" style="--c:#A8294A">ژل هیالورونیک اسید</span>
+              <div class="xs mute-2">جوویدرم ولوما</div></td>
+            <td class="num bold">۰٫۸ <span class="mute-2 xs">سی‌سی</span></td>
+            <td class="small mute">عمقی (سوپراپریوستئال)<div class="xs mute-2">کانولا</div></td>
+            <td class="num mute ltr" style="text-align:right">JV-۸۸۰۱۶</td>
+            <td class="num mute">۲۹ شهریور ۱۴۰۵<div class="xs mute-2">دکتر کیانی</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="12" data-s="s3" data-m="ha">
+            <td class="num"><span class="fm-dot" style="--c:#A8294A">۱۲</span></td>
+            <td class="t-title">خط فک راست</td>
+            <td><span class="fm-mat" style="--c:#A8294A">ژل هیالورونیک اسید</span>
+              <div class="xs mute-2">جوویدرم ولوما</div></td>
+            <td class="num bold">۰٫۷ <span class="mute-2 xs">سی‌سی</span></td>
+            <td class="small mute">عمقی (سوپراپریوستئال)<div class="xs mute-2">کانولا</div></td>
+            <td class="num mute ltr" style="text-align:right">JV-۸۸۰۱۶</td>
+            <td class="num mute">۲۹ شهریور ۱۴۰۵<div class="xs mute-2">دکتر کیانی</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr>
+          <tr data-i="13" data-s="s3" data-m="ha">
+            <td class="num"><span class="fm-dot" style="--c:#A8294A">۱۳</span></td>
+            <td class="t-title">خط فک چپ</td>
+            <td><span class="fm-mat" style="--c:#A8294A">ژل هیالورونیک اسید</span>
+              <div class="xs mute-2">جوویدرم ولوما</div></td>
+            <td class="num bold">۰٫۷ <span class="mute-2 xs">سی‌سی</span></td>
+            <td class="small mute">عمقی (سوپراپریوستئال)<div class="xs mute-2">کانولا</div></td>
+            <td class="num mute ltr" style="text-align:right">JV-۸۸۰۱۶</td>
+            <td class="num mute">۲۹ شهریور ۱۴۰۵<div class="xs mute-2">دکتر کیانی</div></td>
+            <td style="text-align:end"><button class="icon-btn sm" title="ویرایش" data-modal="m-inj"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 5.5 18.5 9.5"/></svg></button></td>
+          </tr></tbody>
+          </table>
+          <div class="fm-empty hide" id="fm-empty" data-cols="8">
+            موردی با این فیلتر وجود ندارد.</div>
+        </div>
+
+        <div class="card-foot row" style="flex-wrap:wrap;gap:var(--s-4)">
+          <span class="hint grow">تصویر نقشه از «تنظیمات ← کلینیک» قابل تغییر است.
+            محل، ماده و مقدار، داده پزشکی پرونده‌اند — در دسترس مدیر و پزشک معالج.</span>
+          <button class="btn btn-sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M8 11l4 4 4-4"/><path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18"/></svg> خروجی چاپی</button>
+        </div>
+      </div>
+
+      <div class="modal-back hide" id="m-inj">
+        <div class="modal">
+          <div class="card-head"><h4>ثبت تزریق</h4>
+            <button class="icon-btn" data-modal-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+          <div class="card-body col m-scroll">
+            <div class="note row" style="gap:var(--s-3)">
+              <span class="kpi-ico" style="width:36px;height:36px;background:var(--brand-50);
+                color:var(--brand)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg></span>
+              <span><b>محل روی نقشه ثبت شد</b>
+                <div class="xs mute-2">نقطه دقیقاً همان‌جایی است که کلیک کردید
+                  (<span id="inj-xy" class="ltr"></span>). برای جابه‌جایی پنجره را ببندید
+                  و دوباره روی نقطه دلخواه بزنید.</div></span>
+            </div>
+            <div class="field"><span class="label">نام ناحیه — پیشنهاد سیستم، قابل تغییر</span>
+              <select class="select" id="inj-zone"><option value="forehead">پیشانی</option><option value="glabella">خط اخم</option><option value="brow-r">ابروی راست</option><option value="brow-l">ابروی چپ</option><option value="temple-r">شقیقه راست</option><option value="temple-l">شقیقه چپ</option><option value="crow-r">پنجه کلاغی راست</option><option value="crow-l">پنجه کلاغی چپ</option><option value="tear-r">گودی زیر چشم راست</option><option value="tear-l">گودی زیر چشم چپ</option><option value="cheek-r">گونه راست</option><option value="cheek-l">گونه چپ</option><option value="nose">بینی</option><option value="naso-r">خط خنده راست</option><option value="naso-l">خط خنده چپ</option><option value="lip-top">لب بالا</option><option value="lip-bot">لب پایین</option><option value="mario-r">خط ماریونت راست</option><option value="mario-l">خط ماریونت چپ</option><option value="chin">چانه</option><option value="jaw-r">خط فک راست</option><option value="jaw-l">خط فک چپ</option><option value="neck">گردن</option><option value="__free">سایر — نام دلخواه…</option></select></div>
+            <div class="field hide" id="inj-zfree-wrap">
+              <span class="label">نام ناحیه (دلخواه)</span>
+              <input class="input" id="inj-zfree" placeholder="مثلاً زاویه فک سمت راست"></div>
+            <div id="inj-risk" class="alert warn hide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.8 20h18.4Z"/><path d="M12 10v4M12 17.2v.1"/></svg>
+              <div>این ناحیه در تنظیمات کلینیک «نیازمند احتیاط» علامت خورده است.</div></div>
+            <div class="grid g-2">
+              <div class="field"><span class="label">ماده</span>
+                <select class="select" id="inj-mat"><option value="ha">ژل هیالورونیک اسید</option><option value="btx">بوتاکس</option><option value="fat">تزریق چربی</option><option value="meso">مزوتراپی</option><option value="thr">نخ</option></select></div>
+              <div class="field"><span class="label">مقدار (<span id="inj-unit">سی‌سی</span>)</span>
+                <input class="input" id="inj-amt" type="number" step="0.1" min="0" value="0.5"></div>
+            </div>
+            <div class="grid g-2">
+              <div class="field"><span class="label">برند / محصول</span>
+                <input class="input" id="inj-brand" placeholder="مثلاً جوویدرم ولوما"></div>
+              <div class="field"><span class="label">شماره بچ (Lot)</span>
+                <input class="input ltr" id="inj-lot" placeholder="JV-00000"></div>
+            </div>
+            <div class="grid g-2">
+              <div class="field"><span class="label">عمق</span>
+                <select class="select" id="inj-dep"><option>زیرجلدی</option><option>عمقی (سوپراپریوستئال)</option><option>داخل عضلانی</option><option>درم میانی</option></select></div>
+              <div class="field"><span class="label">تکنیک</span>
+                <select class="select" id="inj-tech"><option>کانولا</option><option>سوزن</option></select></div>
+            </div>
+            <div class="field"><span class="label">یادداشت (اختیاری)</span>
+              <textarea class="textarea" id="inj-note" rows="2"></textarea></div>
+            <div class="alert info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8v.1"/></svg><div>شماره بچ برای پیگیری محصول ثبت می‌شود و
+              در صورت عارضه، تمام مراجعینی که از همان بچ دریافت کرده‌اند قابل بازیابی‌اند.</div></div>
+          </div>
+          <div class="card-foot row" style="justify-content:flex-end">
+            <button class="btn" data-modal-close>انصراف</button>
+            <button class="btn btn-primary" id="inj-save">ثبت تزریق</button>
+          </div>
+        </div>
+      </div>
+
+<script>
+(function () {
+  var root = document.getElementById("fm"); if (!root) return;
+  var D = "۰۱۲۳۴۵۶۷۸۹";
+  var fa = function (s) {
+    return String(s).replace(/\./g, "٫").replace(/[0-9]/g, function (d) { return D[+d]; });
+  };
+  var q = function (s) { return root.querySelector(s); };
+  var qa = function (s) { return [].slice.call(root.querySelectorAll(s)); };
+
+  var stage = q("#fm-stage"), tip = q("#fm-tip");
+  var sess = "", mat = "", ghost = false;
+
+  function apply() {
+    var shown = 0;
+    qa(".fm-pin").forEach(function (p) {
+      var okS = !sess || p.dataset.s === sess;
+      var okM = !mat || p.dataset.m === mat;
+      var old = sess && p.dataset.s !== sess;
+      p.classList.toggle("hide", !((okS || (ghost && okM)) && okM));
+      p.classList.toggle("ghost", ghost && old && okM);
+    });
+    qa("#fm-rows tbody tr").forEach(function (tr) {
+      var ok = (!sess || tr.dataset.s === sess) && (!mat || tr.dataset.m === mat);
+      tr.classList.toggle("hide", !ok);
+      if (ok) shown++;
+    });
+    q("#fm-n").textContent = fa(shown);
+    q("#fm-empty").classList.toggle("hide", shown > 0);
+    counts();
+  }
+
+  function counts() {
+    qa("#fm-sess button").forEach(function (b) {
+      var k = b.dataset.s, n = 0;
+      qa("#fm-rows tbody tr").forEach(function (tr) {
+        if ((!k || tr.dataset.s === k) && (!mat || tr.dataset.m === mat)) n++;
+      });
+      var el = b.querySelector(".n"); if (el) el.textContent = fa(n);
+      else b.insertAdjacentHTML("beforeend", ' <span class="n">' + fa(n) + "</span>");
+    });
+  }
+
+  q("#fm-sess").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    qa("#fm-sess button").forEach(function (x) { x.classList.remove("active"); });
+    b.classList.add("active"); sess = b.dataset.s || ""; apply();
+  });
+
+  q("#fm-legend").addEventListener("click", function (e) {
+    var b = e.target.closest(".fm-lg"); if (!b) return;
+    var k = b.dataset.m;
+    mat = (mat === k) ? "" : k;
+    qa(".fm-lg").forEach(function (x) { x.classList.toggle("off", mat && x.dataset.m !== mat); });
+    apply();
+  });
+
+  var g = q("#fm-ghost");
+  if (g) g.addEventListener("change", function () { ghost = g.checked; apply(); });
+
+  var zoom = q("#fm-zoom");
+  if (zoom) zoom.addEventListener("click", function () {
+    var on = stage.classList.toggle("zoom");
+    zoom.classList.toggle("btn-soft", on);
+  });
+
+  /* تول‌تیپ */
+  function showTip(p) {
+    var d = p.dataset;
+    tip.innerHTML = '<b>' + d.z + '</b>' +
+      '<div class="r"><span>ماده</span><b>' + d.brand + '</b></div>' +
+      '<div class="r"><span>مقدار</span><b>' + d.amt + '</b></div>' +
+      '<div class="r"><span>روش</span><b>' + d.det + '</b></div>' +
+      '<div class="r"><span>بچ</span><b class="ltr">' + d.lot + '</b></div>' +
+      '<div class="r"><span>تاریخ</span><b>' + d.date + '</b></div>';
+    var sb = stage.getBoundingClientRect(), pb = p.getBoundingClientRect();
+    tip.classList.remove("hide");
+    var x = pb.left + pb.width / 2 - sb.left, y = pb.top - sb.top;
+    tip.style.left = Math.max(8, Math.min(sb.width - tip.offsetWidth - 8,
+                                          x - tip.offsetWidth / 2)) + "px";
+    tip.style.top = Math.max(4, y - tip.offsetHeight - 12) + "px";
+  }
+  stage.addEventListener("mouseover", function (e) {
+    var p = e.target.closest(".fm-pin"); if (p) showTip(p);
+  });
+  stage.addEventListener("mouseout", function (e) {
+    if (e.target.closest(".fm-pin")) tip.classList.add("hide");
+  });
+
+  stage.addEventListener("click", function (e) {
+    var p = e.target.closest(".fm-pin"); if (!p || stage.classList.contains("adding")) return;
+    pick(p.dataset.i);
+  });
+  q("#fm-rows").addEventListener("mouseover", function (e) {
+    var tr = e.target.closest("tr[data-i]"); if (tr) pick(tr.dataset.i, true);
+  });
+  function pick(i, soft) {
+    qa(".fm-pin").forEach(function (p) { p.classList.toggle("sel", p.dataset.i === i); });
+    qa("#fm-rows tbody tr").forEach(function (t) { t.classList.toggle("sel", t.dataset.i === i); });
+    if (!soft) {
+      var tr = q('#fm-rows tbody tr[data-i="' + i + '"]');
+      if (tr) tr.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
+  window.FM = { root: root, fa: fa, q: q, qa: qa, stage: stage, apply: apply };
+  apply();
+})();
+</script>
+<script>
+(function () {
+  if (!window.FM) return;
+  var FM = window.FM, root = FM.root, stage = FM.stage, q = FM.q, qa = FM.qa, fa = FM.fa;
+  var mq = function (s) { return document.querySelector(s); };
+  var MAT = {"ha": {"n": "ژل هیالورونیک اسید", "c": "#A8294A", "sh": "circle", "u": "سی‌سی", "s": "0.1"}, "btx": {"n": "بوتاکس", "c": "#3E8FD4", "sh": "square", "u": "واحد", "s": "1"}, "fat": {"n": "تزریق چربی", "c": "#B06A12", "sh": "tri", "u": "سی‌سی", "s": "0.5"}, "meso": {"n": "مزوتراپی", "c": "#36A073", "sh": "diamond", "u": "سی‌سی", "s": "0.5"}, "thr": {"n": "نخ", "c": "#5B3F8C", "sh": "hex", "u": "رشته", "s": "1"}}, ZONES = [{"k": "forehead", "n": "پیشانی", "x": 436, "y": 420, "rx": 150, "ry": 60, "r": 0}, {"k": "glabella", "n": "خط اخم", "x": 436, "y": 505, "rx": 44, "ry": 38, "r": 1}, {"k": "brow-r", "n": "ابروی راست", "x": 300, "y": 492, "rx": 72, "ry": 26, "r": 0}, {"k": "brow-l", "n": "ابروی چپ", "x": 572, "y": 492, "rx": 72, "ry": 26, "r": 0}, {"k": "temple-r", "n": "شقیقه راست", "x": 206, "y": 478, "rx": 58, "ry": 78, "r": 0}, {"k": "temple-l", "n": "شقیقه چپ", "x": 666, "y": 478, "rx": 58, "ry": 78, "r": 0}, {"k": "crow-r", "n": "پنجه کلاغی راست", "x": 182, "y": 585, "rx": 46, "ry": 46, "r": 0}, {"k": "crow-l", "n": "پنجه کلاغی چپ", "x": 690, "y": 585, "rx": 46, "ry": 46, "r": 0}, {"k": "tear-r", "n": "گودی زیر چشم راست", "x": 268, "y": 650, "rx": 70, "ry": 32, "r": 1}, {"k": "tear-l", "n": "گودی زیر چشم چپ", "x": 604, "y": 650, "rx": 70, "ry": 32, "r": 1}, {"k": "cheek-r", "n": "گونه راست", "x": 222, "y": 712, "rx": 82, "ry": 74, "r": 0}, {"k": "cheek-l", "n": "گونه چپ", "x": 650, "y": 712, "rx": 82, "ry": 74, "r": 0}, {"k": "nose", "n": "بینی", "x": 436, "y": 740, "rx": 56, "ry": 110, "r": 1}, {"k": "naso-r", "n": "خط خنده راست", "x": 348, "y": 840, "rx": 34, "ry": 60, "r": 1}, {"k": "naso-l", "n": "خط خنده چپ", "x": 524, "y": 840, "rx": 34, "ry": 60, "r": 1}, {"k": "lip-top", "n": "لب بالا", "x": 436, "y": 896, "rx": 95, "ry": 28, "r": 0}, {"k": "lip-bot", "n": "لب پایین", "x": 436, "y": 932, "rx": 92, "ry": 30, "r": 0}, {"k": "mario-r", "n": "خط ماریونت راست", "x": 350, "y": 960, "rx": 30, "ry": 50, "r": 0}, {"k": "mario-l", "n": "خط ماریونت چپ", "x": 522, "y": 960, "rx": 30, "ry": 50, "r": 0}, {"k": "chin", "n": "چانه", "x": 436, "y": 1000, "rx": 72, "ry": 46, "r": 0}, {"k": "jaw-r", "n": "خط فک راست", "x": 248, "y": 930, "rx": 62, "ry": 80, "r": 0}, {"k": "jaw-l", "n": "خط فک چپ", "x": 624, "y": 930, "rx": 62, "ry": 80, "r": 0}, {"k": "neck", "n": "گردن", "x": 436, "y": 1180, "rx": 150, "ry": 110, "r": 0}];
+  var DEPTH = ["زیرجلدی", "عمقی (سوپراپریوستئال)", "داخل عضلانی", "درم میانی"], TECH = ["کانولا", "سوزن"], SHAPE = {"circle": "<circle r=\"13\"></circle>", "square": "<rect x=\"-12\" y=\"-12\" width=\"24\" height=\"24\" rx=\"6\"></rect>", "tri": "<path d=\"M0 -14.5L13.5 9.5H-13.5Z\"></path>", "diamond": "<path d=\"M0 -15L15 0L0 15L-15 0Z\"></path>", "hex": "<path d=\"M0 -14.5L12.6 -7.2V7.2L0 14.5L-12.6 7.2V-7.2Z\"></path>"};
+  var pending = null, n = 13;
+  var svg = stage.querySelector(".fm-svg");
+
+  /* نزدیک‌ترین ناحیه به نقطه کلیک — فقط برای پیشنهاد نام */
+  function suggest(x, y) {
+    var best = null, bestD = Infinity;
+    for (var i = 0; i < ZONES.length; i++) {
+      var z = ZONES[i];
+      var dx = (x - z.x) / z.rx, dy = (y - z.y) / z.ry;
+      var d = dx * dx + dy * dy;
+      if (d <= 1) return z;                 /* داخل ناحیه */
+      if (d < bestD) { bestD = d; best = z; }
+    }
+    return bestD < 4 ? best : null;         /* خیلی دور ⇒ بدون پیشنهاد */
+  }
+
+  function toLocal(e) {
+    var pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    var l = pt.matrixTransform(svg.getScreenCTM().inverse());
+    return { x: Math.round(l.x), y: Math.round(l.y) };
+  }
+
+  var addBtn = q("#fm-add"), hint = q("#fm-tip-add"), hintZ = q("#fm-hint-z");
+  addBtn.addEventListener("click", function () {
+    var on = stage.classList.toggle("adding");
+    hint.classList.toggle("hide", !on);
+    addBtn.classList.toggle("btn-primary", !on);
+    addBtn.textContent = on ? "انصراف از ثبت" : "افزودن تزریق";
+  });
+
+  stage.addEventListener("mousemove", function (e) {
+    if (!stage.classList.contains("adding")) return;
+    var l = toLocal(e), z = suggest(l.x, l.y);
+    hintZ.textContent = z ? ("نزدیک‌ترین ناحیه: " + z.n + " — برای ثبت کلیک کنید")
+                          : "روی هر نقطه‌ای از تصویر کلیک کنید";
+  });
+
+  stage.addEventListener("click", function (e) {
+    if (!stage.classList.contains("adding")) return;
+    var l = toLocal(e), z = suggest(l.x, l.y);
+    pending = { x: l.x, y: l.y, risk: !!(z && z.r) };
+    mq("#inj-zone").value = z ? z.k : "__free";
+    mq("#inj-zfree-wrap").classList.toggle("hide", !!z);
+    mq("#inj-zfree").value = "";
+    mq("#inj-xy").textContent = l.x + " × " + l.y;
+    mq("#inj-risk").classList.toggle("hide", !pending.risk);
+    document.getElementById("m-inj").classList.remove("hide");
+  });
+
+  mq("#inj-zone").addEventListener("change", function () {
+    mq("#inj-zfree-wrap").classList.toggle("hide", this.value !== "__free");
+    var z = null;
+    for (var i = 0; i < ZONES.length; i++) if (ZONES[i].k === this.value) z = ZONES[i];
+    mq("#inj-risk").classList.toggle("hide", !(z && z.r));
+  });
+
+  mq("#inj-mat").addEventListener("change", function () {
+    var m = MAT[this.value];
+    mq("#inj-unit").textContent = m.u;
+    mq("#inj-amt").step = m.s;
+    mq("#inj-amt").value = m.s === "1" ? "10" : "0.5";
+  });
+
+  mq("#inj-save").addEventListener("click", function () {
+    if (!pending) return;
+    var k = mq("#inj-mat").value, m = MAT[k];
+    var zv = mq("#inj-zone").value, zn = "نقطه ثبت‌شده";
+    if (zv === "__free") zn = mq("#inj-zfree").value || "ناحیه دلخواه";
+    else for (var i = 0; i < ZONES.length; i++) if (ZONES[i].k === zv) zn = ZONES[i].n;
+    var amt = mq("#inj-amt").value || "0";
+    var brand = mq("#inj-brand").value || m.n;
+    var lot = mq("#inj-lot").value || "—";
+    var dep = mq("#inj-dep").value, tech = mq("#inj-tech").value;
+    n++;
+    var dy = m.sh === "tri" ? 7 : 4;
+    var g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("class", "fm-pin new");
+    g.setAttribute("transform", "translate(" + pending.x + " " + pending.y + ") scale(2)");
+    g.style.setProperty("--c", m.c);
+    g.dataset.i = n; g.dataset.s = "new"; g.dataset.m = k; g.dataset.z = zn;
+    g.dataset.amt = fa(amt) + " " + m.u; g.dataset.brand = brand; g.dataset.lot = lot;
+    g.dataset.det = dep + "‏ · ‏" + tech; g.dataset.date = "امروز";
+    g.innerHTML = SHAPE[m.sh] + '<text dy="' + dy + '">' + fa(n) + "</text>";
+    stage.querySelector(".fm-pins").appendChild(g);
+
+    var tb = q("#fm-rows tbody");
+    var tr = document.createElement("tr");
+    tr.dataset.i = n; tr.dataset.s = "new"; tr.dataset.m = k;
+    tr.innerHTML =
+      '<td class="num"><span class="fm-dot" style="--c:' + m.c + '">' + fa(n) + "</span></td>" +
+      '<td class="t-title">' + zn + "</td>" +
+      '<td><span class="fm-mat" style="--c:' + m.c + '">' + m.n + "</span>" +
+        '<div class="xs mute-2">' + brand + "</div></td>" +
+      '<td class="num bold">' + fa(amt) + ' <span class="mute-2 xs">' + m.u + "</span></td>" +
+      '<td class="small mute">' + dep + '<div class="xs mute-2">' + tech + "</div></td>" +
+      '<td class="num mute ltr" style="text-align:right">' + lot + "</td>" +
+      '<td class="num mute">امروز<div class="xs mute-2">جلسه جاری</div></td>' +
+      '<td style="text-align:end"><span class="badge ok no-dot">تازه</span></td>';
+    tb.insertBefore(tr, tb.firstChild);
+
+    if (!q('#fm-sess button[data-s="new"]'))
+      q("#fm-sess").insertAdjacentHTML("beforeend",
+        '<button data-s="new">جلسه جاری <span class="n"></span></button>');
+
+    var card = root.querySelector('.fm-tot[data-k="' + k + '"]');
+    if (card) {
+      var v = Math.round((parseFloat(card.dataset.v || 0) + parseFloat(amt)) * 100) / 100;
+      card.dataset.v = v; card.querySelector("b").textContent = fa(v);
+    } else {
+      q(".fm-sum").insertAdjacentHTML("beforeend",
+        '<div class="fm-tot" data-k="' + k + '" data-v="' + amt + '" style="--c:' + m.c + '">' +
+        '<svg viewBox="-18 -18 36 36" class="fm-gl">' + SHAPE[m.sh] + "</svg>" +
+        "<span><b>" + fa(amt) + "</b> <i>" + m.u + "</i>" +
+        '<div class="xs mute-2">' + m.n + "</div></span></div>");
+    }
+
+    document.getElementById("m-inj").classList.add("hide");
+    stage.classList.remove("adding"); hint.classList.add("hide");
+    addBtn.classList.add("btn-primary"); addBtn.textContent = "افزودن تزریق";
+    pending = null;
+    FM.apply();
+    setTimeout(function () { g.classList.remove("new"); }, 1400);
+  });
+})();
+</script></div>
     </main>
   </div>
 </div>

@@ -400,6 +400,11 @@ export const ADMIN_CAMPAIGNS = {
 export const ADMIN_CUSTOMER_PROFILE = {
   /** The header's booking action, which opens the manager's own day grid. */
   book: 'رزرو نوبت',
+  /** The two profile tabs' own labels. */
+  tabs: {
+    summary: 'خلاصه پرونده',
+    injections: 'نقشه تزریق',
+  },
   /** The four KPI tiles above the two columns. */
   kpi: {
     visits: 'مراجعه',
@@ -463,7 +468,6 @@ export const ADMIN_CUSTOMER_PROFILE = {
     payments: 'پرداختی برای این مشتری ثبت نشده است.',
   },
 } as const
-
 /**
  * The manager's people surface — the demo's `admin/staff.html`, whose copy the shared
  * `STAFF_PAGE` does not hold.
