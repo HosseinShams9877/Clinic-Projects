@@ -5,8 +5,17 @@
  * The tabs are a `?tab=` search param and links, not client state: the URL is the
  * memory, and the two pages that carry the tabs (`admin/customer/[id]` and
  * `reception/customers/[id]`) read it back. A tab is a link the browser can
- * bookmark, share, and reach with the back button, and a client-side tab strip
- * would give up all three for no benefit at this size.
+ * bookmark, share, and reach with the back button.
+ *
+ * ## The pill strip
+ *
+ * The two tabs are a pill strip, not underline tabs: the segment sits in a
+ * `bg-surface-sunken` track with `rounded-pill`, each link is itself a pill, and
+ * the active link is filled with the brand colour and carries the brand shadow.
+ * The `role="tablist"` and `aria-selected` wiring is the ARIA tabs pattern, and
+ * the two are links because the URL is the state — a link that navigates is the
+ * honest control, and a button that mutates state would be a tab strip the back
+ * button cannot undo.
  */
 
 import Link from 'next/link'
@@ -27,9 +36,10 @@ export function CustomerTabs({
   readonly injectionsLabel: string
 }) {
   return (
-    <nav
-      className="flex flex-wrap items-center gap-1 border-b border-line"
+    <div
+      role="tablist"
       aria-label={summaryLabel}
+      className="inline-flex items-center gap-1 self-start rounded-pill bg-surface-sunken p-1"
     >
       <TabLink
         href={basePath}
@@ -41,11 +51,11 @@ export function CustomerTabs({
         active={active === 'injections'}
         label={injectionsLabel}
       />
-    </nav>
+    </div>
   )
 }
 
-/** One tab, as the strip renders it. */
+/** One tab, as a pill inside the strip. */
 function TabLink({
   href,
   active,
@@ -58,12 +68,13 @@ function TabLink({
   return (
     <Link
       href={href}
-      aria-current={active ? 'page' : undefined}
+      role="tab"
+      aria-selected={active}
       className={cx(
-        'relative -mb-px inline-flex items-center gap-2 rounded-t-sm px-4 py-3 text-sm font-semibold no-underline transition-colors',
+        'inline-flex items-center gap-2 rounded-pill px-4 py-2 text-sm font-semibold no-underline transition-all',
         active
-          ? 'border-b-2 border-brand text-brand-700'
-          : 'border-b-2 border-transparent text-ink-2 hover:bg-surface-2 hover:text-ink',
+          ? 'bg-brand text-ink-inverse shadow-brand'
+          : 'text-ink-2 hover:bg-surface hover:text-ink',
       )}
     >
       {label}

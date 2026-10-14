@@ -14,6 +14,16 @@
  * rest of the product's date fields read the same way. A free-text field would be
  * a second date format the record could carry, and the record's whole value is
  * that it is queryable later.
+ *
+ * ## The visual language
+ *
+ * The dialog opens under the same one-pixel brand bar the booking and block
+ * popups use, with the title's icon in a `bg-brand-50` disc beside it. The form's
+ * two-column rows (amount + unit, depth + technique) are pairs the doctor reads
+ * together, and each pair sits in its own row so the eye groups them. The
+ * submit is the primary variant with the `add` icon, because adding a row is the
+ * dialog's one positive action; the cancel is a ghost, so the eye finds the
+ * submit first.
  */
 
 'use client'
@@ -123,8 +133,13 @@ export function InjectionDialog(props: InjectionDialogProps) {
         aria-labelledby={titleId}
         className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[560px]"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
+        <div className="h-1 rounded-t-xl bg-brand" aria-hidden="true" />
+
+        <header className="flex items-center justify-between gap-4 px-5 py-4">
+          <h2 id={titleId} className="flex items-center gap-2 text-lg font-bold text-ink">
+            <span className="grid size-8 shrink-0 place-items-center rounded-pill bg-brand-50 text-brand-700">
+              <Icon name="treatment" size="card" />
+            </span>
             {INJECTION_TAB.dialog.title}
           </h2>
           <Button
@@ -258,19 +273,23 @@ export function InjectionDialog(props: InjectionDialogProps) {
           </Field>
 
           {result !== null && !result.ok ? (
-            <p className="flex items-center gap-1 text-sm text-danger" role="alert">
+            <p
+              className="flex items-center gap-2 rounded-md bg-danger-bg px-3 py-2 text-sm text-danger"
+              role="alert"
+            >
               <Icon name="error" size="compact" />
               {result.message}
             </p>
           ) : null}
         </div>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-line px-5 py-4">
+        <footer className="flex items-center justify-between gap-2 border-t border-line px-5 py-4">
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
             {INJECTION_TAB.dialog.cancel}
           </Button>
           <Button
             variant="primary"
+            leadingIcon="add"
             loading={pending}
             disabled={!canSubmit}
             onClick={() => void submit()}
