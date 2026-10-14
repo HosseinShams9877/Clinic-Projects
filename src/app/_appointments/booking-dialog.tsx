@@ -51,6 +51,16 @@
  * never made. So the popup's part is to send the pair the write path needs, and
  * nothing more: a mobile alone is not a booking, and a mobile with a name is the
  * pair `createOrFindCustomer` reads.
+ *
+ * ## Why the customer search matches on both mobile and name
+ *
+ * The desk's own habit is to type whichever fact the customer gave them first: the
+ * mobile number read off a form, or the name said across the counter. The field
+ * therefore accepts both, and the search matches either. The match on the name is
+ * a substring against the full name ("فاطمه کریمی" and "کریمی" both find her), and
+ * the match on the mobile is a substring against the normalised mobile, so the
+ * first digits are enough. The two are tried independently, and a row that matches
+ * either is shown.
  */
 
 'use client'
@@ -459,7 +469,7 @@ export function BookingDialog(props: BookingDialogProps) {
                 <CustomerSearch
                   customers={props.customers}
                   selectedId={values.customerId}
-                  mobile={values.mobile}
+                  query={values.mobile}
                   firstName={values.firstName}
                   lastName={values.lastName}
                   onChange={(patch) => setValues({ ...values, ...patch })}
@@ -749,19 +759,19 @@ function SlotButton({
 function CustomerSearch({
   customers,
   selectedId,
-  mobile,
+  query,
   firstName,
   lastName,
   onChange,
 }: {
   readonly customers: readonly CustomerOption[]
   readonly selectedId: string
-  readonly mobile: string
+  readonly query: string
   readonly firstName: string
   readonly lastName: string
   readonly onChange: (patch: Partial<BookingValues>) => void
 }) {
-  const matches = mobile === '' ? [] : searchCustomers(customers, mobile)
+  const matches = query.trim() === '' ? [] : searchCustomers(customers, query)
   const chosen =
     selectedId === '' ? null : customers.find((option) => option.id === selectedId) ?? null
 
@@ -769,9 +779,9 @@ function CustomerSearch({
     <>
       <Field label={BOOKING_POPUP.fields.customerSearch} required>
         <TextInput
-          type="tel"
-          inputMode="tel"
-          value={mobile}
+          type="text"
+          inputMode="search"
+          value={query}
           placeholder={BOOKING_POPUP.fields.mobile}
           onChange={(event) => {
             onChange({ mobile: event.target.value, customerId: '' })
@@ -875,14 +885,31 @@ function customerName(option: CustomerOption): string {
   return option.lastName === null ? option.firstName : `${option.firstName} ${option.lastName}`
 }
 
+/**
+ * The customer search — a substring match on both the mobile and the name.
+ *
+ * The desk types whichever fact the customer gave first: the mobile number read
+ * off a form, or the name said across the counter. The field therefore accepts
+ * both, and a row is shown when either matches. The mobile match is against the
+ * *normalised* mobile, so the first digits are enough and Persian digits in the
+ * query find the Latin digits in the row; the name match is a substring against
+ * the full name, so "کریمی" finds "فاطمه کریمی" and "فاطمه" finds her too.
+ */
 function searchCustomers(
   customers: readonly CustomerOption[],
   query: string,
 ): readonly CustomerOption[] {
-  const normalised = normalizeMobile(query)
-  if (normalised === '') return []
+  const byMobile = normalizeMobile(query)
+  const byName = query.trim()
+  if (byMobile === '' && byName === '') return []
+
   return customers
-    .filter((option) => option.mobile.includes(normalised) || option.firstName.includes(query))
+    .filter((option) => {
+      const fullName = `${option.firstName} ${option.lastName ?? ''}`.trim()
+      const mobileMatch = byMobile !== '' && option.mobile.includes(byMobile)
+      const nameMatch = byName !== '' && fullName.includes(byName)
+      return mobileMatch || nameMatch
+    })
     .slice(0, 6)
 }
 

@@ -15,6 +15,14 @@
  * the refusal would still be a sentence on the row, and the honest answer is to not
  * show the affordance at all.
  *
+ * ## The two-step path a real booking walks
+ *
+ * A real booking reaches `COMPLETED` through `ARRIVED`: «حاضر شد» on `BOOKED` is
+ * the plain arrival transition, and «ثبت نتیجه» on `ARRIVED` is the note dialog.
+ * The desk never skips the arrival — the state machine still permits `BOOKED` →
+ * `COMPLETED`, but only for a slot block (below), and this component gates the
+ * real-booking case on the row actually being at `ARRIVED`.
+ *
  * ## Why a slot block's "arrived" opens the note dialog
  *
  * A slot block is a closed hour, not a booking: it has no customer, no service, and
@@ -23,11 +31,6 @@
  * about it. The button is therefore labelled «حاضر شد» (the block's own word for
  * "this hour is over") and it opens `ResultDialog`, which writes the same
  * `resultNote` a real booking's completion would.
- *
- * A real booking keeps the two-step path: «حاضر شد» on `BOOKED` is the plain arrival
- * transition, and «ثبت نتیجه» on `ARRIVED` is the note dialog. The two rows mean two
- * different things by "arrived", and the `isSlotBlock` flag is what tells them
- * apart.
  *
  * ## Why the actions are not optimistic
  *
@@ -111,24 +114,36 @@ export function RowActions({ appointmentId, status, panel, isSlotBlock = false, 
     })
   }
 
-  // A slot block closes in one step: it shows «حاضر شد» as the trigger for the note
-  // dialog, and the dialog writes `BOOKED` → `COMPLETED` with the note. A real
-  // booking walks the two-step path — «حاضر شد» is the plain arrival, and «ثبت
-  // نتیجه» is the note dialog from `ARRIVED`. The two rows mean different things
-  // by "arrived", and this is where they part ways.
+  // A real booking walks the two-step path: «حاضر شد» on `BOOKED` or
+  // `AWAITING_ARRIVAL`, then «ثبت نتیجه» once the row is at `ARRIVED`. The
+  // state machine permits `BOOKED` → `COMPLETED` for a slot block, but a real
+  // booking is not allowed to skip the arrival — the button is gated on the row
+  // actually being at `ARRIVED`, so the desk records the arrival before the
+  // result.
   const canArriveAsBooking =
     !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.Arrived)
-  const canComplete = canTransition(status as AppointmentStatus, AppointmentStatus.Completed)
+  const canCompleteAsBooking =
+    !isSlotBlock && status === AppointmentStatus.Arrived
   const canNoShow = !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.NoShow)
   const canCancel = canTransition(status as AppointmentStatus, AppointmentStatus.Cancelled)
-  // A block's "arrived" is the dialog trigger, not a plain transition.
-  const canCloseBlock = isSlotBlock && canComplete
+  // A block's "arrived" closes it in one step — `BOOKED` → `COMPLETED` — and the
+  // note dialog is what records the fact. The state machine permits that pair
+  // only for a block, and this flag is what tells the two rows apart.
+  const canCloseBlock =
+    isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.Completed)
   // An edit is offered on a live booking only — a row the machine would still let the
   // desk cancel, that holds a service (not a slot block). A terminal row offers none.
   const canEdit =
     edit !== undefined && !edit.isSlotBlock && edit.serviceId !== null && (canArriveAsBooking || canCancel)
 
-  if (!canArriveAsBooking && !canComplete && !canNoShow && !canCancel && !canEdit && !canCloseBlock) {
+  if (
+    !canArriveAsBooking &&
+    !canCompleteAsBooking &&
+    !canNoShow &&
+    !canCancel &&
+    !canEdit &&
+    !canCloseBlock
+  ) {
     // A terminal row offers nothing. Rendering an empty group would still claim the
     // row's end cell, so the component returns nothing instead.
     return null
@@ -152,7 +167,7 @@ export function RowActions({ appointmentId, status, panel, isSlotBlock = false, 
             triggerLabel={APPOINTMENTS_PAGE.controls.arrived}
           />
         ) : null}
-        {canComplete && !isSlotBlock ? (
+        {canCompleteAsBooking ? (
           <ResultDialog panel={panel} appointmentId={appointmentId} />
         ) : null}
         {canNoShow ? (

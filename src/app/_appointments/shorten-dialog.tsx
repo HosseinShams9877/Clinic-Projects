@@ -6,6 +6,10 @@
  * booking dialog is what calls it. It owns no state the booking dialog does not
  * already hold, because a second source of truth for "the desk agreed" is the one
  * that drifts from the row that was written.
+ *
+ * The header is the same shape as the booking dialog's — a small close button at
+ * the inline-start edge and the title at the inline-end — so the two dialogs the
+ * booking flow opens read as one flow and not two.
  */
 
 'use client'
@@ -45,10 +49,17 @@ export function ShortenDialog(props: ShortenDialogProps) {
         aria-labelledby={titleId}
         className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[460px]"
       >
-        <header className="border-b border-line px-5 py-4">
+        <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
           <h2 id={titleId} className="text-lg font-bold text-ink">
             {SHORTEN_POPUP.title}
           </h2>
+          <Button
+            size="icon"
+            variant="ghost"
+            icon="close"
+            aria-label={SHORTEN_POPUP.dismiss}
+            onClick={props.onDismiss}
+          />
         </header>
 
         <p className="p-5 text-sm text-ink-2">

@@ -111,18 +111,17 @@ export default async function AdminAppointmentsPage({
         </header>
         <div className="overflow-x-auto p-4">
           <DayGrid
-  localDate={localDate}
-  doctors={data.doctors}
-  windows={data.windows}
-  rows={rows}
-  services={data.services}
-  customers={data.customers}
-  servicesByDoctorId={data.servicesByDoctorId}
-  workingDaysByDoctorId={data.workingDaysByDoctorId}
-  freeSlotsByDoctorId={data.freeSlotsByDoctorId}
-  panel="admin"
-  writable={true}
-/>
+            localDate={localDate}
+            doctors={data.doctors}
+            windows={data.windows}
+            rows={rows}
+            services={data.services}
+            customers={data.customers}
+            servicesByDoctorId={data.servicesByDoctorId}
+            workingDaysByDoctorId={data.workingDaysByDoctorId}
+            panel="admin"
+            writable={true}
+          />
         </div>
       </section>
     </div>

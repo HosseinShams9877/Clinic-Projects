@@ -17,6 +17,7 @@
  * | — | `BOOKED` | the booking itself (§2.2: "appointment created") |
  * | `BOOKED` | `AWAITING_ARRIVAL` | the sweep, when the day arrives |
  * | `BOOKED` | `ARRIVED` | منشی — the customer is here before the sweep ran |
+ * | `BOOKED` | `NO_SHOW` | منشی — the customer never came, and the sweep has not run |
  * | `BOOKED` | `COMPLETED` | منشی — a slot block closed as a completed hour |
  * | `BOOKED` | `CANCELLED` | منشی or the customer |
  * | `BOOKED` | `RESCHEDULED` | either |
@@ -50,6 +51,13 @@
  * is refused by `recordResult`'s own transition guard on the way in — the transition
  * is legal, the row is not a block, and the desk is told to mark the arrival first.
  *
+ * `BOOKED` does go straight to `NO_SHOW`: the sweep is hourly and a desk that has
+ * watched a customer fail to arrive should not have to wait for the sweep before
+ * recording the fact. The `AWAITING_ARRIVAL` step remains the state the sweep
+ * writes, and the arrival the desk records, but a missed booking is the desk's own
+ * fact and the state machine permits it to be recorded without the intermediate
+ * state.
+ *
  * ## Why the sweep's own transitions are in this table
  *
  * The worker does not ask permission (`09-security.md` §8), so it has no
@@ -77,6 +85,7 @@ export const APPOINTMENT_TRANSITIONS: Readonly<Record<Status, readonly Status[]>
   BOOKED: [
     AppointmentStatus.AwaitingArrival,
     AppointmentStatus.Arrived,
+    AppointmentStatus.NoShow,
     AppointmentStatus.Completed,
     AppointmentStatus.Cancelled,
     AppointmentStatus.Rescheduled,

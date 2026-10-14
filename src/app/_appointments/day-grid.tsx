@@ -351,24 +351,26 @@ function FreeCell({
   }
   const lockedSlot: LockedSlot = { localDate, localTime: time }
   return (
-    <span className="group/free block h-full rounded-sm transition-colors [&_button]:flex [&_button]:h-full [&_button]:w-full [&_button]:items-center [&_button]:justify-center [&_button]:border-dashed [&_button]:border-line-2 [&_button]:bg-surface-2 [&_button]:text-ink-3 [&_button]:transition-colors hover:[&_button]:border-brand-300 hover:[&_button]:bg-brand-50 hover:[&_button]:text-brand-700">
-      <BookingDialog
-        variant="book"
-        panel={panel}
-        triggerLabel="+"
-        triggerVariant="outline"
-        triggerIcon={null}
-        doctorId={doctor.id}
-        doctorName={doctor.name}
-        localDate={localDate}
-        defaultTime={time}
-        lockedSlot={lockedSlot}
-        services={services}
-        customers={customers}
-        allowedServiceIds={servicesByDoctorId?.[doctor.id]}
-        workingWeekdays={workingDaysByDoctorId?.[doctor.id]}
-        slotMinutes={slotMinutesByDoctorId?.[doctor.id] ?? null}
-      />
+    <span className="group/free block h-full rounded-sm transition-colors">
+      <span className="contents [&>button]:flex [&>button]:h-full [&>button]:w-full [&>button]:items-center [&>button]:justify-center [&>button]:border-dashed [&>button]:border-line-2 [&>button]:bg-surface-2 [&>button]:text-ink-3 [&>button]:transition-colors hover:[&>button]:border-brand-300 hover:[&>button]:bg-brand-50 hover:[&>button]:text-brand-700">
+        <BookingDialog
+          variant="book"
+          panel={panel}
+          triggerLabel="+"
+          triggerVariant="outline"
+          triggerIcon={null}
+          doctorId={doctor.id}
+          doctorName={doctor.name}
+          localDate={localDate}
+          defaultTime={time}
+          lockedSlot={lockedSlot}
+          services={services}
+          customers={customers}
+          allowedServiceIds={servicesByDoctorId?.[doctor.id]}
+          workingWeekdays={workingDaysByDoctorId?.[doctor.id]}
+          slotMinutes={slotMinutesByDoctorId?.[doctor.id] ?? null}
+        />
+      </span>
       <span className="[&_button]:[border-style:solid]">
         <BlockDialog
           panel={panel}
