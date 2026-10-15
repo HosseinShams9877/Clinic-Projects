@@ -54,9 +54,14 @@ function DoctorCard({
   return (
     <div className="flex flex-col overflow-hidden rounded-[18px] border border-line bg-white">
       <div className="aspect-square bg-brand-100">
-        <div className="grid size-full place-items-center text-brand-300">
-          <Icon name="doctor" size="action" />
-        </div>
+        {doctor.avatarUrl === null ? (
+          <div className="grid size-full place-items-center text-brand-300">
+            <Icon name="doctor" size="action" />
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={doctor.avatarUrl} alt={doctor.name} className="size-full object-cover" />
+        )}
       </div>
       <div className="flex flex-col gap-3 p-4">
         <div className="flex flex-col gap-1">

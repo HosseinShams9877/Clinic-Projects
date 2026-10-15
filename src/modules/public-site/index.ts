@@ -29,6 +29,7 @@ export type { PublicNavLink, TrustItem } from './catalog'
 
 export type {
   PublicBeforeAfter,
+  PublicClinicImages,
   PublicDoctor,
   PublicService,
 } from './lib/reads'
@@ -48,6 +49,7 @@ export {
 
 export {
   publicBeforeAfter,
+  publicClinicImages,
   publicDoctors,
   publicDoctorsForService,
   publicService,

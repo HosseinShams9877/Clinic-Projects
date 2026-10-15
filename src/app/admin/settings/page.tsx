@@ -1,38 +1,5 @@
 /**
  * The settings page — `02-architecture.md` §9's `admin/settings.html`.
- *
- * Six tabs, one row: the clinic's identity, the booking mode and the appointment
- * lifecycle timings, the working hours and holidays, the cycle engine's two defaults,
- * every automatic message's text, and the eight toggles beside the overrides the
- * tenant has declared. The tab is the query string's `?tab=`, so a manager lands on
- * the tab a link named and the tab bar is six links rather than six pages.
- *
- * ## Why the page reads all six tabs at once
- *
- * The tab bar renders the six names from the constants' own order, and the tab it
- * renders is one of the six the surface read — a second read for the bar would be a
- * second place the six are listed, and a tab the surface did not read is a tab the
- * switch would render empty. The five reads the surface does not use are cheap: they
- * are the tenant's own row and the two small tables that hang off it.
- *
- * ## What the demo holds that this page does not
- *
- * The demo's head carries one «ذخیره تغییرات» button for the whole page. There is no
- * such save: each tab is its own `<form>` and its own action, because the six tabs
- * write six different parts of the tenant's row and a single submit would be one
- * action that reaches into all of them — which the settings module does not expose.
- * So the save stays on each tab's own form, where the demo's own forms also keep a
- * save, and the head holds no button that would write nothing. The demo's own tab
- * order puts «کلینیک» last; the page keeps the module's order (`SETTINGS_TABS`),
- * where identity is first, because the order is the constants' and not the page's.
- *
- * ## Why `TEMPLATE_PLACEHOLDERS` is read here and not in the form
- *
- * `MessagesForm` is `'use client'`, and importing `@/modules/messages` from a client
- * file would pull the module's whole transitive graph — its ledger and dispatch
- * reach `node:async_hooks` — into the browser bundle, which Turbopack refuses. The
- * page is a Server Component, so it reads the module's own allow-list here and hands
- * it down as plain data. The client only renders.
  */
 
 import type { Metadata } from 'next'
@@ -46,6 +13,7 @@ import { cx } from '@/core/lib'
 import { requireStaffPanel } from '@/app/_shell/session'
 import {
   BookingForm,
+  ClinicImagesForm,
   CycleForm,
   IdentityForm,
   MessagesForm,
@@ -59,6 +27,7 @@ import {
   CYCLE_FIELDS,
   DEPOSIT_REFUND_LABELS,
   IDENTITY_FIELDS,
+  IDENTITY_IMAGES_FIELDS,
   MESSAGES_FIELDS,
   OPTIONS_FIELDS,
   SETTINGS_FIELDS,
@@ -121,13 +90,25 @@ export default async function SettingsPage({
       <p className="text-sm text-ink-3">{SETTINGS_TAB_LEADS[tab]}</p>
 
       {tab === SettingsTab.Identity ? (
-        <IdentityForm
-          tenantName={surface.identity.tenantName}
-          clinicName={surface.identity.clinicName}
-          phone={surface.identity.phone ?? ''}
-          address={surface.identity.address ?? ''}
-          labels={IDENTITY_FIELDS}
-        />
+        <div className="flex flex-col gap-8">
+          <IdentityForm
+            tenantName={surface.identity.tenantName}
+            clinicName={surface.identity.clinicName}
+            phone={surface.identity.phone ?? ''}
+            address={surface.identity.address ?? ''}
+            labels={IDENTITY_FIELDS}
+          />
+          <ClinicImagesForm
+            clinicId={surface.images.clinicId}
+            heroImageUrl={surface.images.heroImageUrl}
+            heroImageKey={surface.images.heroImageKey}
+            heroImageBackend={surface.images.heroImageBackend}
+            aboutImageUrl={surface.images.aboutImageUrl}
+            aboutImageKey={surface.images.aboutImageKey}
+            aboutImageBackend={surface.images.aboutImageBackend}
+            labels={IDENTITY_IMAGES_FIELDS}
+          />
+        </div>
       ) : null}
 
       {tab === SettingsTab.Booking ? (

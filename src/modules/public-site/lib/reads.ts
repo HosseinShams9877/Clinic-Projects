@@ -21,6 +21,10 @@ export interface PublicService {
   readonly beforeCare: string | null
   readonly afterCare: string | null
   readonly notSuitableFor: string | null
+  /** The service's own picture, as the storage module recorded it. */
+  readonly imageUrl: string | null
+  readonly imageBackend: string | null
+  readonly imageKey: string | null
 }
 
 /** One doctor card, as the public pages render it. */
@@ -28,6 +32,10 @@ export interface PublicDoctor {
   readonly id: string
   readonly name: string
   readonly specialties: readonly string[]
+  /** The doctor's own picture, as the storage module recorded it. */
+  readonly avatarUrl: string | null
+  readonly avatarBackend: string | null
+  readonly avatarKey: string | null
 }
 
 /** One published before/after pair, consent-filtered. */
@@ -35,6 +43,13 @@ export interface PublicBeforeAfter {
   readonly id: string
   readonly path: string
   readonly caption: string | null
+}
+
+/** The site's own pictures, as the clinic row holds them. */
+export interface PublicClinicImages {
+  readonly logoUrl: string | null
+  readonly heroImageUrl: string | null
+  readonly aboutImageUrl: string | null
 }
 
 /** The columns a service row is mapped from. */
@@ -52,6 +67,9 @@ type ServiceRow = {
   readonly afterCare: string | null
   readonly notSuitableFor: string | null
   readonly isActive: boolean
+  readonly imageUrl: string | null
+  readonly imageBackend: string | null
+  readonly imageKey: string | null
 }
 
 const SERVICE_SELECT = {
@@ -68,6 +86,9 @@ const SERVICE_SELECT = {
   afterCare: true,
   notSuitableFor: true,
   isActive: true,
+  imageUrl: true,
+  imageBackend: true,
+  imageKey: true,
 } as const
 
 /**
@@ -99,6 +120,9 @@ function asPublicService(row: ServiceRow): PublicService {
     beforeCare: row.beforeCare,
     afterCare: row.afterCare,
     notSuitableFor: row.notSuitableFor,
+    imageUrl: row.imageUrl,
+    imageBackend: row.imageBackend,
+    imageKey: row.imageKey,
   }
 }
 
@@ -128,7 +152,16 @@ export async function publicDoctors(
     where: { tenantId, service: { isActive: true } },
     select: {
       doctorId: true,
-      doctor: { select: { id: true, firstName: true, lastName: true } },
+      doctor: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          avatarUrl: true,
+          avatarBackend: true,
+          avatarKey: true,
+        },
+      },
       service: { select: { name: true } },
     },
     orderBy: { doctor: { firstName: 'asc' } },
@@ -139,9 +172,19 @@ export async function publicDoctors(
     const name = [row.doctor.firstName, row.doctor.lastName].filter(Boolean).join(' ')
     const existing = byDoctor.get(row.doctorId)
     if (existing === undefined) {
-      byDoctor.set(row.doctorId, { id: row.doctorId, name, specialties: [row.service.name] })
+      byDoctor.set(row.doctorId, {
+        id: row.doctorId,
+        name,
+        specialties: [row.service.name],
+        avatarUrl: row.doctor.avatarUrl,
+        avatarBackend: row.doctor.avatarBackend,
+        avatarKey: row.doctor.avatarKey,
+      })
     } else if (!existing.specialties.includes(row.service.name)) {
-      byDoctor.set(row.doctorId, { ...existing, specialties: [...existing.specialties, row.service.name] })
+      byDoctor.set(row.doctorId, {
+        ...existing,
+        specialties: [...existing.specialties, row.service.name],
+      })
     }
   }
   return [...byDoctor.values()]
@@ -173,23 +216,32 @@ export async function publicServiceBeforeAfter(
 }
 
 /**
+ * The primary clinic's own pictures.
+ *
+ * The three are read together because the home page and the about page are the two
+ * surfaces that render them, and a page that read one would still need the clinic's
+ * row for its name. NULL on any of the three is a clinic that has not uploaded that
+ * picture, and the page renders its own placeholder.
+ */
+export async function publicClinicImages(
+  tx: TransactionClient,
+  tenantId: string,
+): Promise<PublicClinicImages> {
+  const clinic = await tx.clinic.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: 'asc' },
+    select: { logoUrl: true, heroImageUrl: true, aboutImageUrl: true },
+  })
+
+  return {
+    logoUrl: clinic?.logoUrl ?? null,
+    heroImageUrl: clinic?.heroImageUrl ?? null,
+    aboutImageUrl: clinic?.aboutImageUrl ?? null,
+  }
+}
+
+/**
  * The slots the booking wizard offers for one service on one day.
- *
- * ## Why the walk is per range and not per doctor
- *
- * A doctor's weekday is a set of ranges, and each range carries its own
- * `slotMinutes`. A 10–12 range at 120 minutes offers a single slot (10:00); a
- * 14–17 range at 45 minutes offers 14:00, 14:45, 15:30, 16:15. The public wizard
- * must offer the same slots the desk's grid draws, so the walk here is the
- * per-range walk the grid's own `doctorWindowsOnDay` performs — the same query,
- * the same `workingRange` intersection, the same step.
- *
- * ## Why the service's duration is not the step
- *
- * The step is the range's own `slotMinutes`, not the service's `durationMinutes`.
- * A service whose duration is longer than the step is a booking the desk confirms
- * as shorter (`SHORTEN_POPUP`); on the public site, the step is what the visitor
- * picks from, and the service's duration is the row the booking snapshots.
  */
 export async function publicSlotsForDay(args: {
   readonly tx: TransactionClient
@@ -296,7 +348,16 @@ export async function publicDoctorsForService(
   const rows = await tx.serviceDoctor.findMany({
     where: { tenantId, serviceId, doctor: { memberships: { some: { tenantId, isActive: true } } } },
     select: {
-      doctor: { select: { id: true, firstName: true, lastName: true } },
+      doctor: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          avatarUrl: true,
+          avatarBackend: true,
+          avatarKey: true,
+        },
+      },
     },
     orderBy: { doctor: { firstName: 'asc' } },
   })
@@ -305,6 +366,9 @@ export async function publicDoctorsForService(
     id: row.doctor.id,
     name: [row.doctor.firstName, row.doctor.lastName].filter(Boolean).join(' '),
     specialties: [],
+    avatarUrl: row.doctor.avatarUrl,
+    avatarBackend: row.doctor.avatarBackend,
+    avatarKey: row.doctor.avatarKey,
   }))
 }
 

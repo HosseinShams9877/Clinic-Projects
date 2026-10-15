@@ -22,8 +22,10 @@ import {
 import {
   PUBLIC_HOME,
   publicBeforeAfter,
+  publicClinicImages,
   publicDoctors,
   publicServices,
+  type PublicClinicImages,
   type PublicDoctor,
   type PublicService,
   type TrustItem,
@@ -33,11 +35,11 @@ export const metadata = { title: PUBLIC_HOME.hero.title }
 
 export default async function HomePage() {
   const tenantId = await resolveTenantId()
-  const { services, doctors, gallery } = await readHome(tenantId)
+  const { services, doctors, gallery, images } = await readHome(tenantId)
 
   return (
     <>
-      <Hero />
+      <Hero heroImageUrl={images.heroImageUrl} />
       <TrustBar />
       <ServicesSection services={services} />
       <DoctorsSection doctors={doctors} />
@@ -47,7 +49,7 @@ export default async function HomePage() {
 }
 
 /** §30 — the gradient banner, the two actions and the 16/11 media. */
-function Hero() {
+function Hero({ heroImageUrl }: { readonly heroImageUrl: string | null }) {
   const hero = PUBLIC_HOME.hero
   return (
     <section
@@ -80,9 +82,14 @@ function Hero() {
           </div>
         </div>
         <div className="aspect-[16/11] overflow-hidden rounded-[24px] bg-brand-100">
-          <div className="grid size-full place-items-center">
-            <Icon name="treatment" size="action" />
-          </div>
+          {heroImageUrl === null ? (
+            <div className="grid size-full place-items-center">
+              <Icon name="treatment" size="action" />
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={heroImageUrl} alt={hero.title} className="size-full object-cover" />
+          )}
         </div>
       </div>
     </section>
@@ -147,9 +154,14 @@ function ServiceCard({
       className="group relative flex flex-col overflow-hidden rounded-[18px] border border-line bg-white no-underline transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-[3px] hover:border-brand-300 hover:shadow-2"
     >
       <div className="relative aspect-[4/3] bg-brand-100">
-        <div className="grid size-full place-items-center text-brand-300">
-          <Icon name="treatment" size="action" />
-        </div>
+        {service.imageUrl === null ? (
+          <div className="grid size-full place-items-center text-brand-300">
+            <Icon name="treatment" size="action" />
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={service.imageUrl} alt={service.name} className="size-full object-cover" />
+        )}
         <span className="absolute bottom-0 left-1/2 grid size-[34px] -translate-x-1/2 translate-y-1/2 place-items-center rounded-full border-[3px] border-white bg-brand-50 text-brand">
           <Icon name="appointment" size="compact" />
         </span>
@@ -204,9 +216,14 @@ function DoctorCard({
   return (
     <div className="flex flex-col overflow-hidden rounded-[18px] border border-line bg-white">
       <div className="aspect-square bg-brand-100">
-        <div className="grid size-full place-items-center text-brand-300">
-          <Icon name="doctor" size="action" />
-        </div>
+        {doctor.avatarUrl === null ? (
+          <div className="grid size-full place-items-center text-brand-300">
+            <Icon name="doctor" size="action" />
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={doctor.avatarUrl} alt={doctor.name} className="size-full object-cover" />
+        )}
       </div>
       <div className="flex flex-col gap-3 p-4">
         <div className="flex flex-col gap-1">
@@ -258,13 +275,11 @@ function BeforeAfterSection({
 function PairPane({ label, path }: { readonly label: string; readonly path: string }) {
   return (
     <div className="relative aspect-square bg-brand-100">
-      <div className="grid size-full place-items-center text-brand-300">
-        <Icon name="treatment" size="action" />
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={path} alt={label} className="size-full object-cover" />
       <span className="absolute inset-x-0 bottom-0 bg-[rgba(46,37,36,.72)] py-1.5 text-center text-[11.5px] font-medium text-white">
         {label}
       </span>
-      <span className="sr-only">{path}</span>
     </div>
   )
 }
@@ -302,13 +317,25 @@ function SectionHeader({
  * about the clinic and not four reads that could disagree mid-render.
  */
 async function readHome(tenantId: Awaited<ReturnType<typeof resolveTenantId>>) {
-  if (tenantId === null) return { services: [], doctors: [], gallery: [] }
+  if (tenantId === null) {
+    return {
+      services: [],
+      doctors: [],
+      gallery: [],
+      images: {
+        logoUrl: null,
+        heroImageUrl: null,
+        aboutImageUrl: null,
+      } satisfies PublicClinicImages,
+    }
+  }
   return runInTenantScope({ tenantId, clinicId: null, role: 'public', userId: 'public' }, prisma(), async (tx) => {
-    const [services, doctors, gallery] = await Promise.all([
+    const [services, doctors, gallery, images] = await Promise.all([
       publicServices(tx, tenantId),
       publicDoctors(tx, tenantId),
       publicBeforeAfter(tx, tenantId),
+      publicClinicImages(tx, tenantId),
     ])
-    return { services, doctors, gallery }
+    return { services, doctors, gallery, images }
   })
 }

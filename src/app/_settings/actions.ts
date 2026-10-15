@@ -25,6 +25,12 @@
  * The public site reads the clinic's name and the booking picker reads the mode and
  * the hours at request time; a write the page did not re-read is a holiday the next
  * customer's grid still offers a slot on.
+ *
+ * ## Why the two image actions are separate
+ *
+ * The site's home hero and its about picture are two separate facts about the
+ * clinic, and a single action that took a "which one" argument would be an action
+ * a caller could aim at the wrong field. Two names, two writes, one shared body.
  */
 
 'use server'
@@ -38,6 +44,7 @@ import { AutomaticMessageKind, isMember } from '@/core/constants'
 import { DomainError } from '@/core/types'
 import type { TenantContext } from '@/core/tenant'
 import { normalizeDigits, asLocalTime } from '@/core/localization'
+import { removeFile, storeFile, type StoredFile } from '@/modules/storage'
 
 import { moduleFailureMessage } from '@/app/_shared/module-failure'
 import type { Panel } from '@/app/_shell/navigation'
@@ -46,6 +53,7 @@ import {
   bookingSchema,
   cycleSchema,
   holidaySchema,
+  IDENTITY_IMAGES_FIELDS,
   identitySchema,
   messagesSchema,
   overrideDeclarationSchema,
@@ -70,10 +78,6 @@ const SETTINGS_PANEL: Panel = 'admin'
 
 /**
  * The answer every form reads: a done, or a sentence about why it was not done.
- *
- * `message` is `null` on the done, because the tabs re-render from the row the write
- * left and not from the answer; a failure's sentence is the one thing the row cannot
- * say for itself.
  */
 export type ActionResult =
   | { readonly ok: true; readonly message: null }
@@ -211,9 +215,6 @@ export async function saveMessagesAction(
 
     await saveMessagesTab(tx, ctx, {
       templates: values.templates.flatMap((template) =>
-        // The schema is permissive about the kind a form sent; the module's own
-        // contract is the seven the constants close, and one outside them is a
-        // template the tab did not render.
         isMember(AutomaticMessageKind, template.kind)
           ? [{
               id: template.id ?? null,
@@ -236,9 +237,6 @@ export async function saveTogglesAction(
   form: FormData,
 ): Promise<ActionResult> {
   return run(async (ctx, tx) => {
-    // A checkbox the person left off sends nothing, and the form's keys are the names
-    // that came back — so the eight are the names, and their values are the `on` the
-    // checked ones carry.
     const changes = Object.fromEntries(
       [...form.keys()].map((toggle) => [toggle, form.get(toggle) === 'on']),
     ) as Readonly<Partial<Record<Toggle, boolean>>>
@@ -267,6 +265,112 @@ export async function removeOverrideAction(module: string): Promise<ActionResult
   })
 }
 
+/* ── The two image writes ─────────────────────────────────────────────────── */
+
+/** The answer an image upload reads, richer because the form shows the stored URL. */
+export type UploadResult =
+  | { readonly ok: true; readonly url: string }
+  | { readonly ok: false; readonly message: string }
+
+/** The fields an image-upload form sends, as the form holds them. */
+export interface ClinicImageInput {
+  readonly filename: string
+  readonly contentType: string
+  readonly bytes: Uint8Array
+  readonly previousKey?: string
+  readonly previousBackend?: 'vercel-blob' | 'public'
+}
+
+/** «تصویر صفحه‌ی اصلی» — stores the hero image on the clinic row. */
+export async function uploadClinicHeroAction(
+  input: ClinicImageInput,
+): Promise<UploadResult> {
+  return uploadClinicImage('heroImage', input)
+}
+
+/** «تصویر درباره ما» — stores the about image on the clinic row. */
+export async function uploadClinicAboutAction(
+  input: ClinicImageInput,
+): Promise<UploadResult> {
+  return uploadClinicImage('aboutImage', input)
+}
+
+/**
+ * The one upload path the two actions share.
+ *
+ * The clinic is resolved inside the tenant scope, because a caller that could name
+ * a clinic id would be a caller that could write into another tenant's row. The
+ * bytes are stored under the clinic's own folder and the row's three columns are
+ * updated in one write, because a URL without its backend and key is a URL a delete
+ * or a fallback cannot resolve later.
+ */
+async function uploadClinicImage(
+  field: 'heroImage' | 'aboutImage',
+  input: ClinicImageInput,
+): Promise<UploadResult> {
+  const session = await resolveStaffPanel(SETTINGS_PANEL).catch(() => null)
+  if (session === null) {
+    return { ok: false, message: IDENTITY_IMAGES_FIELDS.sessionExpired }
+  }
+
+  const clinic = await runInTenantScope(session.permissions, prisma(), (tx) =>
+    tx.clinic.findFirst({
+      where: { tenantId: session.permissions.tenantId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    }),
+  ).catch(() => null)
+
+  if (clinic === null) {
+    return { ok: false, message: IDENTITY_IMAGES_FIELDS.clinicNotFound }
+  }
+
+  let stored: StoredFile
+  try {
+    stored = await storeFile({
+      scope: {
+        tenantId: session.permissions.tenantId,
+        clinicId: clinic.id as never,
+        userId: session.permissions.userId,
+      },
+      kind: 'clinic',
+      ownerId: `${clinic.id}-${field}`,
+      filename: input.filename,
+      contentType: input.contentType,
+      bytes: input.bytes,
+    })
+  } catch (error) {
+    return { ok: false, message: moduleFailureMessage(error) }
+  }
+
+  const result = await runInTenantScope(session.permissions, prisma(), (tx) =>
+    tx.clinic
+      .updateMany({
+        where: { id: clinic.id, tenantId: session.permissions.tenantId },
+        data: {
+          [`${field}Url`]: stored.url,
+          [`${field}Backend`]: stored.backend,
+          [`${field}Key`]: stored.key,
+        },
+      })
+      .then((written) => (written.count === 1 ? { ok: true as const } : { ok: false as const })),
+  ).catch(() => ({ ok: false as const }))
+
+  if (!result.ok) {
+    await removeFile({ key: stored.key, backend: stored.backend })
+    return { ok: false, message: IDENTITY_IMAGES_FIELDS.clinicNotFound }
+  }
+
+  if (input.previousKey !== undefined && input.previousBackend !== undefined) {
+    await removeFile({ key: input.previousKey, backend: input.previousBackend })
+  }
+
+  revalidatePath(SETTINGS_PATH)
+  revalidatePath('/')
+  revalidatePath('/about')
+  return { ok: true, url: stored.url }
+}
+
 /** A `template:<kind>:<channel>` field's two names, as the messages tab sends them. */
 const TEMPLATE_KEY = /^template:(.+):(.+)$/
 
@@ -291,9 +395,6 @@ function toHolidayInput(row: {
 /**
  * One action's resolution: the panel's session, a tenant-scoped transaction, and the
  * one answer every form reads back.
- *
- * `resolveStaffPanel` raises rather than redirecting, because an action answers a
- * form and not a page; the raise becomes the failure sentence the form renders.
  */
 async function run(
   block: (ctx: TenantContext, tx: TransactionClient) => Promise<void>,
@@ -308,12 +409,6 @@ async function run(
   }
 }
 
-/**
- * One payload against its schema, or the sentence about the field that failed.
- *
- * The schema is the module's, so a field the form no longer sends is a compile error
- * here and a value the schema refuses is the one Persian sentence the catalog holds.
- */
 function parse<TSchema extends z.ZodType>(
   schema: TSchema,
   form: FormData,
@@ -330,7 +425,6 @@ function parse<TSchema extends z.ZodType>(
   return result.data
 }
 
-/** One field's string, as the module's own trimmed value. */
 function stringOf(form: FormData, name: string): string {
   const value = form.get(name)
   if (typeof value !== 'string') {
@@ -342,13 +436,11 @@ function stringOf(form: FormData, name: string): string {
   return value.trim()
 }
 
-/** One optional field, as `null` for the empty string the empty field sends. */
 function optionalOf(form: FormData, name: string): string | undefined {
   const value = form.get(name)
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
 }
 
-/** A whole number a text field sent, or `0` when the field was empty. */
 function wholeNumber(form: FormData, name: string): number {
   const normalized = normalizeDigits(stringOf(form, name))
   if (normalized === '') return 0
@@ -362,7 +454,6 @@ function wholeNumber(form: FormData, name: string): number {
   return parsed
 }
 
-/** A money amount a text field sent, or `null` when the manager left it empty. */
 function moneyOrNone(form: FormData, name: string): bigint | null {
   const value = form.get(name)
   if (typeof value !== 'string' || value.trim() === '') return null
@@ -377,7 +468,6 @@ function moneyOrNone(form: FormData, name: string): bigint | null {
   return BigInt(normalized)
 }
 
-/** The debt grace-days a text field sent, or `null` when the manager left it empty. */
 function graceDaysOrNull(form: FormData): number | null {
   const normalized = normalizeDigits(stringOf(form, 'debtGraceDays'))
   if (normalized === '') return null

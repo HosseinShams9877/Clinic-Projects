@@ -31,6 +31,7 @@ import { parseModuleOverrides } from '@/modules/registry'
 
 import type {
   BookingSettings,
+  ClinicImagesSettings,
   CycleTabSettings,
   DeclaredOverrideRow,
   HolidayRow,
@@ -57,11 +58,20 @@ const IDENTITY_SELECT = {
   name: true,
 } as const
 
-const CLINIC_SELECT = {
-  id: true,
+const CLINIC_IDENTITY_SELECT = {
   name: true,
   phone: true,
   address: true,
+} as const
+
+const CLINIC_IMAGES_SELECT = {
+  id: true,
+  heroImageUrl: true,
+  heroImageBackend: true,
+  heroImageKey: true,
+  aboutImageUrl: true,
+  aboutImageBackend: true,
+  aboutImageKey: true,
 } as const
 
 const SHIFT_SELECT = {
@@ -87,8 +97,9 @@ export async function readSettingsSurface(
   tx: TransactionClient,
   tenantId: string,
 ): Promise<TenantSettingsSurface> {
-  const [identity, booking, workingHours, cycle, messages, options] = await Promise.all([
+  const [identity, images, booking, workingHours, cycle, messages, options] = await Promise.all([
     readIdentity(tx, tenantId),
+    readClinicImages(tx, tenantId),
     readBooking(tx, tenantId),
     readWorkingHours(tx, tenantId),
     readCycleTab(tx, tenantId),
@@ -98,6 +109,7 @@ export async function readSettingsSurface(
 
   return Object.freeze({
     identity,
+    images,
     booking,
     workingHours,
     cycle,
@@ -116,7 +128,7 @@ export async function readIdentity(
     tx.clinic.findFirst({
       where: { tenantId },
       orderBy: { createdAt: 'asc' },
-      select: CLINIC_SELECT,
+      select: CLINIC_IDENTITY_SELECT,
     }),
   ])
 
@@ -125,6 +137,28 @@ export async function readIdentity(
     clinicName: clinic?.name ?? tenant?.name ?? '',
     phone: clinic?.phone ?? null,
     address: clinic?.address ?? null,
+  })
+}
+
+/** «تصاویر سایت» — the clinic's hero image and about picture, as the row holds them. */
+export async function readClinicImages(
+  tx: TransactionClient,
+  tenantId: string,
+): Promise<ClinicImagesSettings> {
+  const clinic = await tx.clinic.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: 'asc' },
+    select: CLINIC_IMAGES_SELECT,
+  })
+
+  return Object.freeze({
+    clinicId: clinic?.id ?? null,
+    heroImageUrl: clinic?.heroImageUrl ?? null,
+    heroImageBackend: clinic?.heroImageBackend ?? null,
+    heroImageKey: clinic?.heroImageKey ?? null,
+    aboutImageUrl: clinic?.aboutImageUrl ?? null,
+    aboutImageBackend: clinic?.aboutImageBackend ?? null,
+    aboutImageKey: clinic?.aboutImageKey ?? null,
   })
 }
 

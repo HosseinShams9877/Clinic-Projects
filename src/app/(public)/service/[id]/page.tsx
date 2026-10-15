@@ -79,9 +79,14 @@ export default async function ServiceDetailPage({ params }: PageProps) {
             ) : null}
           </div>
           <div className="aspect-[4/3] overflow-hidden rounded-[24px] bg-brand-100">
-            <div className="grid size-full place-items-center text-brand-300">
-              <Icon name="treatment" size="action" />
-            </div>
+            {service.imageUrl === null ? (
+              <div className="grid size-full place-items-center text-brand-300">
+                <Icon name="treatment" size="action" />
+              </div>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={service.imageUrl} alt={service.name} className="size-full object-cover" />
+            )}
           </div>
         </div>
 
@@ -125,8 +130,8 @@ function BeforeAfter({
       <div className="grid gap-4 panel:grid-cols-2">
         {gallery.slice(0, 4).map((image) => (
           <figure key={image.id} className="grid grid-cols-2 gap-[3px] overflow-hidden rounded-[14px]">
-            <PairPane label={copy.sections.before} />
-            <PairPane label={copy.sections.after} />
+            <PairPane label={copy.sections.before} path={image.path} />
+            <PairPane label={copy.sections.after} path={image.path} />
             {image.caption === null ? null : (
               <figcaption className="col-span-2 pt-2 text-center text-[11.5px] text-ink-2">
                 {image.caption}
@@ -139,12 +144,11 @@ function BeforeAfter({
   )
 }
 
-function PairPane({ label }: { readonly label: string }) {
+function PairPane({ label, path }: { readonly label: string; readonly path: string }) {
   return (
     <div className="relative aspect-square bg-brand-100">
-      <div className="grid size-full place-items-center text-brand-300">
-        <Icon name="treatment" size="action" />
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={path} alt={label} className="size-full object-cover" />
       <span className="absolute inset-x-0 bottom-0 bg-[rgba(46,37,36,.72)] py-1.5 text-center text-[11.5px] font-medium text-white">
         {label}
       </span>

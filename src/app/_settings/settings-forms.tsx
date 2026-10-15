@@ -46,11 +46,19 @@
  * does not provide that context. The phone field therefore uses the shell's own
  * `Field` (imported as `FormField` to leave the local `Field` name free) so the
  * control has a label, a described-by and an error slot.
+ *
+ * ## Why the two image uploads are their own component
+ *
+ * A hero image and an about picture are two separate facts about the clinic, and
+ * each upload is its own round trip: the bytes go to storage, the row gets the
+ * URL, and a failure is about one image and not the tab. A single form that
+ * carried both would be a form whose partial failure is the whole tab.
  */
 
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState, useTransition } from 'react'
+import type { ChangeEvent } from 'react'
 
 import { Button } from '@/core/components/button'
 import { Field as FormField, PersianPhoneInput } from '@/core/components/form'
@@ -69,12 +77,17 @@ import {
   saveIdentityAction,
   saveMessagesAction,
   saveTogglesAction,
+  uploadClinicAboutAction,
+  uploadClinicHeroAction,
   type ActionResult,
+  type ClinicImageInput,
+  type UploadResult,
 } from './actions'
 import type {
   BOOKING_FIELDS,
   CYCLE_FIELDS,
   IDENTITY_FIELDS,
+  IDENTITY_IMAGES_FIELDS,
   MESSAGES_FIELDS,
   OPTIONS_FIELDS,
   WORKING_HOURS_FIELDS,
@@ -156,6 +169,135 @@ export function IdentityForm({
       <FormAnswer result={result} />
       <Submit label={labels.save} />
     </form>
+  )
+}
+
+/**
+ * «تصاویر سایت» — the clinic's hero image and about picture.
+ */
+export function ClinicImagesForm({
+  clinicId,
+  heroImageUrl,
+  heroImageKey,
+  heroImageBackend,
+  aboutImageUrl,
+  aboutImageKey,
+  aboutImageBackend,
+  labels,
+}: {
+  readonly clinicId: string | null
+  readonly heroImageUrl: string | null
+  readonly heroImageKey: string | null
+  readonly heroImageBackend: string | null
+  readonly aboutImageUrl: string | null
+  readonly aboutImageKey: string | null
+  readonly aboutImageBackend: string | null
+  readonly labels: typeof IDENTITY_IMAGES_FIELDS
+}) {
+  if (clinicId === null) return null
+
+  return (
+    <section className="flex flex-col gap-4 border-t border-line pt-6">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-bold text-ink">{labels.title}</h2>
+        <p className="text-sm text-ink-2">{labels.lead}</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 panel:grid-cols-2">
+        <ImageUpload
+          title={labels.heroImage}
+          initialUrl={heroImageUrl}
+          initialKey={heroImageKey}
+          initialBackend={heroImageBackend}
+          action={uploadClinicHeroAction}
+          labels={labels}
+        />
+        <ImageUpload
+          title={labels.aboutImage}
+          initialUrl={aboutImageUrl}
+          initialKey={aboutImageKey}
+          initialBackend={aboutImageBackend}
+          action={uploadClinicAboutAction}
+          labels={labels}
+        />
+      </div>
+    </section>
+  )
+}
+
+/** One image field — a preview, a file input, and a save. */
+function ImageUpload({
+  title,
+  initialUrl,
+  initialKey,
+  initialBackend,
+  action,
+  labels,
+}: {
+  readonly title: string
+  readonly initialUrl: string | null
+  readonly initialKey: string | null
+  readonly initialBackend: string | null
+  readonly action: (input: ClinicImageInput) => Promise<UploadResult>
+  readonly labels: typeof IDENTITY_IMAGES_FIELDS
+}) {
+  const [pending, startTransition] = useTransition()
+  const [chosen, setChosen] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(initialUrl)
+  const [answer, setAnswer] = useState<UploadResult | null>(null)
+
+  function onPick(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0] ?? null
+    setChosen(file)
+    setAnswer(null)
+    if (file !== null) setPreview(URL.createObjectURL(file))
+  }
+
+  function submit() {
+    if (chosen === null) {
+      setAnswer({ ok: false, message: labels.noFile })
+      return
+    }
+    startTransition(async () => {
+      const bytes = new Uint8Array(await chosen.arrayBuffer())
+      const outcome = await action({
+        filename: chosen.name,
+        contentType: chosen.type,
+        bytes,
+        previousKey: initialKey ?? undefined,
+        previousBackend:
+          initialBackend === 'vercel-blob' || initialBackend === 'public'
+            ? initialBackend
+            : undefined,
+      })
+      setAnswer(outcome)
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-line bg-surface-2 p-3">
+      <span className="text-sm font-bold text-ink">{title}</span>
+      <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-line-2 bg-surface p-2">
+        {preview === null ? (
+          <span className="text-xs text-ink-3">{labels.empty}</span>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={preview} alt={title} className="max-h-full max-w-full rounded-md object-contain" />
+        )}
+      </div>
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/avif"
+        onChange={onPick}
+        className="block inline-size-full cursor-pointer rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs"
+      />
+      {answer !== null && !answer.ok ? (
+        <p className="text-xs text-danger">{answer.message}</p>
+      ) : null}
+      <Button type="button" variant="primary" loading={pending} onClick={submit}>
+        {labels.save}
+      </Button>
+    </div>
   )
 }
 
@@ -479,10 +621,6 @@ export function MessagesForm({
   readonly labels: FieldLabels<typeof MESSAGES_FIELDS>
   readonly kindLabels: Readonly<Record<string, string>>
   readonly channelLabels: Readonly<Record<string, string>>
-  /**
-   * The allow-list per kind, read on the page (a Server Component) and handed down
-   * as plain data. See the file's own header for why it is not read here.
-   */
   readonly placeholders: Readonly<Record<string, readonly string[]>>
 }) {
   const [result, action] = useActionState(saveMessagesAction, { ok: true, message: null })

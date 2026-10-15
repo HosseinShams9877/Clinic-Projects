@@ -10,6 +10,15 @@
  *
  * What is deliberately not here: the overrides write. It carries an audit entry and
  * a registry validation the other five do not, so it lives in `./overrides.ts`.
+ *
+ * ## Why the images are a separate `saveClinicImages`
+ *
+ * The identity write's fields are the tenant's own name and its clinic's contact
+ * details; the pictures are three separate facts whose bytes are stored by the
+ * storage module and whose URLs are recorded on the same clinic row. Folding them
+ * into `saveIdentity` would make a name change that did not touch a picture carry
+ * the pictures' own values — which the form does not send — and would put the
+ * storage module's path policy behind a write that has nothing to do with it.
  */
 
 import { DepositRefundPolicy, Permission, isMember } from '@/core/constants'
@@ -23,6 +32,7 @@ import { DomainError } from '@/core/types'
 import type {
   AppointmentTimings,
   BookingSettings,
+  ClinicImagesSettings,
   CycleTabSettings,
   IdentitySettings,
   MessageTemplateEdit,
@@ -78,6 +88,60 @@ export async function saveIdentity(
   })
 }
 
+/**
+ * «تصاویر سایت» — the clinic's hero image and about picture.
+ *
+ * The three columns per picture are written together — URL, backend and key — so a
+ * row can never name a URL without the pair a delete or a fallback needs. The
+ * `null` values the form sends for an unset picture are written as `null`, which
+ * is what the read resolves to a placeholder.
+ */
+export async function saveClinicImages(
+  tx: TransactionClient,
+  ctx: TenantContext,
+  values: ClinicImagesSettings,
+): Promise<ClinicImagesSettings> {
+  requirePermission(ctx, Permission.ManageClinicSettings)
+
+  if (values.clinicId === null) {
+    throw new DomainError('No clinic exists for this tenant to attach the pictures to.', {
+      messageKey: 'settings.invalidValue',
+      detail: { field: 'clinicId' },
+    })
+  }
+
+  const updated = await tx.clinic.update({
+    where: { id: values.clinicId },
+    data: {
+      heroImageUrl: values.heroImageUrl,
+      heroImageBackend: values.heroImageBackend,
+      heroImageKey: values.heroImageKey,
+      aboutImageUrl: values.aboutImageUrl,
+      aboutImageBackend: values.aboutImageBackend,
+      aboutImageKey: values.aboutImageKey,
+    },
+    select: {
+      id: true,
+      heroImageUrl: true,
+      heroImageBackend: true,
+      heroImageKey: true,
+      aboutImageUrl: true,
+      aboutImageBackend: true,
+      aboutImageKey: true,
+    },
+  })
+
+  return Object.freeze({
+    clinicId: updated.id,
+    heroImageUrl: updated.heroImageUrl,
+    heroImageBackend: updated.heroImageBackend,
+    heroImageKey: updated.heroImageKey,
+    aboutImageUrl: updated.aboutImageUrl,
+    aboutImageBackend: updated.aboutImageBackend,
+    aboutImageKey: updated.aboutImageKey,
+  })
+}
+
 /** «نوبتدهی» — the mode, the lifecycle timings, and the two payment policy values. */
 export async function saveBooking(
   tx: TransactionClient,
@@ -116,8 +180,6 @@ export async function saveBooking(
     mode: values.mode,
     timings: JSON.parse(row.appointmentSettings ?? '{}') as AppointmentTimings,
     secretaryDiscountCap: row.secretaryDiscountCap,
-    // The column is a free `String?`, so the code the matrix closes is narrowed here
-    // and a value the row should never hold is the read's documented default.
     depositRefundPolicy: policyOf(row.depositRefundPolicy),
     debtGraceDays: row.debtGraceDays,
   })

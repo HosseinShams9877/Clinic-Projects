@@ -41,25 +41,28 @@ export const SETTINGS_TABS = [
 /** «اطلاعات کلینیک» — the name and the address a customer and the site show. */
 export interface IdentitySettings {
   readonly tenantName: string
-  /** The primary clinic's own name, which is what a branch's patients see. */
   readonly clinicName: string
   readonly phone: string | null
   readonly address: string | null
 }
 
+/** «تصاویر سایت» — the clinic's own pictures, as the storage module recorded them. */
+export interface ClinicImagesSettings {
+  readonly clinicId: string | null
+  readonly heroImageUrl: string | null
+  readonly heroImageBackend: string | null
+  readonly heroImageKey: string | null
+  readonly aboutImageUrl: string | null
+  readonly aboutImageBackend: string | null
+  readonly aboutImageKey: string | null
+}
+
 /**
  * The appointment lifecycle timings the «نوبتدهی» tab owns.
- *
- * Stored as the `appointmentSettings` blob, so a value the column does not hold is
- * the documented default rather than an error — the same contract every other
- * settings blob in the product keeps.
  */
 export interface AppointmentTimings {
-  /** The length of the slot the grid offers, in minutes. */
   readonly slotDurationMinutes: number
-  /** How long before a session the automatic reminder is queued, in hours. */
   readonly reminderLeadHours: number
-  /** How long a booked slot is held before it is released, in minutes. */
   readonly bookingHoldMinutes: number
 }
 
@@ -67,18 +70,14 @@ export interface AppointmentTimings {
 export interface BookingSettings {
   readonly mode: BookingMode
   readonly timings: AppointmentTimings
-  /** «سقف تخفیف منشی» — NULL is no ceiling, which is no discount. */
   readonly secretaryDiscountCap: bigint | null
-  /** §4.4's policy — NULL is no refund until the manager sets one. */
   readonly depositRefundPolicy: DepositRefundPolicy | null
-  /** «مهلت تا سررسید» — days after a session before its balance is past due; NULL = default. */
   readonly debtGraceDays: number | null
 }
 
 /** One of the clinic's weekly shifts, as the «ساعات کاری» tab renders it. */
 export interface ShiftRow {
   readonly id: string
-  /** ۰–۶, Saturday first (`06-constants.md`). */
   readonly weekday: number
   readonly startTime: LocalTime
   readonly endTime: LocalTime
@@ -98,11 +97,7 @@ export interface WorkingHoursSettings {
   readonly holidays: readonly HolidayRow[]
 }
 
-/**
- * «چرخه درمان» — the two settings `04-roles-permissions.md` §5 keeps with the cycle
- * engine, read here so the settings screen that edits them is one tab and not two
- * surfaces. The shape is the cycle module's own, so the two cannot drift.
- */
+/** «چرخه درمان» — the two settings §5 keeps with the cycle engine. */
 export interface CycleTabSettings {
   readonly noShowAddsToContactList: boolean
   readonly rescheduleShiftsDueDates: boolean
@@ -141,6 +136,7 @@ export interface OptionsSettings {
 /** All six tabs in one read, for the page that renders whichever tab it was asked for. */
 export interface TenantSettingsSurface {
   readonly identity: IdentitySettings
+  readonly images: ClinicImagesSettings
   readonly booking: BookingSettings
   readonly workingHours: WorkingHoursSettings
   readonly cycle: CycleTabSettings

@@ -1,11 +1,5 @@
 /**
- * The Persian surface of the settings screen — the six tabs' names, every field's
- * label, and the eight toggles' own sentences.
- *
- * The eight toggles' labels land here because this is the screen that renders them
- * (`04-roles-permissions.md` §4's table carries the Persian, and the constants
- * module deliberately holds the codes only). A label is typed over the `Toggle`
- * union, so a ninth toggle without a sentence is a compile error.
+ * The Persian surface of the settings screen.
  */
 
 import type { AutomaticMessageKind, BookingMode, DepositRefundPolicy } from '@/core/constants'
@@ -49,6 +43,19 @@ export const IDENTITY_FIELDS = Object.freeze({
   save: 'ذخیره اطلاعات کلینیک',
 }) satisfies Record<string, string>
 
+export const IDENTITY_IMAGES_FIELDS = Object.freeze({
+  title: 'تصاویر سایت',
+  lead: 'تصویر صفحه‌ی اصلی و تصویر «درباره ما».',
+  heroImage: 'تصویر صفحه‌ی اصلی',
+  aboutImage: 'تصویر درباره ما',
+  field: 'تصویر',
+  empty: 'تصویری ثبت نشده است.',
+  noFile: 'لطفاً ابتدا یک تصویر انتخاب کنید.',
+  save: 'ذخیره تصویر',
+  sessionExpired: 'نشست شما منقضی شده است. لطفاً دوباره وارد شوید.',
+  clinicNotFound: 'کلینیک پیدا نشد.',
+}) satisfies Record<string, string>
+
 /* ── «نوبتدهی» ───────────────────────────────────────────────────────────── */
 
 export const BOOKING_MODE_LABELS: Readonly<Record<BookingMode, string>> = Object.freeze({
@@ -65,7 +72,6 @@ export const BOOKING_FIELDS = Object.freeze({
   secretaryDiscountCap: 'سقف تخفیف منشی (تومان)',
   depositRefundPolicy: 'سیاست بازگرداندن بیعانه',
   debtGraceDays: 'مهلت تا سررسید (روز)',
-  /** The label of the empty option, which is the policy the manager has not set. */
   none: 'تعیین نشده',
   save: 'ذخیره نوبتدهی',
 }) satisfies Record<string, string>
@@ -95,7 +101,6 @@ export const WORKING_HOURS_FIELDS = Object.freeze({
   save: 'ذخیره ساعات کاری',
 }) satisfies Record<string, string>
 
-/** The seven days, Saturday first, as the shift table's header renders them. */
 export const WEEKDAY_LABELS = Object.freeze([
   'شنبه',
   'یکشنبه',
@@ -124,13 +129,6 @@ export const MESSAGES_FIELDS = Object.freeze({
   save: 'ذخیره پیام‌ها',
 }) satisfies Record<string, string>
 
-/**
- * The seven automatic messages, as the tab names each one it offers a field for.
- *
- * The channel's own labels are `messages`'s, because that module owns the two; these
- * are the seven the tab renders, keyed over the constants' own codes so an eighth
- * message is a key with no sentence.
- */
 export const AUTOMATIC_KIND_LABELS: Readonly<Record<AutomaticMessageKind, string>> = Object.freeze({
   NEXT_SESSION_REMINDER: 'یادآور جلسه بعد',
   BOOKING_CONFIRMATION: 'تأیید رزرو',
@@ -143,11 +141,6 @@ export const AUTOMATIC_KIND_LABELS: Readonly<Record<AutomaticMessageKind, string
 
 /* ── «اختیارات» ──────────────────────────────────────────────────────────── */
 
-/**
- * §4's eight rows: a label, and the sentence that says what turning it on permits.
- * The description is the one the screen owes the person flipping it, because a
- * toggle whose consequence is not stated is a toggle set by guesswork.
- */
 export const TOGGLE_LABELS: Readonly<
   Record<Toggle, { readonly label: string; readonly description: string }>
 > = Object.freeze({
@@ -196,7 +189,6 @@ export const OPTIONS_FIELDS = Object.freeze({
   noOverrides: 'این کلینیک پیاده‌سازی اختصاصی ندارد.',
 }) satisfies Record<string, string>
 
-/** Every message the settings actions can raise, for the catalog's completeness. */
 export type SettingsMessageKey =
   | 'settings.saved'
   | 'settings.toggleDisabled'
@@ -205,10 +197,7 @@ export type SettingsMessageKey =
 
 export const MESSAGES: Readonly<Record<SettingsMessageKey, string>> = Object.freeze({
   'settings.saved': 'تنظیمات ذخیره شد.',
-  // The toggle the caller's action needs is off on this clinic's settings row.
   'settings.toggleDisabled': 'این اختیار در تنظیمات کلینیک روشن نیست.',
-  // The pair the operator named is not one this build's registry holds.
-  'settings.overrideNotInRegistry':
-    'این ترکیب ماژول و پیاده‌سازی در این نسخه وجود ندارد.',
+  'settings.overrideNotInRegistry': 'این ترکیب ماژول و پیاده‌سازی در این نسخه وجود ندارد.',
   'settings.invalidValue': 'یکی از مقادیر نامعتبر است.',
 })

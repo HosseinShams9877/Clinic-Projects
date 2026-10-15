@@ -1,19 +1,23 @@
 /**
  * «درباره ما» — `02-architecture.md` §9's `about.html`.
  *
- * The one page of the eight that reads nothing: it is the clinic's own story, and the
- * story is copy. Every string is in the catalog and the page is a layout.
+ * The page reads the clinic's own about picture and renders the copy from the
+ * catalog. A clinic that has not uploaded the picture renders its own placeholder.
  */
 
+import { prisma, runInTenantScope } from '@/core/db'
+import { resolveTenantId } from '@/app/_shell/tenant'
 import { Icon } from '@/core/components/icons'
 import { toPersianDigits } from '@/core/localization'
 
-import { PUBLIC_ABOUT } from '@/modules/public-site'
+import { PUBLIC_ABOUT, publicClinicImages } from '@/modules/public-site'
 
 export const metadata = { title: PUBLIC_ABOUT.title }
 
-export default function AboutPage() {
+export default async function AboutPage() {
   const copy = PUBLIC_ABOUT
+  const tenantId = await resolveTenantId()
+  const aboutImageUrl = await readAboutImage(tenantId)
 
   return (
     <>
@@ -24,9 +28,14 @@ export default function AboutPage() {
             <p className="text-base leading-8 text-ink-2">{copy.lead}</p>
           </div>
           <div className="aspect-[16/9] overflow-hidden rounded-[24px] bg-brand-100">
-            <div className="grid size-full place-items-center text-brand-300">
-              <Icon name="customers" size="action" />
-            </div>
+            {aboutImageUrl === null ? (
+              <div className="grid size-full place-items-center text-brand-300">
+                <Icon name="customers" size="action" />
+              </div>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={aboutImageUrl} alt={copy.title} className="size-full object-cover" />
+            )}
           </div>
         </div>
       </section>
@@ -82,4 +91,17 @@ export default function AboutPage() {
       </section>
     </>
   )
+}
+
+/** The clinic's about picture, or `null` for a tenant the address does not resolve. */
+async function readAboutImage(
+  tenantId: Awaited<ReturnType<typeof resolveTenantId>>,
+): Promise<string | null> {
+  if (tenantId === null) return null
+  const images = await runInTenantScope(
+    { tenantId, clinicId: null, role: 'public', userId: 'public' },
+    prisma(),
+    (tx) => publicClinicImages(tx, tenantId),
+  )
+  return images.aboutImageUrl
 }
