@@ -24,6 +24,7 @@ type ActionPanel = 'reception' | 'doctor' | 'admin'
 
 export interface RowEditContext {
   readonly doctorId: string
+  readonly doctorName: string
   readonly serviceId: string | null
   readonly localDate: string
   readonly localTime: string
@@ -148,6 +149,7 @@ export function RowActions({
             servicesByDoctorId={edit.servicesByDoctorId}
             current={{
               doctorId: edit.doctorId,
+              doctorName: edit.doctorName,
               serviceId: edit.serviceId ?? '',
               localDate: edit.localDate,
               localTime: edit.localTime,

@@ -508,26 +508,41 @@ export async function updateAppointment(args: {
       { appointmentId: current.id },
     )
   }
-  const durationMinutes = args.durationMinutes ?? (args.serviceId !== undefined ? service.durationMinutes : current.durationMinutes)
+  const durationMinutes =
+    args.durationMinutes ??
+    (args.serviceId !== undefined ? service.durationMinutes : current.durationMinutes)
 
   const settings = await readBookingSettings(args.tx, args.ctx.tenantId)
-  await assertSlotBookable(
-    {
-      tx: args.tx,
-      ctx: args.ctx,
-      clinicId: current.clinicId,
-      doctorId,
-      customerId: current.customerId,
-      serviceId,
-      localDate,
-      localTime,
-      durationMinutes,
-      priceAtBooking: service.price,
-      depositAmount: current.depositAmount,
-      source: current.source ?? AppointmentSource.Reception,
-    },
-    settings,
-  )
+
+  // The slot the row is holding is its own, and the booking's own day is a day
+  // the desk can keep. The domain rules are re-checked only when a key that
+  // defines the slot has actually changed: a service correction on the same day
+  // and time does not need to prove its slot is bookable against a set that
+  // includes the row itself.
+  const sameSlot =
+    doctorId === current.doctorId &&
+    localDate === current.localDate &&
+    localTime === current.localTime
+
+  if (!sameSlot) {
+    await assertSlotBookable(
+      {
+        tx: args.tx,
+        ctx: args.ctx,
+        clinicId: current.clinicId,
+        doctorId,
+        customerId: current.customerId,
+        serviceId,
+        localDate,
+        localTime,
+        durationMinutes,
+        priceAtBooking: service.price,
+        depositAmount: current.depositAmount,
+        source: current.source ?? AppointmentSource.Reception,
+      },
+      settings,
+    )
+  }
 
   const scheduledAt = toUtcInstant(localDate, localTime, settings.utcOffsetMinutes)
   const slotKey = scheduledAt.toISOString()
@@ -543,7 +558,11 @@ export async function updateAppointment(args: {
         localTime,
         durationMinutes,
         priceAtBooking: service.price,
-        slotKey,
+        // The `slotKey` is written only when the slot itself changed. Writing it
+        // on every update runs the unique index against the row's own key and
+        // raises a `P2002` a caller reads as "taken" on a slot the row is already
+        // holding — which is the bug this guard closes.
+        ...(sameSlot ? {} : { slotKey }),
       },
       select: APPOINTMENT_SELECT,
     })

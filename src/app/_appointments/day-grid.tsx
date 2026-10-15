@@ -506,6 +506,7 @@ function editContext(
 ): RowEditContext {
   return {
     doctorId: row.doctorId,
+    doctorName: row.doctorName,
     serviceId: row.serviceId,
     localDate: row.localDate,
     localTime: row.localTime,

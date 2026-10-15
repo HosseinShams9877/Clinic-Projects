@@ -1,37 +1,5 @@
 /**
  * The customer profile — `02-architecture.md` §9's `admin/customer.html`.
- *
- * The one surface the customers module's full record renders on. The page composes
- * four modules' reads — `customers` for the row and its two histories, `cycles` for
- * the courses the profile's left column holds, `messages` for the recent sends, and
- * `audience-groups` for the badges that say which campaigns can already reach this
- * person — which is what `02-architecture.md` §6 puts composition in `src/app/` for:
- * the profile is the one page a customer's whole record is one page on.
- *
- * ## The two tabs, and what each holds
- *
- * The page carries two tabs — «خلاصه پرونده» (the two columns below) and
- * «نقشه تزریق» (the injection map's table and its four counts). The tab is a
- * `?tab=` search param and the strip is a link, not a client state, so the URL
- * is the memory and a bookmark lands on the tab it names.
- *
- * ## Why the badges are evaluated and not stored
- *
- * `03-data-model.md` Decision 3 is a group is a saved predicate and not a stored
- * member list, so whether this customer is in «وفادارها» is a question asked now and
- * not a flag the row carries. The page asks it through the audience-groups module's
- * own evaluation for the same reason the campaign's dispatch does: a badge that
- * disagreed with the audience a campaign sent to would be a badge the manager could
- * not act on.
- *
- * ## Why a missing row is a 404 and not a 500
- *
- * `customerProfile` raises `NotFoundError` for a row that is outside the caller's
- * scope — another tenant's customer, or another doctor's patient when the caller
- * cannot see the whole file (`09-security.md` §6.3). The page catches that one error
- * and answers `notFound()`, because the honest answer to a person who opened a
- * profile they cannot see is the same page as one that does not exist. Every other
- * failure is the framework's own error page, which is where a bug belongs.
  */
 
 import type { Metadata } from 'next'
@@ -41,12 +9,8 @@ import { notFound } from 'next/navigation'
 import { prisma, runInTenantScope } from '@/core/db'
 import type { TransactionClient } from '@/core/db/scope'
 import { realClock } from '@/core/lib/clock'
-import {
-  APPOINTMENT_STATUS_LABELS,
-} from '@/modules/appointments'
-import {
-  ACQUISITION_SOURCE_LABELS,
-} from '@/modules/customers'
+import { APPOINTMENT_STATUS_LABELS } from '@/modules/appointments'
+import { ACQUISITION_SOURCE_LABELS } from '@/modules/customers'
 import {
   AppointmentStatus,
   AudienceGroupKey,
@@ -77,20 +41,17 @@ import { Pagination, paginate, pageFromParam } from '@/app/_components/Paginatio
 import { CUSTOMER_PROFILE_PAGE } from '@/app/catalog'
 import { loadCustomerProfile } from '@/app/_customers/page-data'
 import { CustomerTabs, tabFromParam } from '@/app/_customers/customer-tabs'
-import { InjectionTab } from '@/app/_injections'
 import {
-  PAYMENT_KIND_LABELS,
-  PAYMENT_METHOD_LABELS,
-} from '@/modules/payments'
+  InjectionTab,
+  DEFAULT_INJECTION_VIEW,
+  type InjectionView,
+} from '@/app/_injections'
+import { PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS } from '@/modules/payments'
 import { CYCLE_STATUS_LABELS, customerCycles } from '@/modules/cycles'
 import type { CycleRow } from '@/modules/cycles'
 import { customerMessageHistory } from '@/modules/messages'
 import { AUDIENCE_GROUP_LABELS, evaluateGroup } from '@/modules/audience-groups'
-import {
-  ConsentForm,
-  DoctorNoteForm,
-  ProfileEdit,
-} from '@/app/_customers/profile-forms'
+import { ConsentForm, DoctorNoteForm, ProfileEdit } from '@/app/_customers/profile-forms'
 import { ProgressBar } from '@/app/_components/ProgressBar'
 import { requireStaffPanel } from '@/app/_shell/session'
 
@@ -119,13 +80,19 @@ export default async function CustomerProfilePage({
   const tab = tabFromParam(query.tab)
   const apptsPage = pageFromParam(query[APPTS_PAGE_PARAM])
   const paysPage = pageFromParam(query[PAYS_PAGE_PARAM])
+  const injectionView = injectionViewFromParam(query.injectionView)
 
   const data = await loadProfile(session.permissions, id)
 
   const { profile, cycles, messages, groups, injections, injectionCounts } = data
   const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
   const balance = profile.chargedTotal - profile.paidTotal
-  const activeCycles = cycles.filter((row) => row.status === CycleStatus.Active || row.status === CycleStatus.Due || row.status === CycleStatus.AtRisk)
+  const activeCycles = cycles.filter(
+    (row) =>
+      row.status === CycleStatus.Active ||
+      row.status === CycleStatus.Due ||
+      row.status === CycleStatus.AtRisk,
+  )
 
   const appts = paginate(profile.appointments, apptsPage)
   const pays = paginate(profile.payments, paysPage)
@@ -173,12 +140,14 @@ export default async function CustomerProfilePage({
       />
 
       {tab === 'injections' ? (
-        <InjectionTab
-          rows={injections}
-          counts={injectionCounts}
-          panel="admin"
-          customerId={profile.id}
-        />
+       <InjectionTab
+  rows={injections}
+  counts={injectionCounts}
+  panel="admin"
+  customerId={profile.id}
+  view={injectionView}
+  basePath={`${basePath}?tab=injections`}
+/>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
@@ -237,7 +206,18 @@ export default async function CustomerProfilePage({
             </div>
 
             <div className="flex flex-col gap-6">
-              <Card title={ADMIN_CUSTOMER_PROFILE.cards.details} action={<ProfileEdit customerId={profile.id} firstName={profile.firstName} lastName={profile.lastName} birthDate={profile.birthDate} residenceArea={profile.residenceArea} />}>
+              <Card
+                title={ADMIN_CUSTOMER_PROFILE.cards.details}
+                action={
+                  <ProfileEdit
+                    customerId={profile.id}
+                    firstName={profile.firstName}
+                    lastName={profile.lastName}
+                    birthDate={profile.birthDate}
+                    residenceArea={profile.residenceArea}
+                  />
+                }
+              >
                 <DetailsDl profile={profile} doctorName={data.primaryDoctorName} />
               </Card>
 
@@ -269,13 +249,15 @@ export default async function CustomerProfilePage({
   )
 }
 
+/** The injection view the URL names, or the default (the map). */
+function injectionViewFromParam(value: string | string[] | undefined): InjectionView {
+  if (value === 'table') return 'table'
+  return DEFAULT_INJECTION_VIEW
+}
+
 /**
  * The profile and the three reads beside it, in the caller's scope, or the 404 a row
  * outside it answers.
- *
- * The four reads are one transaction because the profile is one page: a cycle closed
- * between the row and the courses would be a course the page rendered against a row
- * that no longer held it.
  */
 async function loadProfile(
   ctx: Parameters<typeof loadCustomerProfile>[0]['ctx'],
@@ -299,10 +281,6 @@ async function loadProfile(
 
 /**
  * The built-in groups this customer is in, evaluated now.
- *
- * A badge is a question answered at read time and not a stored fact (Decision 3), so
- * the eight are evaluated through the module's own evaluation — the same one a
- * campaign's dispatch runs — and the ones that answer yes are the ones the card shows.
  */
 async function groupMemberships(
   tx: TransactionClient,
@@ -334,9 +312,7 @@ function Card({
   children,
 }: {
   readonly title: string
-  /** The small count a history card names beside its heading, or none. */
   readonly note?: string
-  /** The one action the card's head holds, or none. */
   readonly action?: React.ReactNode
   readonly children: React.ReactNode
 }) {
@@ -420,9 +396,13 @@ function CycleRow({ row }: { readonly row: CycleRow }) {
         <div className="flex flex-col gap-1 tabular-nums">
           <span className="font-semibold text-ink">
             {toPersianDigits(row.completedSessions)}
-            {row.totalSessions === 0 ? '' : ` ${ADMIN_CUSTOMER_PROFILE.cycleColumns.sessions} ${toPersianDigits(row.totalSessions)}`}
+            {row.totalSessions === 0
+              ? ''
+              : ` ${ADMIN_CUSTOMER_PROFILE.cycleColumns.sessions} ${toPersianDigits(row.totalSessions)}`}
           </span>
-          {row.totalSessions === 0 ? null : <ProgressBar done={row.completedSessions} total={row.totalSessions} />}
+          {row.totalSessions === 0 ? null : (
+            <ProgressBar done={row.completedSessions} total={row.totalSessions} />
+          )}
         </div>
       </td>
       <td className="px-3 py-2 text-ink-2 tabular-nums">{intervalLabel(row.intervalDays)}</td>
@@ -497,32 +477,32 @@ function AppointmentHistory({
   return (
     <div className="flex flex-col gap-3">
       <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-line-2 text-ink-3">
-            <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.date}</Th>
-            <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.service}</Th>
-            <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.doctor}</Th>
-            <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.status}</Th>
-            <Th className="text-end">{ADMIN_CUSTOMER_PROFILE.visitColumns.amount}</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-b border-line last:border-b-0">
-              <td className="px-3 py-2 text-ink-2 tabular-nums">
-                {formatDate(row.localDate as LocalDate, 'short')}
-              </td>
-              <td className="px-3 py-2 font-semibold text-ink">{row.serviceName ?? '—'}</td>
-              <td className="px-3 py-2 text-ink-2">{row.doctorName ?? '—'}</td>
-              <td className="px-3 py-2">{statusBadge(row.status)}</td>
-              <td className="px-3 py-2 text-end font-semibold text-ink tabular-nums">
-                {formatMoney(row.priceAtBooking)}
-              </td>
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-line-2 text-ink-3">
+              <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.date}</Th>
+              <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.service}</Th>
+              <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.doctor}</Th>
+              <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.status}</Th>
+              <Th className="text-end">{ADMIN_CUSTOMER_PROFILE.visitColumns.amount}</Th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-b border-line last:border-b-0">
+                <td className="px-3 py-2 text-ink-2 tabular-nums">
+                  {formatDate(row.localDate as LocalDate, 'short')}
+                </td>
+                <td className="px-3 py-2 font-semibold text-ink">{row.serviceName ?? '—'}</td>
+                <td className="px-3 py-2 text-ink-2">{row.doctorName ?? '—'}</td>
+                <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                <td className="px-3 py-2 text-end font-semibold text-ink tabular-nums">
+                  {formatMoney(row.priceAtBooking)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
     </div>
@@ -554,28 +534,30 @@ function PaymentHistory({
   return (
     <div className="flex flex-col gap-3">
       <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-line-2 text-ink-3">
-            <Th>{CUSTOMER_PROFILE_PAGE.history.paidAt}</Th>
-            <Th className="text-end">{CUSTOMER_PROFILE_PAGE.history.amount}</Th>
-            <Th>{CUSTOMER_PROFILE_PAGE.history.method}</Th>
-            <Th>{CUSTOMER_PROFILE_PAGE.history.kind}</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-b border-line last:border-b-0">
-              <td className="px-3 py-2 text-ink-2 tabular-nums">
-                {row.paidAt === null ? '—' : formatDate(dateToLocalDate(row.paidAt), 'short')}
-              </td>
-              <td className="px-3 py-2 text-end font-semibold text-ink tabular-nums">{formatMoney(row.amount)}</td>
-              <td className="px-3 py-2 text-ink-2">{methodLabel(row.method)}</td>
-              <td className="px-3 py-2 text-ink-2">{kindLabel(row.kind)}</td>
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-line-2 text-ink-3">
+              <Th>{CUSTOMER_PROFILE_PAGE.history.paidAt}</Th>
+              <Th className="text-end">{CUSTOMER_PROFILE_PAGE.history.amount}</Th>
+              <Th>{CUSTOMER_PROFILE_PAGE.history.method}</Th>
+              <Th>{CUSTOMER_PROFILE_PAGE.history.kind}</Th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-b border-line last:border-b-0">
+                <td className="px-3 py-2 text-ink-2 tabular-nums">
+                  {row.paidAt === null ? '—' : formatDate(dateToLocalDate(row.paidAt), 'short')}
+                </td>
+                <td className="px-3 py-2 text-end font-semibold text-ink tabular-nums">
+                  {formatMoney(row.amount)}
+                </td>
+                <td className="px-3 py-2 text-ink-2">{methodLabel(row.method)}</td>
+                <td className="px-3 py-2 text-ink-2">{kindLabel(row.kind)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
     </div>
@@ -620,20 +602,39 @@ function DetailsDl({
 }) {
   return (
     <dl className="grid grid-cols-1 gap-x-6 gap-y-3">
-      <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.mobile} value={formatPhone(profile.mobile)} ltr />
+      <Detail
+        label={ADMIN_CUSTOMER_PROFILE.detailFields.mobile}
+        value={formatPhone(profile.mobile)}
+        ltr
+      />
       <Detail
         label={ADMIN_CUSTOMER_PROFILE.detailFields.birthDate}
         value={formatBirthday(profile.birthDate)}
       />
       <Detail
         label={ADMIN_CUSTOMER_PROFILE.detailFields.firstVisit}
-        value={profile.firstVisitAt === null ? null : formatDate(dateToLocalDate(profile.firstVisitAt), 'long')}
+        value={
+          profile.firstVisitAt === null
+            ? null
+            : formatDate(dateToLocalDate(profile.firstVisitAt), 'long')
+        }
       />
-      <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.source} value={sourceLabel(profile.acquisitionSource)} />
+      <Detail
+        label={ADMIN_CUSTOMER_PROFILE.detailFields.source}
+        value={sourceLabel(profile.acquisitionSource)}
+      />
       <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.doctor} value={doctorName} />
       <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.residence} value={profile.residenceArea} />
-      <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.medicalHistory} value={profile.medicalHistory} span />
-      <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.sensitivities} value={profile.sensitivities} span />
+      <Detail
+        label={ADMIN_CUSTOMER_PROFILE.detailFields.medicalHistory}
+        value={profile.medicalHistory}
+        span
+      />
+      <Detail
+        label={ADMIN_CUSTOMER_PROFILE.detailFields.sensitivities}
+        value={profile.sensitivities}
+        span
+      />
     </dl>
   )
 }
@@ -647,9 +648,7 @@ function Detail({
 }: {
   readonly label: string
   readonly value: string | null
-  /** Whether the fact takes the grid's whole row. */
   readonly span?: boolean
-  /** Whether the value is a Latin string the page must isolate. */
   readonly ltr?: boolean
 }) {
   return (
@@ -703,12 +702,7 @@ function GroupBadges({ groups }: { readonly groups: readonly AudienceGroupKey[] 
   )
 }
 
-/**
- * The recent sends, as the messages card lists them.
- *
- * The count beside them is the window the sending frequency cap counts (`03-data-model.md`
- * §2.5's «۳ پیام در ۳۰ روز»), read from the same rows and not from a second query.
- */
+/** The recent sends, as the messages card lists them. */
 function MessageList({
   rows,
 }: {
@@ -758,7 +752,9 @@ function formatBirthday(birthDate: string | null): string | null {
 
 /** The empty state the three tables share. */
 function EmptyState({ sentence }: { readonly sentence: string }) {
-  return <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">{sentence}</p>
+  return (
+    <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">{sentence}</p>
+  )
 }
 
 /** One column header, with the alignment the design system's tables keep. */
