@@ -1,18 +1,5 @@
 /**
  * The module's reads — the four buckets, over the appointments that carry a balance.
- *
- * There is no `debts` table (`03-data-model.md` §4.3), so every read here is a
- * computation: the appointments that completed, the payments that settled them, and
- * the three terms put together by the `payments` module's own function. `debts` reads
- * financial facts and writes nothing but a follow-up, which is the division the phase's
- * instruction names.
- *
- * | Read | Surface |
- * |---|---|
- * | `contactList` | `reception/debts.html`, with the row actions |
- * | `clinicDebts` | `admin/debts.html`, read-only oversight |
- * | `doctorDebts` | `doctor/debts.html`, the caller's own courses |
- * | `customerDebts` | the customer profile's debt summary |
  */
 
 import { AppointmentStatus, DebtBucket, Permission } from '@/core/constants'
@@ -20,7 +7,6 @@ import { fromUtcInstant, type LocalDate } from '@/core/localization'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 import { requirePermission } from '@/modules/roles-permissions'
-import { asBalance } from '@/modules/payments'
 
 import type { DebtBuckets, DebtRow, LastFollowUp } from '../types'
 import { bucketOf, daysOverdueOf, effectiveDueInstant } from './buckets'
@@ -28,6 +14,14 @@ import { readDebtSettings } from './settings'
 
 /** The most a bucket reads in one go; a list is scrolled, not paged. */
 const LIST_LIMIT = 200
+
+/** The four statuses a live booking can hold, with a charge on it. */
+const LIVE_STATUSES: string[] = [
+  AppointmentStatus.Booked,
+  AppointmentStatus.AwaitingArrival,
+  AppointmentStatus.Arrived,
+  AppointmentStatus.Completed,
+]
 
 /** The columns a debt row reads off the appointment, and nothing more. */
 const APPOINTMENT_SELECT = {
@@ -45,7 +39,6 @@ const APPOINTMENT_SELECT = {
   doctor: { select: { firstName: true, lastName: true } },
 } as const
 
-/** The shape Prisma hands back from the appointments read. */
 type AppointmentRow = {
   readonly id: string
   readonly customerId: string | null
@@ -68,20 +61,27 @@ type AppointmentRow = {
   }
 }
 
-/** The sums one appointment's payments carry, as a `groupBy` hands them back. */
 type PaymentSums = {
   readonly appointmentId: string
   readonly _sum: { readonly amount: bigint | null; readonly discountAmount: bigint | null }
 }
 
 /**
- * The tenant's debts, in the four buckets — the read the three debt pages share.
- *
- * Takes no permission itself; the three wrappers below each hold their own, because the
- * three surfaces are three authorisation decisions over one set of rows. The doctor's
- * wrapper scopes by `doctorId` in the `where` and not by a guard after it, which is
- * `09-security.md` §6.3's read half: another doctor's debts are absent from the read.
+ * The three terms of `03-data-model.md` §4.1's formula, as one frozen summary.
  */
+function asBalance(
+  charged: bigint,
+  discount: bigint,
+  paid: bigint,
+): {
+  readonly charged: bigint
+  readonly discount: bigint
+  readonly paid: bigint
+  readonly balance: bigint
+} {
+  return Object.freeze({ charged, discount, paid, balance: charged - discount - paid })
+}
+
 async function tenantDebts(
   tx: TransactionClient,
   tenantId: string,
@@ -91,7 +91,7 @@ async function tenantDebts(
   const settings = await readDebtSettings(tx, tenantId)
 
   const appointments = (await tx.appointment.findMany({
-    where: { tenantId, status: AppointmentStatus.Completed, ...scope },
+    where: { tenantId, status: { in: LIVE_STATUSES }, ...scope },
     select: APPOINTMENT_SELECT,
     orderBy: { scheduledAt: 'asc' },
     take: LIST_LIMIT,
@@ -161,16 +161,10 @@ async function tenantDebts(
   return Object.freeze(buckets)
 }
 
-/**
- * Prisma's `groupBy` return is a readonly array of exactly this shape, but the args'
- * inferred type carries the `by` literal and the array together, so the cast is the one
- * the call needs rather than a cast of the result.
- */
 function groupBySums(rows: unknown): readonly PaymentSums[] {
   return rows as readonly PaymentSums[]
 }
 
-/** The bucket as the buckets object's own key. */
 function bucketKey(bucket: DebtBucket): MutableBucketKey {
   if (bucket === DebtBucket.Over30Days) return 'overdue30'
   if (bucket === DebtBucket.Over7Days) return 'overdue7'
@@ -178,29 +172,20 @@ function bucketKey(bucket: DebtBucket): MutableBucketKey {
   return 'dueSoon'
 }
 
-/** The four bucket names, mutable while the lists are being built. */
 type MutableBucketKey = keyof DebtBuckets
 
-/** The buckets while they fill — frozen before they leave this file. */
 type MutableBuckets = {
   readonly [key in MutableBucketKey]: DebtRow[]
 }
 
-/** The due date as a `LocalDate`, in the tenant's own calendar and digits. */
 function dueLocalDate(dueAt: Date, utcOffsetMinutes: number): LocalDate {
   return fromUtcInstant(dueAt, utcOffsetMinutes).localDate
 }
 
-/** The doctor's name, with the last name only when the row carries one. */
 function doctorName(firstName: string, lastName: string | null): string {
   return lastName === null || lastName === '' ? firstName : `${firstName} ${lastName}`
 }
 
-/**
- * «بدهکاران» — the desk's four buckets, with the row actions.
- *
- * @throws PermissionError — no `view_debts`.
- */
 export async function contactList(args: {
   readonly tx: TransactionClient
   readonly ctx: TenantContext
@@ -210,15 +195,6 @@ export async function contactList(args: {
   return tenantDebts(args.tx, args.ctx.tenantId, args.now)
 }
 
-/**
- * The clinic's debts — the manager's read-only oversight.
- *
- * Read-only is the page's and not the query's: the rows are the same rows the desk's
- * own `follow_up_debt` writes reach, and the oversight table is where the manager reads
- * them before deciding which one needs a call.
- *
- * @throws PermissionError — no `view_debts`.
- */
 export async function clinicDebts(args: {
   readonly tx: TransactionClient
   readonly ctx: TenantContext
@@ -228,14 +204,6 @@ export async function clinicDebts(args: {
   return tenantDebts(args.tx, args.ctx.tenantId, args.now)
 }
 
-/**
- * «بدهکاری‌های من» — the doctor's own, visible only with the granted permission.
- *
- * The scoping is the `where` clause, so another doctor's debts are absent from this
- * read and the doctor's page cannot render a course that is not theirs.
- *
- * @throws PermissionError — no `view_debts`, which §2.1 gives the manager and the desk.
- */
 export async function doctorDebts(args: {
   readonly tx: TransactionClient
   readonly ctx: TenantContext
@@ -245,7 +213,6 @@ export async function doctorDebts(args: {
   return tenantDebts(args.tx, args.ctx.tenantId, args.now, { doctorId: args.ctx.userId })
 }
 
-/** One customer's debts, for the customer profile's summary. */
 export async function customerDebts(args: {
   readonly tx: TransactionClient
   readonly tenantId: string

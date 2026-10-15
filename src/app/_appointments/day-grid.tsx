@@ -120,27 +120,8 @@ export interface DayGridProps {
 /** The default slot length, in minutes. */
 const DEFAULT_SLOT_MINUTES = 30
 
-/**
- * The width of every doctor's column, in pixels.
- *
- * An exact width and not a `min-w`: with `table-fixed`, the header row's cell is
- * the column's width and the fixed layout distributes the table's slack across the
- * columns. Four doctors at 240px each plus the hour column's 68px is 1028px, which
- * fills a typical panel viewport — below four the columns share the slack, above
- * four the table grows and the container scrolls.
- */
 const DOCTOR_COLUMN_WIDTH = 'w-[320px]'
 
-/**
- * The minimum height of every cell, in pixels.
- *
- * The floor is what a booking card reaches with its customer name, its service
- * name and its four action buttons — 96px with the design system's own spacing —
- * so a free cell or an off-schedule gap beside it is the same height as the booking
- * it sits next to, and the row reads as one line. A cell whose content is taller
- * still grows; its row grows with it, because a table row is one height for every
- * cell in it.
- */
 const CELL_MIN_HEIGHT = 'min-h-[96px]'
 
 /** The day grid, as the two breakpoints each render it. */
@@ -312,6 +293,8 @@ export function DayGrid(props: DayGridProps) {
                   appointmentId={row.id}
                   status={row.status}
                   panel={props.panel}
+                  charged={row.priceAtBooking}
+                  alreadyPaid={row.paidTotal}
                   isSlotBlock={row.isSlotBlock}
                   edit={editContext(row, props.services, columns, props.servicesByDoctorId)}
                 />
@@ -505,6 +488,8 @@ function Cell({
           appointmentId={row.id}
           status={row.status}
           panel={panel}
+          charged={row.priceAtBooking}
+          alreadyPaid={row.paidTotal}
           isSlotBlock={row.isSlotBlock}
           edit={editContext(row, services, doctorOptions, servicesByDoctorId)}
         />
@@ -549,15 +534,6 @@ function inAnyRange(window: DoctorDayWindow, minute: number): boolean {
   return window.ranges.some((r) => minute >= r.startMinute && minute < r.endMinute)
 }
 
-/**
- * The slot step in effect at `minute`, for the doctor's own day.
- *
- * The cell the desk clicks is one range's own slot, so the block it writes is that
- * range's own length — the same `slotMinutes` the axis was walked at, and the same
- * step `rowSpanAt` read to size the cell. A minute that falls outside every range
- * falls back to the grid's default, which is what the axis uses when a range has no
- * step of its own.
- */
 function slotMinutesAt(window: DoctorDayWindow | null, minute: number): number {
   const range = window?.ranges.find(
     (r) => minute >= r.startMinute && minute < r.endMinute,
@@ -621,9 +597,6 @@ const BORDER_CLASSES: Readonly<Record<string, string>> = {
   RESULT_NOT_RECORDED: '[border-inline-start-color:var(--danger)]',
 }
 
-/**
- * The grid's time axis, in minutes — the union of every range's own slot starts.
- */
 function axisMinutes(
   windows: readonly DoctorDayWindow[],
   rows: readonly AppointmentRow[],

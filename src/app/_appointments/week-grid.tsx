@@ -27,7 +27,6 @@ export interface WeekGridProps {
   readonly customers: BookingDialogProps['customers']
   readonly panel: BookingDialogProps['panel']
   readonly writable: boolean
-  /** The slot step for each doctor on the day, keyed by doctor id. */
   readonly slotMinutesByDoctorId?: Readonly<Record<string, number | null>>
 }
 
@@ -93,7 +92,13 @@ function WeekCard({
               <p className="mt-1 text-sm text-ink-2">{weekRowDescription(row)}</p>
               {writable ? (
                 <div className="mt-2">
-                  <RowActions appointmentId={row.id} status={row.status} panel={panel} />
+                  <RowActions
+                    appointmentId={row.id}
+                    status={row.status}
+                    panel={panel}
+                    charged={row.priceAtBooking}
+                    alreadyPaid={row.paidTotal}
+                  />
                 </div>
               ) : null}
             </li>

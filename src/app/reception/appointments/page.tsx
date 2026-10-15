@@ -1,6 +1,5 @@
 /**
- * The reception desk's appointments page — `02-architecture.md` §9's
- * `reception/appointments.html`.
+ * The reception desk's appointments page.
  */
 
 import type { Metadata } from 'next'
@@ -42,16 +41,10 @@ import { requireStaffPanel } from '@/app/_shell/session'
 
 export const metadata: Metadata = { title: APPOINTMENTS_PAGE.reception.title }
 
-/** The page's own route, as the tab bar and the day navigation link to. */
 const BASE_PATH = '/reception/appointments'
 
-/** The search params every page in the product reads, as the framework hands them. */
 type PageSearchParams = Promise<{ readonly [key: string]: string | string[] | undefined }>
 
-/**
- * The day grid, the week, and the cartable, for the desk that holds
- * `manage_appointments`.
- */
 export default async function ReceptionAppointmentsPage({
   searchParams,
 }: {
@@ -199,9 +192,6 @@ export default async function ReceptionAppointmentsPage({
   )
 }
 
-/**
- * The earliest free slot of the day.
- */
 function firstFreeSlot(
   windows: readonly DoctorDayWindow[],
   rows: readonly AppointmentRow[],
@@ -224,9 +214,6 @@ function firstFreeSlot(
   return { doctorId: best.doctorId, doctorName: best.doctorName, time: minutesToTime(best.minute) }
 }
 
-/**
- * The cartable — the rows whose outcome the desk has not recorded.
- */
 function Cartable({ rows }: { readonly rows: AppointmentsPageData['cartable'] }) {
   if (rows.length === 0) {
     return <p className="text-sm text-ink-3">{APPOINTMENTS_PAGE.empty.cartable}</p>
@@ -246,7 +233,13 @@ function Cartable({ rows }: { readonly rows: AppointmentsPageData['cartable'] })
             {row.doctorName}
             {row.serviceName === null ? '' : ` — ${row.serviceName}`}
           </p>
-          <RowActions appointmentId={row.id} status={row.status} panel="reception" />
+          <RowActions
+            appointmentId={row.id}
+            status={row.status}
+            panel="reception"
+            charged={row.priceAtBooking}
+            alreadyPaid={row.paidTotal}
+          />
         </li>
       ))}
     </ul>

@@ -1,40 +1,5 @@
 /**
  * The boundary helpers the three appointments pages share.
- *
- * `05-conventions.md` §7 keeps English in the error and Persian in the catalog, and
- * a Server Action is where the two meet: this file is the one place an
- * `AppError`'s key becomes the sentence a person reads. It is the appointments
- * counterpart of `src/app/_login/login-support.ts`, and it exists for the same
- * reason — three pages would otherwise each re-derive the lookup, and the third one
- * would be the one that drops a key.
- *
- * ## Why the lookup is ordered
- *
- * `appointments`'s catalog owns the `appointment.*` keys, `roles-permissions`'s owns
- * the `permission.*` ones a `requirePermission` refusal raises, `customers`'s owns
- * the `customer.*` ones a dedupe refusal raises, `cycles`'s owns the `cycle.*` ones
- * the completed-session path raises, and `core` owns the two `error.*` sentences
- * that are the honest apology when no catalog names what happened. A key is looked
- * up in that order because that is the order the modules are called in — a result
- * recording runs through `appointments`, then `cycles` — and the fallback is last
- * rather than absent because a failure the catalogs do not name is a failure that
- * still has to say something in Persian.
- *
- * ## Why `cycles` was missing, and what it cost
- *
- * `recordResultAction` calls `recordCompletedSession` after the transition, and that
- * function raises `cycle.noInterval` when the service has no `defaultIntervalDays`.
- * Without a `cycles` branch here, that key fell through to the apology — so the desk
- * read "unexpected error" for a fixable configuration gap, and the sentence that
- * names the fix (`cycle.noInterval`) was never rendered. The branch below is the fix,
- * and the order it sits in mirrors the call order: a cycle error arrives *after* the
- * appointment's own checks have passed.
- *
- * ## Why nothing else is translated here
- *
- * A *form's* own sentence — "choose a service first" — is the page's, from
- * `src/app/catalog.ts`, because it is app-tier validation and no module raises it.
- * Those are not errors and never reach the lookup.
  */
 
 import type { TenantContext } from '@/core/tenant'
@@ -59,13 +24,6 @@ import {
   type CyclesMessageKey,
 } from '@/modules/cycles'
 
-/**
- * The Persian sentence for a failure the appointments module raised, or the
- * catalog's one apology for a failure no catalog names.
- *
- * Returns the apology for a non-`AppError` throw as well, which a caller treats as
- * "the platform failed" — the same sentence, arrived by the other path.
- */
 export function appointmentsFailureMessage(error: unknown): string {
   if (!isAppError(error)) return UNEXPECTED
   if (isAppointmentKey(error.messageKey)) return APPOINTMENT_MESSAGES[error.messageKey]
@@ -75,43 +33,24 @@ export function appointmentsFailureMessage(error: unknown): string {
   return UNEXPECTED
 }
 
-/** The one apology, read once so the two paths name the same sentence. */
 const UNEXPECTED = VALIDATION_MESSAGES['error.unhandledCase']
 
-/** Whether the key is one `appointments`'s catalog holds a sentence for. */
 function isAppointmentKey(key: string): key is AppointmentsMessageKey {
   return key in APPOINTMENT_MESSAGES
 }
 
-/** Whether the key is one `customers`'s catalog holds a sentence for. */
 function isCustomersKey(key: string): key is CustomersMessageKey {
   return key in CUSTOMER_MESSAGES
 }
 
-/** Whether the key is one `roles-permissions`'s catalog holds a sentence for. */
 function isRolesKey(key: string): key is RolesPermissionsMessageKey {
   return key in ROLES_MESSAGES
 }
 
-/** Whether the key is one `cycles`'s catalog holds a sentence for. */
 function isCyclesKey(key: string): key is CyclesMessageKey {
   return key in CYCLES_MESSAGES
 }
 
-/**
- * The customer a booking is for — an existing row, or a new one.
- *
- * Delegated to `customers`'s `createOrFindCustomer`, which owns the mobile key
- * (`customer_mobile_key`), the lead conversion, and the sentence the desk reads when
- * the person is already in the file. That function is the one path every booking
- * takes, which is why the conversion happens inside it and not here: a popup is not
- * the only caller, and a conversion written here would be a conversion the lead
- * desk's own booking never made.
- *
- * @returns the customer's id, for `bookAppointment`'s `customerId`.
- * @throws ValidationError — the mobile is not a mobile, raised by the module that
- *   stores the column.
- */
 export async function resolveCustomerId(args: {
   readonly tx: TransactionClient
   readonly ctx: TenantContext

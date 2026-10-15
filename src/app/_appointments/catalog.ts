@@ -45,16 +45,9 @@ export const BLOCK_POPUP = {
 /**
  * The shorten-confirm dialog: the desk's answer to a service that runs longer than
  * the doctor's own slot.
- *
- * The dialog is the *booking*'s confirm and not a validation: the service and the
- * doctor are both valid, and what the dialog asks is whether the desk accepts a
- * booking whose length is shorter than the service the customer asked for. A "no"
- * is a different time or a different doctor, both of which the form behind it can
- * take.
  */
 export const SHORTEN_POPUP = {
   title: 'مدت خدمت با نوبت این پزشک هم‌خوان نیست',
-  /** The sentence around the two numbers: the service's length and the doctor's step. */
   bodyStart: 'این خدمت ',
   bodyMiddle: ' دقیقه است، اما نوبت‌های این پزشک ',
   bodyEnd: ' دقیقه‌ای است. آیا می‌خواهید با زمان کمتر ثبت شود؟',
@@ -63,10 +56,7 @@ export const SHORTEN_POPUP = {
 } as const
 
 /**
- * The booking popup's locked-slot badge — the mark on step 2 when the popup was
- * opened from a grid cell and the day and the time are the facts the desk already
- * chose by clicking. The lock is the popup's own, not a permission: the desk
- * changes the slot by returning to the grid, not by editing the step.
+ * The booking popup's locked-slot badge.
  */
 export const LOCKED_SLOT = {
   badge: 'از جدول',
@@ -74,15 +64,7 @@ export const LOCKED_SLOT = {
 } as const
 
 /**
- * The booking popup's free-slot grid — the step-2 time picker that offers the
- * doctor's own free slots as buttons rather than a free-text time field. Every
- * label here is the picker's own, and the "no slots" sentence is what the desk
- * reads when the day has none left.
- *
- * `error` is the read's own refusal, used by the edit dialog's remote-slot read
- * (`loadFreeSlotsAction`) when the transaction fails for a reason the catalog has
- * no more specific sentence for. It is the picker's own because the picker is the
- * only surface that renders it.
+ * The booking popup's free-slot grid.
  */
 export const SLOT_PICKER = {
   label: 'ساعت‌های آزاد',
@@ -92,13 +74,37 @@ export const SLOT_PICKER = {
   error: 'خطا در خواندن ساعت‌های آزاد.',
 } as const
 
-/** The «ثبت نتیجه» popup: a completed session's outcome note. */
+/**
+ * The «ثبت نتیجه» popup: a completed session's outcome note, and the payment that
+ * may accompany it.
+ */
 export const RESULT_POPUP = {
   trigger: 'ثبت نتیجه',
   title: 'ثبت نتیجه نوبت',
   note: 'یادداشت نتیجه (اختیاری)',
   notePlaceholder: 'مثلاً: جلسه چهارم، پوست واکنش خوبی نشان داد.',
-  save: 'ثبت نتیجه',
+  moneySection: 'پرداخت این جلسه',
+  chargedLabel: 'مبلغ خدمت',
+  alreadyPaidLabel: 'پرداخت‌شده پیش از این',
+  balanceLabel: 'مانده پس از این پرداخت',
+  paidAmount: 'مبلغ پرداختی (تومان)',
+  paidAmountHint: 'خالی بگذارید اگر پرداختی ثبت نمی‌شود.',
+  method: 'روش پرداخت',
+  discount: 'تخفیف (تومان)',
+  discountReason: 'دلیل تخفیف',
+  discountReasonPlaceholder: 'مثلاً: تخفیف وفاداری',
+  save: 'ثبت نتیجه و پرداخت',
+  saveNoteOnly: 'ثبت نتیجه',
   cancel: 'انصراف',
   close: 'بستن',
+  moneyInvalid: 'مبلغ وارد شده معتبر نیست.',
+} as const
+
+/**
+ * The three payment methods, labelled for the result dialog's own method select.
+ */
+export const RESULT_PAYMENT_METHOD_LABELS = {
+  CASH: 'نقد',
+  CARD: 'کارت',
+  ONLINE: 'آنلاین',
 } as const

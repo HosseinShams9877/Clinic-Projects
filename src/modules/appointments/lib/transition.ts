@@ -5,42 +5,14 @@
  * `COMPLETED`, `NO_SHOW` — and each one is written by a named function rather than a
  * generic `setStatus`, because the three are not three values of one thing. Each one
  * carries its own side facts and its own permission, and a generic setter would let
- * a caller write the side facts of one while recording another:
+ * a caller write the side facts of one while recording another.
  *
- * - `ARRIVED` needs `record_appointment_result` and stamps the arrival.
- * - `COMPLETED` needs `record_appointment_result`, stamps `resultRecordedAt`, and is
- *   the transition that creates a treatment cycle — the specification calls this out
- *   as *the* point, and the cycle itself belongs to the `cycles` module in Phase 4.
- *   This module records the fact the cycle is built from (the completed session) and
- *   leaves the cycle to the module that owns it. It also carries an optional
- *   `resultNote` — the sentence the doctor or secretary writes about the session's
- *   outcome — which is a *third* column beside `cancelReason` and `noShowReason`,
- *   because a completed session is a third outcome and one column shared between
- *   three would lose which is which.
- * - `NO_SHOW` needs `record_appointment_result` and carries a reason, and the reason
- *   is a free-text Persian sentence the receptionist types — which is why it is
- *   trimmed here and not on the form, so the stored sentence is the one the report
- *   counts regardless of the form that wrote it.
- *
- * ## Why the loader no longer filters `isSlotBlock: false`
- *
- * A slot block shares the `BOOKED` status with a real booking, and the desk may
- * legitimately mark it as `ARRIVED` — the block is the receptionist saying "this
- * hour is spoken for", and the arrival is the desk saying "the customer is here" in
- * the same hour. The filter that used to exclude blocks here was the reason "arrived"
- * on a block produced a `NotFoundError`; removing it is what lets the arrival and the
- * result land on a block as they do on a booking. A block reaches `COMPLETED`
- * without a cycle (its `customerId` and `serviceId` are `null`, so the caller's
- * cycle path is skipped by its own guard), which is the honest fact: no session was
- * performed, and there is nothing for a cycle to count.
- *
- * ## Why every function reloads the row
- *
- * Each one takes an id, not an appointment, because the status the guard reads has to
- * be the row's *current* status at the moment of the write. A caller that passed a
- * row it read earlier would be asking the state machine about a state the row may
- * have left — the exact race the automatic sweep creates, which is running while the
- * receptionist is typing.
+ * `recordResult` is now the entry point of the completion-and-payment flow: the
+ * caller hands it the money the customer paid for the session as an optional
+ * `payment` argument, and this function records the appointment's own facts while
+ * the caller writes the ledger through the `payments` module. The two writes are in
+ * one transaction, so a completion whose payment was refused rolls back as a unit
+ * and never leaves a completed appointment without its receipt.
  */
 
 import { AppointmentStatus } from '@/core/constants'
@@ -155,6 +127,11 @@ export async function recordArrival(args: {
  * the completed session the cycle is built from, returned here so the caller hands
  * it to the module that owns the cycle rather than the two modules reaching into
  * each other's tables.
+ *
+ * The payment the desk collected for the session is **not** this function's fact —
+ * the ledger belongs to `payments`, and this function has no columns for it. The
+ * caller writes the receipt through `payments`' own `recordPayment` inside the same
+ * transaction; see `recordResultAction`.
  */
 export async function recordResult(args: {
   readonly tx: TransactionClient

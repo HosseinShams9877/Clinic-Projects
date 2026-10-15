@@ -1,46 +1,3 @@
-/**
- * The row-level actions a day cell and a cartable row carry.
- *
- * The grid is a server component, because the rows it renders are the module's own
- * queries; the actions are a client component, because a click is a state change and
- * the sentence the module raises comes back onto the same row. The split is the one
- * `02-architecture.md` §6 draws: `src/app/` composes, and the composition of a read
- * and a write is two components rather than one that does both.
- *
- * ## Which actions a status offers
- *
- * The state machine is the module's, and this component does not re-derive it: it
- * asks `canTransition` for the pair and renders the buttons the machine permits.
- * That is what keeps a button from offering a transition the module will refuse —
- * the refusal would still be a sentence on the row, and the honest answer is to not
- * show the affordance at all.
- *
- * ## The two-step path a real booking walks
- *
- * A real booking reaches `COMPLETED` through `ARRIVED`: «حاضر شد» on `BOOKED` is
- * the plain arrival transition, and «ثبت نتیجه» on `ARRIVED` is the note dialog.
- * The desk never skips the arrival — the state machine still permits `BOOKED` →
- * `COMPLETED`, but only for a slot block (below), and this component gates the
- * real-booking case on the row actually being at `ARRIVED`.
- *
- * ## Why a slot block's "arrived" opens the note dialog
- *
- * A slot block is a closed hour, not a booking: it has no customer, no service, and
- * no arrival stage to walk through. The desk closes it in one step — `BOOKED` →
- * `COMPLETED` — and the note the dialog collects is the only fact the desk records
- * about it. The button is therefore labelled «حاضر شد» (the block's own word for
- * "this hour is over") and it opens `ResultDialog`, which writes the same
- * `resultNote` a real booking's completion would.
- *
- * ## Why the actions are not optimistic
- *
- * The row is revalidated by the action (`revalidatePath`), so the grid the person
- * sees after a click is the grid the database holds. An optimistic update would
- * render a state the sweep or a second desk may already have moved, and the two
- * would disagree until the next render — the module's own answer to a race is the
- * index, and the UI's is to show what was written.
- */
-
 'use client'
 
 import { useState, useTransition } from 'react'
@@ -62,10 +19,8 @@ import {
 } from './actions'
 import { ResultDialog } from './result-dialog'
 
-/** The panel the actions resolve, which is the caller's own. */
 type ActionPanel = 'reception' | 'doctor' | 'admin'
 
-/** What the «ویرایش نوبت» button needs — the row's own values and the pick lists. */
 export interface RowEditContext {
   readonly doctorId: string
   readonly serviceId: string | null
@@ -74,32 +29,29 @@ export interface RowEditContext {
   readonly isSlotBlock: boolean
   readonly services: readonly ServiceOption[]
   readonly doctorOptions: readonly DoctorOption[]
-  /**
-   * The service ids each doctor offers, keyed by doctor id — the same map the
-   * booking popup reads. Optional, because a surface that does not read the day
-   * grid (the cartable) has no map to hand, and the edit dialog's own fallback
-   * (the whole catalogue) is the right one there.
-   */
   readonly servicesByDoctorId?: Readonly<Record<string, readonly string[]>>
 }
 
-/** The row's own props: its id, its status, which panel is acting, and the edit context. */
 export interface RowActionsProps {
   readonly appointmentId: string
   readonly status: string
   readonly panel: ActionPanel
-  /**
-   * Whether the row is a slot block — a closed hour. A block shares the `BOOKED`
-   * status with a real booking, so the state machine alone cannot tell them apart;
-   * this flag is what lets the row render the actions a block may actually take.
-   */
+  readonly charged?: bigint
+  /** The sum already recorded on this appointment's ledger. */
+  readonly alreadyPaid?: bigint
   readonly isSlotBlock?: boolean
-  /** The edit popup's data; omitted on surfaces that do not offer an edit (the cartable). */
   readonly edit?: RowEditContext
 }
 
-/** The actions one row offers, as the state machine permits them. */
-export function RowActions({ appointmentId, status, panel, isSlotBlock = false, edit }: RowActionsProps) {
+export function RowActions({
+  appointmentId,
+  status,
+  panel,
+  charged,
+  alreadyPaid,
+  isSlotBlock = false,
+  edit,
+}: RowActionsProps) {
   const [pending, startTransition] = useTransition()
   const [message, setMessage] = useState<string | null>(null)
   const [confirmingCancel, setConfirmingCancel] = useState(false)
@@ -107,45 +59,21 @@ export function RowActions({ appointmentId, status, panel, isSlotBlock = false, 
   function run(action: (panel: ActionPanel, id: string) => Promise<ActionResult>) {
     startTransition(async () => {
       const outcome = await action(panel, appointmentId)
-      // The sentence the module raised is shown on the row itself, because the row is
-      // what the person was acting on; a toast would be a second surface this
-      // component does not own.
       setMessage(outcome.ok ? null : outcome.message)
     })
   }
 
-  // A real booking walks the two-step path: «حاضر شد» on `BOOKED` or
-  // `AWAITING_ARRIVAL`, then «ثبت نتیجه» once the row is at `ARRIVED`. The
-  // state machine permits `BOOKED` → `COMPLETED` for a slot block, but a real
-  // booking is not allowed to skip the arrival — the button is gated on the row
-  // actually being at `ARRIVED`, so the desk records the arrival before the
-  // result.
   const canArriveAsBooking =
     !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.Arrived)
-  const canCompleteAsBooking =
-    !isSlotBlock && status === AppointmentStatus.Arrived
+  const canCompleteAsBooking = !isSlotBlock && status === AppointmentStatus.Arrived
   const canNoShow = !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.NoShow)
   const canCancel = canTransition(status as AppointmentStatus, AppointmentStatus.Cancelled)
-  // A block's "arrived" closes it in one step — `BOOKED` → `COMPLETED` — and the
-  // note dialog is what records the fact. The state machine permits that pair
-  // only for a block, and this flag is what tells the two rows apart.
   const canCloseBlock =
     isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.Completed)
-  // An edit is offered on a live booking only — a row the machine would still let the
-  // desk cancel, that holds a service (not a slot block). A terminal row offers none.
   const canEdit =
     edit !== undefined && !edit.isSlotBlock && edit.serviceId !== null && (canArriveAsBooking || canCancel)
 
-  if (
-    !canArriveAsBooking &&
-    !canCompleteAsBooking &&
-    !canNoShow &&
-    !canCancel &&
-    !canEdit &&
-    !canCloseBlock
-  ) {
-    // A terminal row offers nothing. Rendering an empty group would still claim the
-    // row's end cell, so the component returns nothing instead.
+  if (!canArriveAsBooking && !canCompleteAsBooking && !canNoShow && !canCancel && !canEdit && !canCloseBlock) {
     return null
   }
 
@@ -164,11 +92,18 @@ export function RowActions({ appointmentId, status, panel, isSlotBlock = false, 
           <ResultDialog
             panel={panel}
             appointmentId={appointmentId}
+            charged={charged ?? 0n}
+            alreadyPaid={alreadyPaid ?? 0n}
             triggerLabel={APPOINTMENTS_PAGE.controls.arrived}
           />
         ) : null}
         {canCompleteAsBooking ? (
-          <ResultDialog panel={panel} appointmentId={appointmentId} />
+          <ResultDialog
+            panel={panel}
+            appointmentId={appointmentId}
+            charged={charged ?? 0n}
+            alreadyPaid={alreadyPaid ?? 0n}
+          />
         ) : null}
         {canNoShow ? (
           <ActionButton
@@ -228,11 +163,7 @@ export function RowActions({ appointmentId, status, panel, isSlotBlock = false, 
       ) : null}
 
       {message === null ? null : (
-        <p
-          className="flex items-center gap-1 text-xs text-danger"
-          role="alert"
-          aria-live="polite"
-        >
+        <p className="flex items-center gap-1 text-xs text-danger" role="alert" aria-live="polite">
           <Icon name="error" size="compact" />
           {message}
         </p>
@@ -241,7 +172,6 @@ export function RowActions({ appointmentId, status, panel, isSlotBlock = false, 
   )
 }
 
-/** One row action, sized for the cell it sits in. */
 function ActionButton({
   label,
   icon,

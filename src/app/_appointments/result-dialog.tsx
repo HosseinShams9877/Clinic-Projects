@@ -1,61 +1,42 @@
-/**
- * The «ثبت نتیجه» / «حاضر شد» popup — a completed session, with an optional note
- * about the outcome.
- *
- * Where the row's other actions are one-click transitions, this one opens a dialog
- * because a completion is the appointment's last fact and the note is the one piece
- * of it the desk may want to record for the profile. The dialog is the same shape
- * as `BlockDialog` — a single optional text field and two buttons — because the
- * only thing it asks is the sentence.
- *
- * ## The two callers, and why the trigger is a prop
- *
- * The dialog is called from two places on the row, and the two callers mean the
- * same thing by it:
- *
- * - A real booking that reached `ARRIVED` shows the «ثبت نتیجه» trigger — the desk
- *   is recording the outcome of a session that was performed.
- * - A slot block shows the «حاضر شد» trigger — the block is the receptionist's
- *   "this hour is spoken for", and marking it arrived is the desk's way of closing
- *   it as a completed hour. The block reaches `COMPLETED` in one step (`BOOKED` →
- *   `COMPLETED`, which the transition table permits for exactly this case) because
- *   a block has no `AWAITING_ARRIVAL` or `ARRIVED` stage to walk through: it is not
- *   a customer's visit, it is a closure of the hour.
- *
- * The trigger's label and icon therefore come from the caller, and the rest — the
- * note field, the action, the module's refusal — is the dialog's own.
- *
- * The transition itself is the module's `recordResult`, and the note is stored in
- * the appointment's own `resultNote` column — distinct from `cancelReason` and
- * `noShowReason`, because a completed session is a third outcome and one column
- * shared between three would lose which is which.
- */
-
 'use client'
 
 import { useId, useState } from 'react'
-import type { MouseEvent, ReactNode } from 'react'
+import type { ChangeEvent, MouseEvent, ReactNode } from 'react'
 
 import { Button } from '@/core/components/button'
 import { Field, TextInput } from '@/core/components/form'
+import { CONTROL_CLASSES } from '@/core/components/form/control-classes'
 import { Icon } from '@/core/components/icons'
 import type { IconName } from '@/core/components/icons'
+import { formatMoney, formatNumber, normalizeDigits } from '@/core/localization'
+import { PaymentMethod, isMember } from '@/core/constants'
+import { SERVICES_PAGE } from '@/app/catalog'
 
-import { RESULT_POPUP } from './catalog'
+import { RESULT_POPUP, RESULT_PAYMENT_METHOD_LABELS } from './catalog'
 import { recordResultAction, type ActionResult } from './actions'
+
+const METHOD_OPTIONS = Object.values(PaymentMethod).map((value) => ({
+  value,
+  label: RESULT_PAYMENT_METHOD_LABELS[value],
+}))
 
 export interface ResultDialogProps {
   readonly panel: 'reception' | 'doctor' | 'admin'
   readonly appointmentId: string
-  /** The trigger button's label. Defaults to «ثبت نتیجه». */
+  readonly charged: bigint
+  /** The sum already on the ledger — the deposit paid at booking, in practice. */
+  readonly alreadyPaid: bigint
   readonly triggerLabel?: string
-  /** The trigger button's icon. Defaults to `confirm`. `null` removes it. */
   readonly triggerIcon?: IconName | null
 }
 
 export function ResultDialog(props: ResultDialogProps) {
   const [open, setOpen] = useState(false)
   const [note, setNote] = useState('')
+  const [paid, setPaid] = useState('')
+  const [discount, setDiscount] = useState('')
+  const [discountReason, setDiscountReason] = useState('')
+  const [method, setMethod] = useState<string>(PaymentMethod.Cash)
   const [result, setResult] = useState<ActionResult | null>(null)
   const [pending, setPending] = useState(false)
   const titleId = useId()
@@ -68,6 +49,10 @@ export function ResultDialog(props: ResultDialogProps) {
         leadingIcon={props.triggerIcon === null ? undefined : (props.triggerIcon ?? 'confirm')}
         onClick={() => {
           setNote('')
+          setPaid('')
+          setDiscount('')
+          setDiscountReason('')
+          setMethod(PaymentMethod.Cash)
           setResult(null)
           setOpen(true)
         }}
@@ -79,11 +64,14 @@ export function ResultDialog(props: ResultDialogProps) {
 
   async function submit() {
     setPending(true)
-    const outcome = await recordResultAction(
-      props.panel,
-      props.appointmentId,
-      note === '' ? undefined : note,
-    )
+    const outcome = await recordResultAction(props.panel, {
+      appointmentId: props.appointmentId,
+      note: note === '' ? undefined : note,
+      paidAmount: paid === '' ? undefined : paid,
+      discountAmount: discount === '' ? undefined : discount,
+      discountReason: discountReason === '' ? undefined : discountReason,
+      method: isMember(PaymentMethod, method) ? method : PaymentMethod.Cash,
+    })
     setPending(false)
     if (outcome.ok) {
       setOpen(false)
@@ -92,22 +80,29 @@ export function ResultDialog(props: ResultDialogProps) {
     setResult(outcome)
   }
 
+  const liveBalance = computeBalance(props.charged, props.alreadyPaid, paid, discount)
+
   return (
     <Overlay onClose={() => setOpen(false)}>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[460px]"
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[520px]"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
+        <div className="h-1 rounded-t-xl bg-brand" aria-hidden="true" />
+
+        <header className="flex items-center justify-between gap-4 px-5 py-4">
+          <h2 id={titleId} className="flex items-center gap-2 text-lg font-bold text-ink">
+            <span className="grid size-8 shrink-0 place-items-center rounded-pill bg-brand-50 text-brand-700">
+              <Icon name="confirm" size="card" />
+            </span>
             {RESULT_POPUP.title}
           </h2>
           <Button size="icon" variant="ghost" icon="close" aria-label={RESULT_POPUP.close} onClick={() => setOpen(false)} />
         </header>
 
-        <div className="flex flex-col gap-4 p-5">
+        <div className="flex flex-col gap-4 px-5 pb-4">
           <Field label={RESULT_POPUP.note}>
             <TextInput
               type="text"
@@ -116,20 +111,64 @@ export function ResultDialog(props: ResultDialogProps) {
               onChange={(event) => setNote(event.target.value)}
             />
           </Field>
+
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md bg-surface-2 px-3 py-2 text-xs">
+            <dt className="text-ink-3">{RESULT_POPUP.chargedLabel}</dt>
+            <dd className="text-end font-semibold text-ink tabular-nums">{formatMoney(props.charged)}</dd>
+            {props.alreadyPaid === 0n ? null : (
+              <>
+                <dt className="text-ink-3">{RESULT_POPUP.alreadyPaidLabel}</dt>
+                <dd className="text-end font-semibold text-ok tabular-nums">{formatMoney(props.alreadyPaid)}</dd>
+              </>
+            )}
+            <dt className="text-ink-3">{RESULT_POPUP.balanceLabel}</dt>
+            <dd className="text-end font-semibold text-ink tabular-nums">{formatMoney(liveBalance)}</dd>
+          </dl>
+
+          <p className="text-sm font-semibold text-ink-2">{RESULT_POPUP.moneySection}</p>
+
+          <Field label={RESULT_POPUP.paidAmount} hint={RESULT_POPUP.paidAmountHint}>
+            <MoneyInput value={paid} onChange={setPaid} />
+          </Field>
+
+          <Field label={RESULT_POPUP.method}>
+            <select className={CONTROL_CLASSES} value={method} onChange={(event) => setMethod(event.target.value)}>
+              {METHOD_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <div className="flex flex-col gap-4 panel:flex-row">
+            <Field label={RESULT_POPUP.discount} className="flex-1">
+              <MoneyInput value={discount} onChange={setDiscount} />
+            </Field>
+            <Field label={RESULT_POPUP.discountReason} className="flex-1">
+              <TextInput
+                type="text"
+                value={discountReason}
+                placeholder={RESULT_POPUP.discountReasonPlaceholder}
+                onChange={(event) => setDiscountReason(event.target.value)}
+              />
+            </Field>
+          </div>
+
           {result !== null && !result.ok ? (
-            <p className="flex items-center gap-1 text-sm text-danger" role="alert">
+            <p className="flex items-center gap-2 rounded-md bg-danger-bg px-3 py-2 text-sm text-danger" role="alert">
               <Icon name="error" size="compact" />
               {result.message}
             </p>
           ) : null}
         </div>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-line px-5 py-4">
+        <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
             {RESULT_POPUP.cancel}
           </Button>
           <Button variant="primary" loading={pending} onClick={() => void submit()}>
-            {RESULT_POPUP.save}
+            {paid === '' ? RESULT_POPUP.saveNoteOnly : RESULT_POPUP.save}
           </Button>
         </footer>
       </div>
@@ -137,7 +176,42 @@ export function ResultDialog(props: ResultDialogProps) {
   )
 }
 
-/** The dimmed backdrop a click outside and an Escape both close. */
+function computeBalance(charged: bigint, alreadyPaid: bigint, paidText: string, discountText: string): bigint {
+  return charged - alreadyPaid - parseTomanText(paidText) - parseTomanText(discountText)
+}
+
+function parseTomanText(value: string): bigint {
+  const normalized = normalizeDigits(value).replace(/\D/g, '')
+  if (normalized === '') return 0n
+  return BigInt(normalized) * 10n
+}
+
+function MoneyInput({ value, onChange }: { readonly value: string; readonly onChange: (next: string) => void }) {
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    const raw = normalizeDigits(event.currentTarget.value)
+    const digitsOnly = raw.replace(/\D/g, '')
+    onChange(digitsOnly === '' ? '' : formatNumber(Number(digitsOnly)))
+  }
+  return (
+    <div className="relative">
+      <TextInput
+        type="text"
+        inputMode="numeric"
+        dir="rtl"
+        value={value}
+        onChange={handleChange}
+        className="pe-16 text-end tabular-nums"
+      />
+      <span
+        className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs text-ink-3"
+        aria-hidden="true"
+      >
+        {SERVICES_PAGE.money.unit}
+      </span>
+    </div>
+  )
+}
+
 function Overlay({ children, onClose }: { readonly children: ReactNode; readonly onClose: () => void }) {
   return (
     <div
@@ -155,7 +229,6 @@ function Overlay({ children, onClose }: { readonly children: ReactNode; readonly
   )
 }
 
-/** Swallows a click so the backdrop does not close on a click inside the panel. */
 function stopPropagation(event: MouseEvent): void {
   event.stopPropagation()
 }

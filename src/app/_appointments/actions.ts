@@ -7,8 +7,8 @@
 import { revalidatePath } from 'next/cache'
 
 import { prisma, runInTenantScope } from '@/core/db'
-import { AppointmentSource } from '@/core/constants'
-import { asLocalDate, asLocalTime, jalaliWeekday } from '@/core/localization'
+import { AppointmentSource, PaymentKind, PaymentMethod, isMember } from '@/core/constants'
+import { asLocalDate, asLocalTime, jalaliWeekday, normalizeDigits } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import type { TenantContext } from '@/core/tenant'
 import { ValidationError } from '@/core/types'
@@ -26,7 +26,7 @@ import {
   updateAppointment,
 } from '@/modules/appointments'
 import { buildFreeSlots } from './page-data'
-import { SLOT_PICKER } from './catalog'
+import { RESULT_POPUP, SLOT_PICKER } from './catalog'
 import { attributeAppointmentToCampaign } from '@/modules/campaigns'
 import { loadBookableService } from '@/modules/services'
 import { noteCycleBooking, recordCompletedSession } from '@/modules/cycles'
@@ -35,12 +35,10 @@ import { resolveStaffPanel } from '@/app/_shell/session'
 
 import { appointmentsFailureMessage, resolveCustomerId } from './support'
 
-/** The answer every action gives: the row it wrote, or the sentence to render. */
 export type ActionResult =
   | { readonly ok: true; readonly appointmentId: string }
   | { readonly ok: false; readonly message: string }
 
-/** The fields the booking popup collects, before the action derives the rest. */
 export interface BookingInput {
   readonly doctorId: string
   readonly serviceId: string
@@ -53,7 +51,6 @@ export interface BookingInput {
   readonly cycleId?: string
 }
 
-/** The fields the slot-block popup collects. */
 export interface BlockInput {
   readonly doctorId: string
   readonly localDate: string
@@ -62,7 +59,6 @@ export interface BlockInput {
   readonly reason?: string
 }
 
-/** The fields the edit popup collects — each optional, the row keeps what is omitted. */
 export interface EditInput {
   readonly appointmentId: string
   readonly doctorId?: string
@@ -70,6 +66,15 @@ export interface EditInput {
   readonly localDate?: string
   readonly localTime?: string
   readonly durationMinutes?: number
+}
+
+export interface ResultInput {
+  readonly appointmentId: string
+  readonly note?: string
+  readonly paidAmount?: string
+  readonly discountAmount?: string
+  readonly discountReason?: string
+  readonly method?: string
 }
 
 interface ScopeArgs {
@@ -105,6 +110,57 @@ function revalidateCampaigns(): void {
   revalidatePath('/admin/campaigns')
 }
 
+function revalidateDebts(): void {
+  revalidatePath('/reception/debts')
+  revalidatePath('/admin/debts')
+}
+
+/**
+ * The receipt writer this file owns.
+ *
+ * A payment row for one appointment, written inside the same transaction as the
+ * completion. The deposit is **not** written here at booking time: a booking is a
+ * promise, not a receipt, and the deposit is the money the desk collects when the
+ * customer arrives — through `/reception/debts` or through the result dialog's own
+ * payment fields. Writing it here would show the deposit as paid before anyone
+ * paid it, and the balance the desk reads would understate the debt.
+ */
+async function writeReceipt(args: {
+  readonly tx: ScopeArgs['tx']
+  readonly tenantId: string
+  readonly userId: string
+  readonly appointmentId: string
+  readonly amount: bigint
+  readonly method: PaymentMethod
+  readonly kind: PaymentKind
+  readonly discountAmount: bigint
+  readonly discountReason: string | null
+  readonly note: string | null
+  readonly now: Date
+}): Promise<void> {
+  const appointment = await args.tx.appointment.findUnique({
+    where: { tenantId: args.tenantId, id: args.appointmentId },
+    select: { customerId: true },
+  })
+  if (appointment === null || appointment.customerId === null) return
+  await args.tx.payment.create({
+    data: {
+      tenantId: args.tenantId,
+      appointmentId: args.appointmentId,
+      customerId: appointment.customerId,
+      recordedByUserId: args.userId,
+      discountByUserId: args.discountAmount > 0n ? args.userId : null,
+      amount: args.amount,
+      discountAmount: args.discountAmount,
+      discountReason: args.discountReason,
+      method: args.method,
+      kind: args.kind,
+      note: args.note,
+      paidAt: args.now,
+    },
+  })
+}
+
 async function resolveBookingCustomer(args: {
   readonly tx: ScopeArgs['tx']
   readonly ctx: TenantContext
@@ -131,7 +187,7 @@ export async function createBookingAction(
   panel: Panel,
   input: BookingInput,
 ): Promise<ActionResult> {
-  const result = await inTenantScope(panel, async ({ tx, ctx }) => {
+  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
     const service = await loadBookableService({ tx, ctx, serviceId: input.serviceId })
     const customerId = await resolveBookingCustomer({ tx, ctx, input })
 
@@ -169,11 +225,12 @@ export async function createBookingAction(
   revalidateAppointments()
   revalidateCycles()
   revalidateCampaigns()
+  revalidateDebts()
   return { ok: true, appointmentId: result.id }
 }
 
 export async function quickBookAction(panel: Panel, input: BookingInput): Promise<ActionResult> {
-  const result = await inTenantScope(panel, async ({ tx, ctx, userId }) => {
+  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
     const service = await loadBookableService({ tx, ctx, serviceId: input.serviceId })
     const customerId = await resolveBookingCustomer({ tx, ctx, input })
 
@@ -211,6 +268,7 @@ export async function quickBookAction(panel: Panel, input: BookingInput): Promis
   revalidateAppointments()
   revalidateCycles()
   revalidateCampaigns()
+  revalidateDebts()
   return { ok: true, appointmentId: result.id }
 }
 
@@ -246,28 +304,37 @@ export async function markArrivedAction(panel: Panel, appointmentId: string): Pr
 
 export async function recordResultAction(
   panel: Panel,
-  appointmentId: string,
-  note?: string,
+  input: ResultInput,
 ): Promise<ActionResult> {
-  const result = await inTenantScope(panel, async ({ tx, ctx }) => {
+  const parsed = parseResultInput(input)
+  if (!parsed.ok) return parsed
+
+  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
     const completed = await recordResult({
       tx,
       ctx,
-      appointmentId,
-      note,
+      appointmentId: input.appointmentId,
+      note: input.note,
       now: realClock(),
     })
 
+    if (parsed.value.payment !== null) {
+      await writeReceipt({
+        tx,
+        tenantId,
+        userId,
+        appointmentId: completed.id,
+        amount: parsed.value.payment.amount,
+        method: parsed.value.payment.method,
+        kind: PaymentKind.Partial,
+        discountAmount: parsed.value.payment.discountAmount,
+        discountReason: parsed.value.payment.discountReason,
+        note: parsed.value.payment.note,
+        now: realClock(),
+      })
+    }
+
     if (completed.customerId !== null && completed.serviceId !== null) {
-      // The cycle is a *consequence* of the completed session, not a condition of
-      // it. A service the clinic never configured an interval for
-      // (`defaultIntervalDays <= 0`) anchors no spacing, so `recordCompletedSession`
-      // would refuse with `cycle.noInterval` — and refusing the *completion* for a
-      // missing catalogue field would leave the appointment in `ARRIVED` while the
-      // session was, in fact, completed. The check is therefore here, on the
-      // completion's own path, so the appointment reaches `COMPLETED` whatever the
-      // catalogue holds; the interval is the manager's to fix afterwards, and
-      // `recordCompletedSession` keeps its own refusal for every other caller.
       const service = await tx.service.findFirst({
         where: { id: completed.serviceId, tenantId: ctx.tenantId },
         select: { defaultIntervalDays: true },
@@ -293,6 +360,7 @@ export async function recordResultAction(
   if (!('id' in result)) return result
   revalidateAppointments()
   revalidateCycles()
+  revalidateDebts()
   return { ok: true, appointmentId: result.id }
 }
 
@@ -328,6 +396,7 @@ export async function cancelAppointmentAction(
 
   if (!('id' in result)) return result
   revalidateAppointments()
+  revalidateDebts()
   return { ok: true, appointmentId: result.id }
 }
 
@@ -352,20 +421,6 @@ export async function updateAppointmentAction(panel: Panel, input: EditInput): P
   return { ok: true, appointmentId: result.id }
 }
 
-/**
- * The free slots of one doctor's day, for the edit dialog's time field.
- *
- * The edit dialog cannot use the day grid's own `freeSlotsByDoctorId` map for a
- * day the desk has moved to: that map is computed for **one day** (the grid's
- * anchor), and re-reading it would be a second server round trip the dialog does
- * not have. This action is that round trip, made explicit.
- *
- * `excludeAppointmentId` is the appointment the desk is editing. Without it, the
- * row's own slot would be treated as occupied — `buildFreeSlots` drops a candidate
- * that any row already holds, and the row the desk is editing is on the day
- * already — so the slot the desk is holding would vanish from the list it is
- * choosing from. The exclusion is what keeps the current slot in the list.
- */
 export async function loadFreeSlotsAction(
   panel: Panel,
   doctorId: string,
@@ -408,4 +463,65 @@ export async function loadFreeSlotsAction(
   if (Array.isArray(result)) return { ok: true, slots: result }
   if (typeof result === 'object' && result !== null && 'message' in result) return result
   return { ok: false, message: SLOT_PICKER.error }
+}
+
+type Parsed<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly message: string }
+
+interface ParsedPayment {
+  readonly amount: bigint
+  readonly discountAmount: bigint
+  readonly discountReason: string | null
+  readonly method: PaymentMethod
+  readonly note: string | null
+}
+
+function parseResultInput(input: ResultInput): Parsed<{ readonly payment: ParsedPayment | null }> {
+  const paidText = (input.paidAmount ?? '').trim()
+  if (paidText === '') return { ok: true, value: { payment: null } }
+
+  const amount = parseTomanToRial(paidText)
+  if (amount === null || amount <= 0n) {
+    return { ok: false, message: RESULT_POPUP.moneyInvalid }
+  }
+
+  const discountAmount = parseOptionalTomanToRial(input.discountAmount)
+  if (discountAmount === null) {
+    return { ok: false, message: RESULT_POPUP.moneyInvalid }
+  }
+
+  const method =
+    input.method !== undefined && isMember(PaymentMethod, input.method)
+      ? input.method
+      : PaymentMethod.Cash
+
+  const reason =
+    input.discountReason === undefined || input.discountReason.trim() === ''
+      ? null
+      : input.discountReason.trim()
+
+  return {
+    ok: true,
+    value: {
+      payment: {
+        amount,
+        discountAmount,
+        discountReason: reason,
+        method,
+        note: null,
+      },
+    },
+  }
+}
+
+function parseTomanToRial(value: string): bigint | null {
+  const trimmed = normalizeDigits(value.trim())
+  if (!/^\d+$/.test(trimmed)) return null
+  return BigInt(trimmed) * 10n
+}
+
+function parseOptionalTomanToRial(value: string | undefined): bigint | null {
+  if (value === undefined || value.trim() === '') return 0n
+  return parseTomanToRial(value)
 }
