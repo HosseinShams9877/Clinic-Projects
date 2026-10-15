@@ -14,13 +14,19 @@
  * name a page could call, and no sentence a button could render. The deactivation is
  * the only removal the catalogue has, and the row stays.
  *
- * ## Why the money arrives as a string
+ * ## Why the money arrives as a string, in Toman
  *
  * The form field is text and the column is `BigInt`, so the string the field holds is
- * parsed here and not in the module: the module's own contract is a `bigint`, and a
- * caller that could not parse one is a caller the module would have to explain a
- * `null` to. A string that is not a number is a `ValidationError`, which is the
- * catalogue's own sentence about a name the form did not send.
+ * parsed here and not in the module: the module's own contract is a `bigint` in
+ * **Rial** (`06-constants.md` §6), and a caller that could not parse one is a caller
+ * the module would have to explain a `null` to.
+ *
+ * The form is a Toman surface — its label reads «مبلغ (تومان)» and the person types
+ * Toman — so the parse converts Toman to Rial before the `bigint` leaves this file.
+ * The conversion is `× 10`, held in `TOMAN_TO_RIAL`, and it is here rather than in the
+ * component because the component does not know what the column stores. A price typed
+ * as `۶۰۰۰۰۰` (Toman) becomes `6_000_000n` (Rial), which is what every reader —
+ * `formatMoney`, the public site, the booking summary — divides back by ten.
  *
  * ## Why the digits are normalised before the parse
  *
@@ -45,6 +51,7 @@ import { revalidatePath } from 'next/cache'
 import { prisma, runInTenantScope } from '@/core/db'
 import type { TransactionClient } from '@/core/db/scope'
 import type { TenantContext } from '@/core/tenant'
+import { RIAL_PER_TOMAN } from '@/core/constants'
 import { normalizeDigits } from '@/core/localization'
 import {
   activateService,
@@ -62,14 +69,22 @@ import { resolveStaffPanel } from '@/app/_shell/session'
 /** The catalogue's own panel, which the manager column holds. */
 const SERVICES_PANEL: Panel = 'admin'
 
+/**
+ * The form is a Toman surface and the column is Rial, so every money field this file
+ * parses is multiplied by this before it leaves. The value is `06-constants.md` §6's
+ * own `RIAL_PER_TOMAN` read once and named here for what the parse does with it —
+ * the reverse of the division `formatMoney` makes at the render boundary.
+ */
+const TOMAN_TO_RIAL = RIAL_PER_TOMAN
+
 /** The answer every form reads: a done, or a sentence about why it was not done. */
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly message: string }
 
-/** The fields the new-service form sends, as the form holds them. */
+/** The fields the new-service form sends, as the form holds them (money in Toman). */
 export interface ServiceInput {
   readonly name: string
   readonly category?: string
-  /** The price, as the text field holds it — parsed to `bigint` before the module. */
+  /** The price, as the text field holds it in Toman — parsed to Rial `bigint` here. */
   readonly price: string
   readonly depositAmount?: string
   readonly durationMinutes: string
@@ -325,14 +340,14 @@ function skip(): { readonly ok: true; readonly value: undefined } {
   return { ok: true, value: undefined }
 }
 
-/** One required money field, as the column's `bigint`. */
+/** One required money field, as the column's Rial `bigint`. */
 function parseMoney(value: string): Parsed<bigint> {
   const parsed = parseBigInt(value)
   if (parsed === null) return { ok: false, message: SERVICES_PAGE.validation.money }
   return { ok: true, value: parsed }
 }
 
-/** One optional money field, as the column's `bigint` or the nothing the form sent. */
+/** One optional money field, as the column's Rial `bigint` or the nothing the form sent. */
 function parseOptionalMoney(value: string | undefined): Parsed<bigint | undefined> {
   if (value === undefined || value.trim() === '') return skip()
   const parsed = parseBigInt(value)
@@ -356,10 +371,17 @@ function parseOptionalCount(value: string | undefined): Parsed<number | undefine
 }
 
 /**
- * One money field, as a `bigint` the column takes or `null` for a string that is not
- * a non-negative integer.
+ * One money field, as a Rial `bigint` the column takes or `null` for a string that is
+ * not a non-negative integer.
  *
- * The catalogue's own fields are whole rials — a decimal is a price the clinic cannot
+ * The form types Toman — the label says so, and a price the clinic charges is a round
+ * Toman amount — and the column stores Rial (`06-constants.md` §6), so this is the one
+ * place the two meet: the digits are normalised, parsed as a whole Toman, and
+ * multiplied by `TOMAN_TO_RIAL` before the `bigint` leaves. The reverse division is
+ * `formatMoney`'s, at the render boundary, and the two together are what makes a typed
+ * `۶۰۰۰۰۰` display back as `۶۰۰٬۰۰۰ تومان`.
+ *
+ * The catalogue's own fields are whole Toman — a decimal is a price the clinic cannot
  * charge — so the parse is an integer parse and not a float one. The digits are
  * normalised first, so a Persian speaker's `۸۰۰۰۰۰` and a Latin `800000` are the same
  * value.
@@ -367,5 +389,5 @@ function parseOptionalCount(value: string | undefined): Parsed<number | undefine
 function parseBigInt(value: string): bigint | null {
   const trimmed = normalizeDigits(value.trim())
   if (!/^\d+$/.test(trimmed)) return null
-  return BigInt(trimmed)
+  return BigInt(trimmed) * TOMAN_TO_RIAL
 }

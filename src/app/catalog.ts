@@ -565,6 +565,9 @@ export const SERVICES_PAGE = {
     money: 'مبلغ باید یک عدد صحیح به تومان باشد.',
     count: 'مدت زمان و تعداد جلسات باید عدد صحیح باشند.',
   },
+    money: {
+    unit: 'تومان',
+  },
 } as const satisfies Record<string, unknown>
 
 /**

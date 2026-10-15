@@ -98,7 +98,6 @@ export const RECEPTION_LEADS = {
 } as const
 
 /** The customers page's reception-specific copy — the lifecycle chips and the detail route. */
-/** The customers page's reception-specific copy — the lifecycle chips and the detail route. */
 export const RECEPTION_CUSTOMERS = {
   /** The lifecycle chip filter above the directory table. */
   filter: {
@@ -134,26 +133,6 @@ export const RECEPTION_CUSTOMERS = {
 
 /**
  * The four debt surfaces' copy — Phase 5.
- *
- * The three staff pages are one row read through three permissions, and the copy each
- * one renders is its own because the three facts are different: the desk owes a call,
- * the manager oversees, and the doctor reads their own. The customer's own history is
- * the fourth surface and the one with no permission at all.
- *
- * ## The tabs
- *
- * The desk's list is now tabbed, and the four tabs are the four states of the debt
- * queue: every open debt (`everyone`), the ones with a follow-up date today (`today`),
- * the ones the desk has called about (`all`), and the ones it has not (`unfollowed`).
- * A row leaves one tab and enters another when a follow-up is recorded, which is what
- * makes the desk's work list the list of what to do next rather than a list of
- * everything.
- *
- * ## Why this lives in the reception catalog and not the main one
- *
- * `src/app/catalog.ts` sits at its 1000-line cap, and the debt surfaces are Phase 5's
- * addition. The main catalog re-exports this object, so every caller that already
- * imports from `@/app/catalog` keeps working.
  */
 export const DEBTS_PAGE = {
   reception: {
@@ -181,11 +160,6 @@ export const DEBTS_PAGE = {
     nextContact: 'تماس بعدی',
     actions: 'عملیات',
   },
-  /**
-   * The four tabs, keyed as the search param is. `everyone` is the default — the whole
-   * picture the desk opens to first. `today` is the day the desk works, `all` is every
-   * debt the desk has called about, and `unfollowed` is the debts it has not.
-   */
   tabs: {
     everyone: 'همه بدهکاران',
     all: 'همه پیگیری‌ها',
@@ -207,6 +181,7 @@ export const DEBTS_PAGE = {
   filter: {
     doctor: 'پزشک',
     allDoctors: 'همه پزشکان',
+    followUpDate: 'تاریخ پیگیری',
   },
   total: {
     label: 'جمع کل',

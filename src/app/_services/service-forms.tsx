@@ -1,39 +1,45 @@
 /**
- * The services catalogue's four writers, as the manager panel renders them.
+ * The services catalogue's five writers, as the manager panel renders them.
  *
- * The catalogue is a read and four writes — a service is created, edited, given its
- * doctors, and deactivated or reactivated — and the four are one client component
- * because they are one row's own affordances and the row is what the manager acts on.
- * A failure the action returns lands on the row that raised it, which is the same
- * answer the lead cartable gives and for the same reason.
+ * The catalogue is a read and five writes — a service is created, edited,
+ * reactivated, deactivated, and assigned its doctors — and the five are one
+ * client component because they are one row's own affordances and the row is what
+ * the manager acts on. A failure the action returns lands on the row that raised
+ * it, which is the same answer the lead cartable gives and for the same reason.
  *
  * ## Why deactivation asks and activation does not
  *
  * «غیرفعال کردن» removes the service from the booking picker the moment it lands
- * (DoD 4), and a manager who tapped by mistake is looking at a picker that no longer
- * offers it — so the row confirms. «فعال کردن» is the reverse and needs no
- * confirmation: a service that returns is a service the clinic offers again, and
- * taking it back away is another tap.
+ * (DoD 4), and a manager who tapped by mistake is looking at a picker that no
+ * longer offers it — so the row confirms. «فعال کردن» is the reverse and needs no
+ * confirmation.
  *
  * ## Why there is no delete button anywhere in this file (DoD 3)
  *
- * The delete path does not exist. No button, no confirm, no sentence, and no action to
- * call — the absence is the invariant, and a file that renders a delete button would
- * be the surface the module refuses to have.
+ * The delete path does not exist. No button, no confirm, no sentence, and no
+ * action to call — the absence is the invariant.
  *
- * ## Why the money fields are text
+ * ## Why the money fields are formatted text
  *
  * The column is `BigInt` rials and the person types digits, so the field is a text
- * input with `inputMode="numeric"` and the action parses. A `<input type="number">`
- * would render a Gregorian-stepper control on a Persian surface and would let a
- * browser hand the action a value in scientific notation, which is a price the clinic
- * cannot charge.
+ * input with `inputMode="numeric"` and the action parses. The field shows the
+ * value as the reader writes it — Persian digits, grouped with `٬` — and the
+ * action reads it back through `normalizeDigits`, so the same value typed as
+ * `۸۰۰۰۰۰` and as `800000` and as `۸۰۰٬۰۰۰` all arrive as one number.
+ *
+ * ## Why the edit dialog divides before it shows
+ *
+ * The row holds Rial and the form types Toman, so the edit dialog divides by
+ * `RIAL_PER_TOMAN` before it hands a default to `MoneyInput`. The action multiplies
+ * back on the way in, and `formatMoney` divides on the way out; this is the third
+ * side of the same triangle, and leaving it out would show the row ten times its
+ * price the moment the dialog opened.
  */
 
 'use client'
 
 import { useId, useState, useTransition } from 'react'
-import type { FormEvent, MouseEvent, ReactNode } from 'react'
+import type { ChangeEvent, FormEvent, MouseEvent, ReactNode } from 'react'
 
 import { Button } from '@/core/components/button'
 import { Combobox } from '@/core/components/combobox'
@@ -41,7 +47,8 @@ import { Field, TextInput } from '@/core/components/form'
 import { Icon } from '@/core/components/icons'
 import { SERVICES_PAGE } from '@/app/catalog'
 import { cx } from '@/core/lib'
-import { toPersianDigits } from '@/core/localization'
+import { RIAL_PER_TOMAN } from '@/core/constants'
+import { formatNumber, normalizeDigits } from '@/core/localization'
 import { SERVICE_CATEGORY_LABELS } from '@/modules/services'
 import { ServiceCategory, isMember } from '@/core/constants'
 
@@ -66,10 +73,6 @@ const CATEGORY_OPTIONS = Object.values(ServiceCategory).map((value) => ({
 
 /**
  * «افزودن خدمت» — the catalogue's one create, opened from the page's own header.
- *
- * A duplicate name comes back onto the form as the catalogue's own sentence, so the
- * manager reads «یک خدمت با این نام قبلاً ثبت شده است» and renames, rather than
- * discovering a second row on the page.
  */
 export function NewServiceDialog() {
   const [open, setOpen] = useState(false)
@@ -87,15 +90,16 @@ export function NewServiceDialog() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const form = event.currentTarget
     const input: ServiceInput = {
-      name: asFormString(event.currentTarget, 'name'),
-      category: asFormString(event.currentTarget, 'category') || undefined,
-      price: asFormString(event.currentTarget, 'price'),
-      depositAmount: asFormString(event.currentTarget, 'depositAmount') || undefined,
-      durationMinutes: asFormString(event.currentTarget, 'durationMinutes'),
-      defaultSessions: asFormString(event.currentTarget, 'defaultSessions') || undefined,
-      defaultIntervalDays: asFormString(event.currentTarget, 'defaultIntervalDays') || undefined,
-      showPriceOnSite: checked(event.currentTarget, 'showPriceOnSite'),
+      name: asFormString(form, 'name'),
+      category: asFormString(form, 'category') || undefined,
+      price: asFormString(form, 'price'),
+      depositAmount: asFormString(form, 'depositAmount') || undefined,
+      durationMinutes: asFormString(form, 'durationMinutes'),
+      defaultSessions: asFormString(form, 'defaultSessions') || undefined,
+      defaultIntervalDays: asFormString(form, 'defaultIntervalDays') || undefined,
+      showPriceOnSite: checked(form, 'showPriceOnSite'),
     }
     startTransition(async () => {
       const outcome: ActionResult = await createServiceAction(input)
@@ -113,10 +117,15 @@ export function NewServiceDialog() {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg"
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[640px]"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
+        <div className="h-1 rounded-t-xl bg-brand" aria-hidden="true" />
+
+        <header className="flex items-center justify-between gap-4 px-5 py-4">
+          <h2 id={titleId} className="flex items-center gap-2 text-lg font-bold text-ink">
+            <span className="grid size-8 shrink-0 place-items-center rounded-pill bg-brand-50 text-brand-700">
+              <Icon name="services" size="card" />
+            </span>
             {SERVICES_PAGE.new.title}
           </h2>
           <Button
@@ -128,21 +137,21 @@ export function NewServiceDialog() {
           />
         </header>
 
-        <form id={NEW_SERVICE_FORM_ID} className="flex flex-col gap-4 p-6" onSubmit={submit}>
+        <form id={NEW_SERVICE_FORM_ID} className="flex flex-col gap-4 px-5 pb-2" onSubmit={submit}>
           <Field label={SERVICES_PAGE.new.name} required>
             <TextInput name="name" />
           </Field>
 
           <Field label={SERVICES_PAGE.new.category}>
-            <CategorySelect value={null} onChange={() => {}} />
+            <CategorySelect />
           </Field>
 
           <div className="flex flex-col gap-4 panel:flex-row">
             <Field label={SERVICES_PAGE.new.price} required className="flex-1">
-              <TextInput name="price" inputMode="numeric" dir="ltr" />
+              <MoneyInput name="price" />
             </Field>
             <Field label={SERVICES_PAGE.new.deposit} className="flex-1">
-              <TextInput name="depositAmount" inputMode="numeric" dir="ltr" />
+              <MoneyInput name="depositAmount" />
             </Field>
           </div>
 
@@ -163,10 +172,10 @@ export function NewServiceDialog() {
             <CheckBox name="showPriceOnSite" />
           </Field>
 
-          <FormAnswer answer={answer} />
+          {answer === null ? null : <FormAnswer answer={answer} />}
         </form>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-line p-6">
+        <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
             {SERVICES_PAGE.edit.cancel}
           </Button>
@@ -186,7 +195,6 @@ const NEW_SERVICE_FORM_ID = 'new-service-form'
 
 /** The row's own fields, as the two dialogs read them back. */
 export interface ServiceRowActionsProps {
-  /** The service the manager is acting on, as the page's own row holds it. */
   readonly service: {
     readonly id: string
     readonly name: string
@@ -198,19 +206,11 @@ export interface ServiceRowActionsProps {
     readonly defaultIntervalDays: number
     readonly isActive: boolean
     readonly showPriceOnSite: boolean
-    /** The `User` ids the checkboxes pre-check. */
     readonly doctorIds: readonly string[]
   }
-  /** The tenant's own doctors, as the assignment dialog offers them. */
   readonly doctorOptions: readonly { readonly value: string; readonly label: string }[]
 }
 
-/**
- * The four things the manager does to a row, as the state permits them.
- *
- * The state column decides which of the two toggles the row renders, because a toggle
- * the row cannot use is a toggle the manager taps and reads a sentence about.
- */
 export function ServiceRowActions({ service, doctorOptions }: ServiceRowActionsProps) {
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
@@ -310,7 +310,7 @@ export function ServiceRowActions({ service, doctorOptions }: ServiceRowActionsP
         <p className="text-xs text-ink-2">{SERVICES_PAGE.actions.deactivateConfirm}</p>
       ) : null}
 
-      <FormAnswer answer={answer} />
+      {answer === null ? null : <FormAnswer answer={answer} />}
 
       {editing ? (
         <EditServiceDialog
@@ -346,13 +346,6 @@ export function ServiceRowActions({ service, doctorOptions }: ServiceRowActionsP
 
 /* ── The edit dialog ───────────────────────────────────────────────────────── */
 
-/**
- * «ویرایش خدمت» — the row's own fields, prefilled from the page's row.
- *
- * The dialog renders inside the row's cell, which keeps the row the manager is editing
- * in view; the fields are the row's own values and not a second read, so the form and
- * the row cannot disagree about a price the catalogue is showing.
- */
 function EditServiceDialog({
   service,
   onClose,
@@ -363,22 +356,20 @@ function EditServiceDialog({
   readonly onDone: (outcome: ActionResult) => void
 }) {
   const [pending, startTransition] = useTransition()
-  const [category, setCategory] = useState<string | null>(
-    isMember(ServiceCategory, service.category) ? service.category : null,
-  )
   const titleId = useId()
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const form = event.currentTarget
     const input: ServiceUpdateInput = {
-      name: asFormString(event.currentTarget, 'name'),
-      category: category ?? undefined,
-      price: asFormString(event.currentTarget, 'price'),
-      depositAmount: asFormString(event.currentTarget, 'depositAmount') || undefined,
-      durationMinutes: asFormString(event.currentTarget, 'durationMinutes'),
-      defaultSessions: asFormString(event.currentTarget, 'defaultSessions') || undefined,
-      defaultIntervalDays: asFormString(event.currentTarget, 'defaultIntervalDays') || undefined,
-      showPriceOnSite: checked(event.currentTarget, 'showPriceOnSite'),
+      name: asFormString(form, 'name'),
+      category: asFormString(form, 'category') || undefined,
+      price: asFormString(form, 'price'),
+      depositAmount: asFormString(form, 'depositAmount') || undefined,
+      durationMinutes: asFormString(form, 'durationMinutes'),
+      defaultSessions: asFormString(form, 'defaultSessions') || undefined,
+      defaultIntervalDays: asFormString(form, 'defaultIntervalDays') || undefined,
+      showPriceOnSite: checked(form, 'showPriceOnSite'),
     }
     startTransition(async () => onDone(await updateServiceAction(service.id, input)))
   }
@@ -389,10 +380,15 @@ function EditServiceDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg"
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[640px]"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
+        <div className="h-1 rounded-t-xl bg-brand" aria-hidden="true" />
+
+        <header className="flex items-center justify-between gap-4 px-5 py-4">
+          <h2 id={titleId} className="flex items-center gap-2 text-lg font-bold text-ink">
+            <span className="grid size-8 shrink-0 place-items-center rounded-pill bg-brand-50 text-brand-700">
+              <Icon name="edit" size="card" />
+            </span>
             {SERVICES_PAGE.edit.title}
           </h2>
           <Button
@@ -404,30 +400,30 @@ function EditServiceDialog({
           />
         </header>
 
-        <form id={EDIT_FORM_ID} className="flex flex-col gap-4 p-6" onSubmit={submit}>
+        <form id={EDIT_FORM_ID} className="flex flex-col gap-4 px-5 pb-2" onSubmit={submit}>
           <Field label={SERVICES_PAGE.new.name} required>
             <TextInput name="name" defaultValue={service.name} />
           </Field>
 
           <Field label={SERVICES_PAGE.new.category}>
-            <CategorySelect value={category} onChange={setCategory} />
+            <CategorySelect
+              defaultValue={
+                isMember(ServiceCategory, service.category) ? service.category : null
+              }
+            />
           </Field>
 
           <div className="flex flex-col gap-4 panel:flex-row">
             <Field label={SERVICES_PAGE.new.price} required className="flex-1">
-              <TextInput
+              <MoneyInput
                 name="price"
-                inputMode="numeric"
-                dir="ltr"
-                defaultValue={toPersianDigits(Number(service.price))}
+                defaultValue={Number(service.price / RIAL_PER_TOMAN)}
               />
             </Field>
             <Field label={SERVICES_PAGE.new.deposit} className="flex-1">
-              <TextInput
+              <MoneyInput
                 name="depositAmount"
-                inputMode="numeric"
-                dir="ltr"
-                defaultValue={toPersianDigits(Number(service.depositAmount))}
+                defaultValue={Number(service.depositAmount / RIAL_PER_TOMAN)}
               />
             </Field>
           </div>
@@ -438,7 +434,7 @@ function EditServiceDialog({
                 name="durationMinutes"
                 inputMode="numeric"
                 dir="ltr"
-                defaultValue={toPersianDigits(service.durationMinutes)}
+                defaultValue={formatNumber(service.durationMinutes)}
               />
             </Field>
             <Field label={SERVICES_PAGE.new.sessions} className="flex-1">
@@ -446,7 +442,7 @@ function EditServiceDialog({
                 name="defaultSessions"
                 inputMode="numeric"
                 dir="ltr"
-                defaultValue={toPersianDigits(service.defaultSessions)}
+                defaultValue={formatNumber(service.defaultSessions)}
               />
             </Field>
           </div>
@@ -456,7 +452,7 @@ function EditServiceDialog({
               name="defaultIntervalDays"
               inputMode="numeric"
               dir="ltr"
-              defaultValue={toPersianDigits(service.defaultIntervalDays)}
+              defaultValue={formatNumber(service.defaultIntervalDays)}
             />
           </Field>
 
@@ -465,7 +461,7 @@ function EditServiceDialog({
           </Field>
         </form>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-line p-6">
+        <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             {SERVICES_PAGE.edit.cancel}
           </Button>
@@ -483,14 +479,6 @@ const EDIT_FORM_ID = 'edit-service-form'
 
 /* ── The doctors dialog ────────────────────────────────────────────────────── */
 
-/**
- * «پزشکان مجاز» — the checkbox group that decides who a service is bookable by.
- *
- * The boxes are the tenant's own doctors and the checked ones are the row's own ids, so
- * the group is a full replacement and the form sends every id it wants kept. An empty
- * clinic — no doctors at all — renders the page's own empty sentence, because the
- * dialog is not the place to invite a doctor.
- */
 function ServiceDoctorsDialog({
   service,
   doctorOptions,
@@ -509,9 +497,7 @@ function ServiceDoctorsDialog({
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     startTransition(async () =>
-      onDone(
-        await assignServiceDoctorsAction(service.id, { doctorIds: [...chosen] }),
-      ),
+      onDone(await assignServiceDoctorsAction(service.id, { doctorIds: [...chosen] })),
     )
   }
 
@@ -521,10 +507,15 @@ function ServiceDoctorsDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg"
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[560px]"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
+        <div className="h-1 rounded-t-xl bg-brand" aria-hidden="true" />
+
+        <header className="flex items-center justify-between gap-4 px-5 py-4">
+          <h2 id={titleId} className="flex items-center gap-2 text-lg font-bold text-ink">
+            <span className="grid size-8 shrink-0 place-items-center rounded-pill bg-brand-50 text-brand-700">
+              <Icon name="doctor" size="card" />
+            </span>
             {SERVICES_PAGE.doctors.title}
           </h2>
           <Button
@@ -536,12 +527,15 @@ function ServiceDoctorsDialog({
           />
         </header>
 
-        <p className="px-6 pt-6 text-sm text-ink-2">{SERVICES_PAGE.doctors.lead}</p>
+        <p className="px-5 pb-2 text-sm text-ink-2">{SERVICES_PAGE.doctors.lead}</p>
 
         {doctorOptions.length === 0 ? (
-          <p className="px-6 py-6 text-sm text-ink-3">{SERVICES_PAGE.doctors.none}</p>
+          <p className="flex items-center gap-2 rounded-md bg-surface-2 px-5 py-4 text-sm text-ink-3">
+            <Icon name="info" size="compact" />
+            {SERVICES_PAGE.doctors.none}
+          </p>
         ) : (
-          <form id={DOCTORS_FORM_ID} className="flex flex-col gap-3 p-6" onSubmit={submit}>
+          <form id={DOCTORS_FORM_ID} className="flex flex-col gap-3 px-5 pb-2" onSubmit={submit}>
             <fieldset className="flex flex-col gap-2">
               <legend className="sr-only">{SERVICES_PAGE.doctors.title}</legend>
               {doctorOptions.map((doctor) => (
@@ -564,7 +558,7 @@ function ServiceDoctorsDialog({
           </form>
         )}
 
-        <footer className="flex items-center justify-end gap-2 border-t border-line p-6">
+        <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             {SERVICES_PAGE.edit.cancel}
           </Button>
@@ -586,33 +580,36 @@ function ServiceDoctorsDialog({
 /** The id the doctors dialog's footer refers to. */
 const DOCTORS_FORM_ID = 'service-doctors-form'
 
-/* ── The pieces the four forms share ───────────────────────────────────────── */
+/* ── The pieces the five forms share ───────────────────────────────────────── */
 
 /** A form's own answer: its outcome and the sentence the outcome rendered. */
 type FormAnswer = { readonly ok: boolean; readonly message: string }
 
-/**
- * A form's answer: nothing while the form is clean, a sentence once the action returned.
- *
- * The tone is the outcome's own and not a guess from the text, because the catalogue's
- * forms each have their own sentences and a comparison against them would be a fourth
- * place those sentences are spelled.
- */
-function FormAnswer({ answer }: { readonly answer: FormAnswer | null }) {
-  if (answer === null) return null
+function FormAnswer({ answer }: { readonly answer: FormAnswer }) {
+  if (answer.ok) {
+    return (
+      <p
+        className="flex items-center gap-2 rounded-md bg-ok-bg px-3 py-2 text-sm text-ok"
+        role="alert"
+        aria-live="polite"
+      >
+        <Icon name="confirm" size="compact" />
+        {answer.message}
+      </p>
+    )
+  }
   return (
     <p
-      className={cx('flex items-center gap-1 text-sm', answer.ok ? 'text-ok' : 'text-danger')}
+      className="flex items-center gap-2 rounded-md bg-danger-bg px-3 py-2 text-sm text-danger"
       role="alert"
       aria-live="polite"
     >
-      <Icon name={answer.ok ? 'confirm' : 'error'} size="compact" />
+      <Icon name="error" size="compact" />
       {answer.message}
     </p>
   )
 }
 
-/** The dimmed backdrop a click outside and an Escape both close. */
 function Overlay({
   children,
   onClose,
@@ -624,6 +621,9 @@ function Overlay({
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 panel:items-center panel:p-6"
       onClick={onClose}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose()
+      }}
       role="presentation"
     >
       <div className="inline-size-full" onClick={stopPropagation} role="presentation">
@@ -633,24 +633,83 @@ function Overlay({
   )
 }
 
-/** One category, as the form's own searchable select holds it. */
-function CategorySelect({
-  value,
-  onChange,
-}: {
-  readonly value: string | null
-  readonly onChange: (value: string) => void
-}) {
+/**
+ * One category, as the form's own searchable select holds it.
+ */
+function CategorySelect({ defaultValue = null }: { readonly defaultValue?: string | null }) {
+  const [value, setValue] = useState<string | null>(defaultValue)
   return (
     <Combobox
       name="category"
       value={value}
-      onChange={onChange}
+      onChange={setValue}
       options={CATEGORY_OPTIONS}
       placeholder={SERVICES_PAGE.new.category}
       emptyMessage={SERVICES_PAGE.doctors.none}
     />
   )
+}
+
+/**
+ * A money field: Persian digits, grouped with `٬`, as the reader types.
+ *
+ * The value the field carries is Persian and grouped, because that is the value the
+ * manager should read. The value the action parses is the same one — `normalizeDigits`
+ * strips the separators and the Persian digits before `parseBigInt` reads it, so
+ * `۸۰۰٬۰۰۰` and `800000` are one number.
+ *
+ * The «تومان» suffix the field draws is `SERVICES_PAGE.money.unit`, read from the
+ * catalogue so the surface has no Persian literal of its own — the same rule the
+ * page's sentences follow, held here for the one string this component needs.
+ */
+function MoneyInput({
+  name,
+  defaultValue,
+}: {
+  readonly name: string
+  readonly defaultValue?: number
+}) {
+  const [text, setText] = useState<string>(() =>
+    defaultValue === undefined || defaultValue === 0 ? '' : groupAndDigit(defaultValue),
+  )
+
+  function onChange(event: ChangeEvent<HTMLInputElement>) {
+    const raw = normalizeDigits(event.currentTarget.value)
+    const digitsOnly = raw.replace(/\D/g, '')
+    setText(digitsOnly === '' ? '' : groupAndDigit(Number(digitsOnly)))
+  }
+
+  return (
+    <div className="relative">
+      <TextInput
+        name={name}
+        inputMode="numeric"
+        dir="rtl"
+        value={text}
+        onChange={onChange}
+        className="pe-16 text-end tabular-nums"
+      />
+      <span
+        className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs text-ink-3"
+        aria-hidden="true"
+      >
+        {SERVICES_PAGE.money.unit}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * A number as Persian digits grouped with `٬`, which is what the field displays.
+ *
+ * `formatNumber` is `07-localization.md` §7.1's own formatter and the only one the
+ * product allows: it renders Persian digits and groups with the Persian thousands
+ * separator, which is exactly what the field needs. A `toLocaleString` here would be
+ * the runtime's locale, not the product's, and the lint rule that forbids it is the
+ * rule this function exists to obey.
+ */
+function groupAndDigit(value: number): string {
+  return formatNumber(value)
 }
 
 /** One checkbox the two forms' boolean fields render, labelled by the enclosing field. */
@@ -684,7 +743,14 @@ function CheckRow({
   readonly onChange: (next: boolean) => void
 }) {
   return (
-    <label className="flex items-center gap-3 rounded-sm border border-line bg-surface-2 px-3 py-2">
+    <label
+      className={cx(
+        'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 transition-all',
+        checked
+          ? 'border-brand bg-brand-50 shadow-brand'
+          : 'border-line-2 bg-surface hover:border-brand-300 hover:bg-brand-50',
+      )}
+    >
       <input
         type="checkbox"
         name={name}

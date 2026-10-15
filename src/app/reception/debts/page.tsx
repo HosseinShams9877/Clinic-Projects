@@ -24,13 +24,25 @@
  * - **بدون پیگیری** — the debts the desk has never called about. This is the tab that
  *   grows when the desk stops calling, and the one whose emptiness is the design goal.
  *
- * ## Why the search, the doctor filter and the total are one block
+ * ## The follow-up date filter, and how it differs from the «پیگیری امروز» tab
  *
- * The desk asks three questions of the same list — "which one is this customer", "is
- * this my doctor's", and "how much is this in total" — and the three are answered from
- * the same rows. The total under the table follows the search and the filter, so the
- * desk can read a single customer's balance by searching their mobile and reading the
- * number beneath. The server does the filtering; the client only types.
+ * The «پیگیری امروز» tab is *today* — the day the desk opens the page. The
+ * follow-up date filter is *any day the desk names*: the 27th of Mordad, the
+ * 3rd of Shahrivar, whichever. The two are one predicate with two sources of
+ * truth — the tab's "today" and the filter's chosen day — and the filter wins
+ * when both are present, because a desk that has typed a date is asking about
+ * that date and not about today. The field is the shell's own `JalaliDatePicker`
+ * (the one the appointment's day picker uses), so the date the desk picks and
+ * the date the grid drew are one control and one calendar.
+ *
+ * ## Why the search, the doctor filter, the date filter and the total are one block
+ *
+ * The desk asks four questions of the same list — "which one is this customer",
+ * "is this my doctor's", "which day is this follow-up for", and "how much is this
+ * in total" — and the four are answered from the same rows. The total under the
+ * table follows all three filters, so the desk can read a single day's worth by
+ * picking the day and reading the number beneath. The server does the filtering;
+ * the client only types and picks.
  */
 
 import type { Metadata } from 'next'
@@ -39,7 +51,7 @@ import Link from 'next/link'
 import { prisma, runInTenantScope } from '@/core/db'
 import { realClock } from '@/core/lib/clock'
 import { cx } from '@/core/lib'
-import { formatMoney } from '@/core/localization'
+import { formatMoney, isValidLocalDate } from '@/core/localization'
 import { isMember } from '@/core/constants'
 
 import { DEBTS_PAGE } from '@/app/catalog'
@@ -54,17 +66,12 @@ import { Pagination, paginate, pageFromParam } from '@/app/_components/Paginatio
 import { requireStaffPanel } from '@/app/_shell/session'
 
 import { DebtsKpi } from './_components/debts-kpi'
+import { DebtsFollowUpDateField } from './_components/debts-follow-up-date-field'
 
 export const metadata: Metadata = { title: DEBTS_PAGE.reception.title }
 
 /**
  * «ثبت پرداخت»'s two closed lists, labelled from the module that owns them.
- *
- * Built here, on the server, because the `payments` barrel is a server-only surface —
- * it writes receipts — and the two labels are the only thing the client form needs from
- * it. Reading them here and handing them down keeps the writer's graph out of the
- * browser bundle, and keeps the two sets spelled in the one place the receipt's own
- * catalog spells them.
  */
 const PAYMENT_OPTIONS = {
   method: [
@@ -94,7 +101,8 @@ type PageSearchParams = Promise<{ readonly [key: string]: string | string[] | un
 
 /**
  * «مانده حساب» — the debts the desk owes a call about, as a KPI row, four tabs, a
- * search, a doctor filter, one flat table, and the running total beneath it.
+ * search, a doctor filter, a follow-up date filter, one flat table, and the running
+ * total beneath it.
  */
 export default async function ReceptionDebtsPage({
   searchParams,
@@ -107,6 +115,7 @@ export default async function ReceptionDebtsPage({
   const tab = tabFromParam(params.tab)
   const search = asString(params.q).trim()
   const doctorFilter = asString(params.doctor)
+  const followUpDate = asLocalDateParam(params.due)
 
   const { buckets, collectedRial, offset, doctors } = await runInTenantScope(
     session.permissions,
@@ -136,10 +145,10 @@ export default async function ReceptionDebtsPage({
   const totalRial = allRows.reduce((total, row) => total + row.balance, 0n)
 
   const tabRows = rowsForTab(allRows, tab, now, offset)
-  const filteredRows = applyFilters(tabRows, search, doctorFilter)
+  const filteredRows = applyFilters(tabRows, search, doctorFilter, followUpDate, offset)
 
   const visibleTotal = filteredRows.reduce((total, row) => total + row.balance, 0n)
-  const isFiltered = search !== '' || doctorFilter !== ''
+  const isFiltered = search !== '' || doctorFilter !== '' || followUpDate !== null
   const totalLabel = isFiltered ? DEBTS_PAGE.total.filteredLabel : DEBTS_PAGE.total.label
 
   const page = pageFromParam(params.page)
@@ -149,6 +158,7 @@ export default async function ReceptionDebtsPage({
     if (tab !== DEFAULT_TAB) sp.set('tab', tab)
     if (search !== '') sp.set('q', search)
     if (doctorFilter !== '') sp.set('doctor', doctorFilter)
+    if (followUpDate !== null) sp.set('due', followUpDate)
     if (next > 1) sp.set('page', String(next))
     const qs = sp.toString()
     return qs === '' ? BASE_PATH : `${BASE_PATH}?${qs}`
@@ -176,13 +186,20 @@ export default async function ReceptionDebtsPage({
         totalRial={totalRial}
       />
 
-      <DebtsTabs active={tab} basePath={BASE_PATH} search={search} doctor={doctorFilter} />
+      <DebtsTabs
+        active={tab}
+        basePath={BASE_PATH}
+        search={search}
+        doctor={doctorFilter}
+        followUpDate={followUpDate}
+      />
 
       <DebtsFilters
         activeTab={tab}
         search={search}
         doctor={doctorFilter}
         doctorOptions={doctorOptions}
+        followUpDate={followUpDate}
         basePath={BASE_PATH}
       />
 
@@ -206,11 +223,13 @@ function DebtsTabs({
   basePath,
   search,
   doctor,
+  followUpDate,
 }: {
   readonly active: DebtsTab
   readonly basePath: string
   readonly search: string
   readonly doctor: string
+  readonly followUpDate: string | null
 }) {
   const labels: Readonly<Record<DebtsTab, string>> = {
     everyone: DEBTS_PAGE.tabs.everyone,
@@ -229,6 +248,7 @@ function DebtsTabs({
         if (tab !== DEFAULT_TAB) sp.set('tab', tab)
         if (search !== '') sp.set('q', search)
         if (doctor !== '') sp.set('doctor', doctor)
+        if (followUpDate !== null) sp.set('due', followUpDate)
         const qs = sp.toString()
         const href = qs === '' ? basePath : `${basePath}?${qs}`
         return (
@@ -254,31 +274,40 @@ function DebtsTabs({
 /* ── The filters ───────────────────────────────────────────────────────────── */
 
 /**
- * The search field and the doctor filter, as a GET form that preserves the tab.
+ * The search field, the doctor filter, and the follow-up date filter, as a GET form
+ * that preserves the tab.
  *
  * A real `<form>` with `method="get"` and no `action`, so a browser without
  * JavaScript still submits it, and the search param is a URL fact the same way every
  * other filter in the product is. The hidden `tab` input is what keeps the person on
  * the tab they were on when the search runs.
+ *
+ * The follow-up date field is the shell's own `JalaliDatePicker`, wrapped in a
+ * `Field` so it inherits the form shell's label and wiring. The picker writes a
+ * `name="due"` hidden input the browser submits with the form, so the field is
+ * the same shape as the search input beside it and the form does not need a
+ * JavaScript handler.
  */
 function DebtsFilters({
   activeTab,
   search,
   doctor,
   doctorOptions,
+  followUpDate,
   basePath,
 }: {
   readonly activeTab: DebtsTab
   readonly search: string
   readonly doctor: string
   readonly doctorOptions: readonly { readonly value: string; readonly label: string }[]
+  readonly followUpDate: string | null
   readonly basePath: string
 }) {
   return (
     <form
       method="get"
       action={basePath}
-      className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3"
+      className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface px-4 py-3"
     >
       {activeTab !== DEFAULT_TAB ? <input type="hidden" name="tab" value={activeTab} /> : null}
       <label className="flex min-w-64 flex-1 flex-col gap-1">
@@ -305,6 +334,7 @@ function DebtsFilters({
           ))}
         </select>
       </label>
+      <DebtsFollowUpDateField defaultValue={followUpDate} />
       <button
         type="submit"
         className="mt-5 shrink-0 rounded-xs border border-brand-300 bg-brand-50 px-4 py-[6px] text-xs font-semibold text-brand-700 hover:bg-brand-100"
@@ -317,26 +347,6 @@ function DebtsFilters({
 
 /* ── The four tab predicates ───────────────────────────────────────────────── */
 
-/**
- * The rows a tab holds, from the four buckets the read returned.
- *
- * `everyone` is the whole list — every open debt, in the order the read returned them
- * (most severe first). It is the default because the first question the desk asks is
- * "what is owed" and not "what have I called about", and the search and the doctor
- * filter narrow it the same way they narrow the other three.
- *
- * `today` is the debts whose next contact is *today in the clinic's own calendar* —
- * not "within 24 hours", because a contact the desk promised for «فردا» belongs in
- * tomorrow's tab, and one promised for «امروز» belongs in today's. The comparison is
- * on the local day, in the tenant's own offset, which is what the offset parameter is
- * for.
- *
- * `all` is every debt the desk has called about, ordered by the nearest next contact
- * first, and the overdue follow-ups (a next contact in the past) rise above the
- * future ones — those are the calls the desk promised and then missed.
- *
- * `unfollowed` is every debt the desk has never called about — `lastFollowUp === null`.
- */
 function rowsForTab(
   rows: readonly DebtRow[],
   tab: DebtsTab,
@@ -357,28 +367,17 @@ function isToday(instant: Date | null, now: Date, utcOffsetMinutes: number): boo
   return dayKey(instant, utcOffsetMinutes) === dayKey(now, utcOffsetMinutes)
 }
 
-/**
- * A day's identity, as the local day the tenant reads it.
- *
- * `YYYY-MM-DD` in the tenant's own calendar, offset by the tenant's minutes, so two
- * instants on the same local day share the key and two instants on different local
- * days do not — the same comparison the `localDate` column makes in the database, done
- * here for the follow-up column, which stores an instant and has no companion.
- */
 function dayKey(instant: Date, utcOffsetMinutes: number): string {
   const shifted = new Date(instant.getTime() + utcOffsetMinutes * 60 * 1000)
   return shifted.toISOString().slice(0, 10)
 }
 
-/** Sort debts by nearest next contact, with a null date last. */
 function compareByNextContact(a: DebtRow, b: DebtRow, now: Date): number {
   if (a.nextContactAt === null && b.nextContactAt === null) return 0
   if (a.nextContactAt === null) return 1
   if (b.nextContactAt === null) return -1
   const aTime = a.nextContactAt.getTime() - now.getTime()
   const bTime = b.nextContactAt.getTime() - now.getTime()
-  // A next contact in the past sorts above a next contact in the future: the past
-  // one is a promise the desk missed.
   const aPast = aTime < 0
   const bPast = bTime < 0
   if (aPast && !bPast) return -1
@@ -386,29 +385,33 @@ function compareByNextContact(a: DebtRow, b: DebtRow, now: Date): number {
   return aTime - bTime
 }
 
-/* ── The search and doctor predicates ──────────────────────────────────────── */
+/* ── The search, doctor and date predicates ────────────────────────────────── */
 
 /**
- * The rows a search and a doctor filter leave.
+ * The rows a search, a doctor filter, and a follow-up date leave.
  *
- * The search matches the customer's name, mobile, or both, normalised on both sides:
- * the desk types Persian digits and letters, the column stores Latin digits and an
- * already-normalised search name, and the comparison has to be against the same
- * normalised form on both sides. There is no fuzzy match: the desk either has the
- * mobile or the name, and the result set is small enough that the local substring is
- * the right predicate.
+ * The follow-up date is a *day identity*, not an instant: the row's
+ * `nextContactAt` is stored as a UTC instant, and the desk's chosen day is a
+ * Jalali `YYYY-MM-DD`. The two are compared through the tenant's own offset —
+ * the same `dayKey` the «پیگیری امروز» tab uses — so the day the desk picked
+ * and the day the row carries are one day and not an off-by-one.
  */
 function applyFilters(
   rows: readonly DebtRow[],
   search: string,
   doctorFilter: string,
+  followUpDate: string | null,
+  utcOffsetMinutes: number,
 ): readonly DebtRow[] {
-  const query = search === '' ? '' : search
   return rows.filter((row) => {
     if (doctorFilter !== '' && row.doctorId !== doctorFilter) return false
-    if (query === '') return true
+    if (followUpDate !== null) {
+      if (row.nextContactAt === null) return false
+      if (dayKey(row.nextContactAt, utcOffsetMinutes) !== followUpDate) return false
+    }
+    if (search === '') return true
     const haystack = `${row.customerFirstName} ${row.customerLastName ?? ''} ${row.customerMobile}`
-    return haystack.toLowerCase().includes(query.toLowerCase())
+    return haystack.toLowerCase().includes(search.toLowerCase())
   })
 }
 
@@ -423,4 +426,19 @@ function tabFromParam(value: string | string[] | undefined): DebtsTab {
 /** One search param as a plain string, or '' when the URL does not carry one. */
 function asString(value: string | string[] | undefined): string {
   return typeof value === 'string' ? value : ''
+}
+
+/**
+ * The `?due=` param as a Jalali `LocalDate`, or `null` when it is absent or not a
+ * date.
+ *
+ * `isValidLocalDate` is the same guard every page uses on a day param, so a URL a
+ * hand-edited `?due=foo` reaches the page as "no filter" and not as an error. A
+ * malformed date is the desk's mistake, and the honest answer is the unfiltered
+ * list, not a crash.
+ */
+function asLocalDateParam(value: string | string[] | undefined): string | null {
+  if (typeof value !== 'string') return null
+  if (value === '') return null
+  return isValidLocalDate(value) ? value : null
 }
