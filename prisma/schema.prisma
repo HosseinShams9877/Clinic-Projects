@@ -49,7 +49,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "sqlite"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -172,6 +172,21 @@ model Clinic {
   address  String?
   isActive Boolean @default(true)
 
+  // The branch's own logo — the mark on the public header and the panel chrome.
+  logoUrl     String?
+  logoBackend String?
+  logoKey     String?
+
+  // The «خانه» hero image — the large picture the landing page opens with.
+  heroImageUrl     String?
+  heroImageBackend String?
+  heroImageKey     String?
+
+  // The «درباره ما» picture — the one the about page renders beside its text.
+  aboutImageUrl     String?
+  aboutImageBackend String?
+  aboutImageKey     String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -199,6 +214,10 @@ model User {
   firstName    String
   lastName     String
   passwordHash String
+
+  avatarUrl     String?
+  avatarBackend String?
+  avatarKey     String?
 
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
@@ -524,6 +543,11 @@ model ConsentRecord {
 // Immutable rule 6: the image is only publishable while `revokedAt` is NULL, and
 // the consent is per image because a customer may allow one photograph and not
 // another.
+//
+// `backend` and `key` are the storage module's own record: `path` stays the URL
+// the browser loads, while the other two say where the bytes live and what they
+// are called, which is what a delete or a fallback needs. NULL is a row written
+// before the storage module existed, whose `path` is a public-folder path.
 model BeforeAfterImage {
   id         String   @id @default(cuid())
   tenantId   String
@@ -537,6 +561,12 @@ model BeforeAfterImage {
   grantedAt   DateTime @default(now())
   revokedAt   DateTime?
   isVisible   Boolean  @default(false)
+
+  // The storage module's record of where the file lives. `backend` is
+  // 'vercel-blob' or 'public'; `key` is the path within the bucket or within
+  // `public/uploads/`, without the leading segment the URL carries.
+  backend String?
+  key     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -768,11 +798,15 @@ model LeaveRequest {
 }
 
 // ── Services ─────────────────────────────────────────────────────────────────
-
 // §2.3. `isActive` is the deactivation that replaces deletion (immutable rule
 // 10): an inactive service leaves the public list and the booking picker and
 // stays for the history of every appointment that used it. `defaultSessions` and
 // `defaultIntervalDays` seed a new cycle, which then holds its own copy.
+//
+// `imageUrl`, `imageBackend` and `imageKey` are the storage module's record of a
+// service's own picture. The `imageUrl` is what a page renders; the other two say
+// where the bytes live and what they are called, so a delete or a fallback does
+// not have to guess from the URL's shape. NULL is a service with no picture.
 model Service {
   id       String @id @default(cuid())
   tenantId String
@@ -798,6 +832,11 @@ model Service {
   beforeCare      String?
   afterCare       String?
   notSuitableFor  String?
+
+  // The service's own picture, as the storage module recorded it.
+  imageUrl     String?
+  imageBackend String?
+  imageKey     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

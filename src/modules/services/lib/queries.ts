@@ -242,6 +242,9 @@ function asServiceRow(row: ServiceSelectRow): ServiceRow {
     defaultIntervalDays: row.defaultIntervalDays,
     isActive: row.isActive,
     showPriceOnSite: row.showPriceOnSite,
+    imageUrl: row.imageUrl,
+    imageBackend: row.imageBackend,
+    imageKey: row.imageKey,
   }
 }
 
@@ -257,4 +260,7 @@ type ServiceSelectRow = {
   readonly defaultIntervalDays: number
   readonly isActive: boolean
   readonly showPriceOnSite: boolean
+  readonly imageUrl: string | null
+  readonly imageBackend: string | null
+  readonly imageKey: string | null
 }

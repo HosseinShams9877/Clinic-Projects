@@ -1,11 +1,11 @@
 /**
- * The services catalogue's five writers, as the manager panel renders them.
+ * The services catalogue's writers, as the manager panel renders them.
  *
- * The catalogue is a read and five writes — a service is created, edited, reactivated,
- * deactivated, and assigned its doctors — and the five are one server-action file
- * because they are one row's own affordances and one row is what the manager acts on.
- * A failure the module raised lands on the form that raised it, as
- * `moduleFailureMessage`'s Persian sentence, which is the same answer the customer
+ * The catalogue is a read and six writes — a service is created, edited, reactivated,
+ * deactivated, assigned its doctors, and given a new image — and the six are one
+ * server-action file because they are one row's own affordances and one row is what
+ * the manager acts on. A failure the module raised lands on the form that raised it,
+ * as `moduleFailureMessage`'s Persian sentence, which is the same answer the customer
  * surfaces give and for the same reason (`05-conventions.md` §7).
  *
  * ## Why there is no delete action here (DoD 3)
@@ -42,6 +42,16 @@
  * both read at request time; a write the page did not re-read is a price the next
  * customer sees as the old one. The paths are the catalogue and the desk's own grid,
  * because those are the two surfaces that name a service.
+ *
+ * ## Why the image upload is a separate action
+ *
+ * An image is bytes, and the five textual writes are JSON-shaped. Folding the image
+ * into `ServiceInput` would make every edit form that changes only a price carry the
+ * image's bytes back to the server — the form does not, but the type would permit it
+ * — and would put the storage module's validation behind a parse that has nothing to
+ * do with it. The image has its own action, its own result type, and its own failure
+ * sentences; the edit form calls both when it changed both, and the two writes are
+ * separate because they are separate facts.
  */
 
 'use server'
@@ -60,6 +70,7 @@ import {
   deactivateService,
   updateService,
 } from '@/modules/services'
+import { removeFile, storeFile, type StoredFile } from '@/modules/storage'
 
 import { moduleFailureMessage } from '@/app/_shared/module-failure'
 import { SERVICES_PAGE } from '@/app/catalog'
@@ -79,6 +90,11 @@ const TOMAN_TO_RIAL = RIAL_PER_TOMAN
 
 /** The answer every form reads: a done, or a sentence about why it was not done. */
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly message: string }
+
+/** The answer an image upload reads, richer because the form shows the stored URL. */
+export type UploadResult =
+  | { readonly ok: true; readonly url: string; readonly backend: 'vercel-blob' | 'public'; readonly key: string }
+  | { readonly ok: false; readonly message: string }
 
 /** The fields the new-service form sends, as the form holds them (money in Toman). */
 export interface ServiceInput {
@@ -102,6 +118,20 @@ export interface ServiceDoctorsInput {
   readonly doctorIds: readonly string[]
 }
 
+/** The fields the image form sends, as the form holds them. */
+export interface ServiceImageInput {
+  readonly filename: string
+  readonly contentType: string
+  readonly bytes: Uint8Array
+  /**
+   * The key of the image the form is replacing, if any. Present because a
+   * replacement leaves the previous file behind unless its key is named, and the
+   * form is the one place that knows what the previous value was.
+   */
+  readonly previousKey?: string
+  readonly previousBackend?: 'vercel-blob' | 'public'
+}
+
 /**
  * One action's own scope: the transaction and the caller's own context.
  */
@@ -113,7 +143,7 @@ interface ScopeArgs {
 /** One action's pre-scope outcome: either the parsed input or the sentence the form reads. */
 type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string }
 
-/* ── The five writes ───────────────────────────────────────────────────────── */
+/* ── The five textual writes ───────────────────────────────────────────────── */
 
 /**
  * «افزودن خدمت» — the catalogue's one create.
@@ -226,6 +256,83 @@ export async function assignServiceDoctorsAction(
   return { ok: true }
 }
 
+/* ── The image write ───────────────────────────────────────────────────────── */
+
+/**
+ * «تصویر خدمت» — stores one image and records its URL on the service row.
+ *
+ * ## Why this action is separate from `updateServiceAction`
+ *
+ * The image is bytes, not a field, and the storage module owns the path the bytes
+ * land on — a path that carries the tenant and the clinic and that no form may
+ * choose. Folding the upload into the update action would put the storage module's
+ * validation behind a parse that has nothing to do with it and would let a caller
+ * pass a `serviceId` that was never checked against the caller's own scope.
+ *
+ * ## Why the previous file is removed after the write, not before
+ *
+ * A replacement that removed first and wrote second would leave the service with no
+ * image at all if the write failed — the failure the fallback exists to prevent, made
+ * visible as a blank page. The new file is written first, the row is updated second,
+ * and the previous file is removed third. A removal that fails is not a failure of the
+ * action: the new image is live, the old one is orphaned, and the orphan is a cleanup
+ * the operator's own sweep can find — a page that showed the wrong image would be a
+ * failure the customer sees.
+ */
+export async function uploadServiceImageAction(
+  serviceId: string,
+  input: ServiceImageInput,
+): Promise<UploadResult> {
+  const session = await resolveStaffPanel(SERVICES_PANEL).catch(() => null)
+  if (session === null) {
+    return { ok: false, message: SERVICES_PAGE.errors.sessionExpired }
+  }
+
+  let stored: StoredFile
+  try {
+    stored = await storeFile({
+      scope: {
+        tenantId: session.permissions.tenantId,
+        clinicId: session.permissions.clinicId,
+        userId: session.permissions.userId,
+      },
+      kind: 'service',
+      ownerId: serviceId,
+      filename: input.filename,
+      contentType: input.contentType,
+      bytes: input.bytes,
+    })
+  } catch (error) {
+    return { ok: false, message: moduleFailureMessage(error) }
+  }
+
+  const result = await inTenantScope(({ tx, ctx }) =>
+    tx.service
+      .updateMany({
+        where: { id: serviceId, tenantId: ctx.tenantId },
+        data: { imageUrl: stored.url, imageBackend: stored.backend, imageKey: stored.key },
+      })
+      .then((written) => (written.count === 1 ? SUCCESS : FAILED)),
+  )
+  if (!('succeeded' in result)) {
+    // The row was not updated; the freshly written file is now an orphan, and the
+    // one place that can name it is here.
+    await removeFile({ key: stored.key, backend: stored.backend })
+    return result.ok === false
+      ? result
+      : { ok: false, message: SERVICES_PAGE.errors.serviceNotFound }
+  }
+
+  // The row now names the new file; the previous one, if the form named it, is
+  // the orphan this action exists to avoid leaving behind.
+  if (input.previousKey !== undefined && input.previousBackend !== undefined) {
+    await removeFile({ key: input.previousKey, backend: input.previousBackend })
+  }
+
+  revalidateCatalogue()
+  return { ok: true, url: stored.url, backend: stored.backend, key: stored.key }
+}
+
 /* ── The scope every action runs in ────────────────────────────────────────── */
 
 /**
@@ -253,6 +360,15 @@ async function inTenantScope<T>(
  * two arms of the union are told apart with.
  */
 const SUCCESS = { succeeded: true } as const
+
+/**
+ * The sentinel a block returns when the row it meant to write was not there.
+ *
+ * Separate from `SUCCESS` because the two are different facts: a `count` of zero is
+ * a service that is not in this tenant, which the form reads as its own sentence and
+ * not as the platform's apology.
+ */
+const FAILED = { succeeded: false } as const
 
 /**
  * The catalogue and the desk's own grid — the two surfaces that name a service.

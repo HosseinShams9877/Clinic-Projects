@@ -1,35 +1,3 @@
-/**
- * The staff login's Server Action — `09-security.md` §10's first login.
- *
- * > Staff login | Mobile or username + password.
- *
- * The page asks for this and nothing else, and it calls the `auth` barrel and never
- * the lib files. One action, because a password login is one round trip.
- *
- * ## Why the action answers with the panel path
- *
- * `loginWithPassword` returns a user and a tenant, and deliberately not a role: a
- * login that returned one would be an authentication step making an authorisation
- * decision (`04-roles-permissions.md` §2). The panel is the *membership's*, so the
- * action resolves it by reading the session it just wrote — the same resolution every
- * request will make from then on — and hands the path back so the person lands on
- * their own panel.
- *
- * The resolution runs in a `catch`-free block of its own after the cookie is set, and
- * a failure there falls back to `/admin`, where `requireStaffPanel` routes any other
- * role to its own panel. That is not a swallowed error: the person lands somewhere
- * correct either way, and the session row the resolution would have read is the one
- * the shell will read again.
- *
- * ## Enumeration
- *
- * §10 requires that a wrong mobile and a wrong password produce the same response,
- * and the module raises one key for both — and does the unknown mobile's hash work so
- * the two take the same time. This action maps that key to one sentence and returns
- * it, and adds nothing to it: no distinction, no timing leak, no branch that reveals
- * which half was wrong.
- */
-
 'use server'
 
 import { cookies } from 'next/headers'
@@ -58,6 +26,8 @@ export async function staffLoginAction(args: {
   readonly mobile: string
   readonly password: string
 }): Promise<StaffLoginResult> {
+  console.log('STEP 1: mobile =', args.mobile)
+
   const now = realClock()
 
   let opened: OpenedSession
@@ -67,9 +37,8 @@ export async function staffLoginAction(args: {
       mobile: args.mobile,
       password: args.password,
     })
-    // Rotation happens here, not on the row the cookie names: `openSession` revokes
-    // every earlier row this principal holds and writes a new one, which is §10's
-    // fixation rule (`09-security.md`).
+    console.log('STEP 2: login OK, userId =', staff.userId, 'tenantId =', staff.tenantId)
+
     opened = await openSession({
       client: unscopedPrisma(),
       tenantId: staff.tenantId,
@@ -78,23 +47,31 @@ export async function staffLoginAction(args: {
       ip: await clientIp(),
       userAgent: await userAgent(),
     })
+    console.log('STEP 3: session opened, token =', opened.token.slice(0, 8))
   } catch (error) {
+    console.error('STEP ERR:', error)
     return { ok: false, message: loginFailureMessage(error) }
   }
 
+  console.log('STEP 4: setting cookie')
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE, opened.token, sessionCookieAttributes(SESSION_TTL_MS / 1000))
+  console.log('STEP 5: cookie set')
 
-  // The session is written and the cookie is set; the panel is the membership's. A
-  // resolution failure here cannot strand the person — the shell resolves the same
-  // token again and routes the role itself — so the manager's panel is the fallback
-  // rather than an error a user would have to read.
   const context = await getTenantContext({
     client: unscopedPrisma(),
     token: opened.token,
     now,
     multiTenant: getEnv().multiTenant,
-  }).catch(() => null)
+  }).catch((err) => {
+    console.error('STEP 6 ERR (getTenantContext):', err)
+    return null
+  })
 
-  return { ok: true, panelPath: panelPath(ROLE_PANEL[context?.role ?? 'MANAGER']) }
+  console.log('STEP 6: context =', context)
+
+  const path = panelPath(ROLE_PANEL[context?.role ?? 'MANAGER'])
+  console.log('STEP 7: path =', path)
+
+  return { ok: true, panelPath: path }
 }

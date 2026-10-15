@@ -519,6 +519,9 @@ export const CYCLES_PAGE = {
  * The page renders the catalogue's own columns and the state that replaces a remove,
  * so its copy names the state and not a deletion: there is no delete button here and
  * no sentence for one, which is DoD 3 held at the surface as well as the module.
+ *
+ * The `picture` block is the image dialog's own copy, and the `actions.picture`
+ * label is the button the row renders to open it.
  */
 export const SERVICES_PAGE = {
   title: 'خدمات',
@@ -540,6 +543,15 @@ export const SERVICES_PAGE = {
     title: 'ویرایش خدمت',
     save: 'ذخیره تغییرات',
     saved: 'تغییرات خدمت ذخیره شد.',
+    cancel: 'انصراف',
+  },
+  picture: {
+    title: 'تصویر خدمت',
+    lead: 'یک تصویر برای این خدمت انتخاب کنید.',
+    field: 'تصویر',
+    empty: 'تصویری ثبت نشده است.',
+    noFile: 'لطفاً ابتدا یک تصویر انتخاب کنید.',
+    save: 'ذخیره تصویر',
     cancel: 'انصراف',
   },
   doctors: {
@@ -566,24 +578,33 @@ export const SERVICES_PAGE = {
     deactivateConfirmYes: 'بله، غیرفعال شود',
     doctors: 'پزشکان',
     edit: 'ویرایش',
+    picture: 'تصویر',
   },
   empty: 'هنوز خدمتی ثبت نشده است.',
   validation: {
     money: 'مبلغ باید یک عدد صحیح به تومان باشد.',
     count: 'مدت زمان و تعداد جلسات باید عدد صحیح باشند.',
   },
-    money: {
+  money: {
     unit: 'تومان',
+  },
+  errors: {
+    sessionExpired: 'نشست شما منقضی شده است. لطفاً دوباره وارد شوید.',
+    serviceNotFound: 'این خدمت پیدا نشد.',
   },
 } as const satisfies Record<string, unknown>
 
 /**
- * The staff page — its permission matrix and its leave table.
+ * The staff page — its permission matrix, its leave table, and the avatar dialog.
  *
  * The matrix's own column header and row labels come from `@/core/localization`'s
  * `PERMISSION_LABELS` and `ROLE_LABELS`, because those are the closed sets and this
  * page renders them; nothing here restates a permission's name. The page's own copy
  * is the chrome around them.
+ *
+ * The `avatar` block is the picture dialog's own copy, and its `trigger` is the
+ * button the row renders to open it — the same shape `SERVICES_PAGE.picture`
+ * takes for a service's own image.
  */
 export const STAFF_PAGE = {
   title: 'کارکنان و دسترسی',
@@ -600,7 +621,7 @@ export const STAFF_PAGE = {
     saved: 'کاربر دعوت شد.',
     cancel: 'انصراف',
   },
-     edit: {
+  edit: {
     /** The button that opens the modal, in the row's actions. */
     trigger: 'ویرایش',
     title: 'ویرایش کارمند',
@@ -623,6 +644,17 @@ export const STAFF_PAGE = {
     cancel: 'انصراف',
     mismatch: 'دو رمز وارد شده یکسان نیستند.',
     tooShort: 'رمز عبور باید حداقل ۸ کاراکتر باشد.',
+  },
+  avatar: {
+    /** The button that opens the modal, in the row's actions. */
+    trigger: 'عکس کارمند',
+    title: 'عکس کارمند',
+    lead: 'یک تصویر برای این کارمند انتخاب کنید.',
+    field: 'تصویر',
+    empty: 'تصویری ثبت نشده است.',
+    noFile: 'لطفاً ابتدا یک تصویر انتخاب کنید.',
+    save: 'ذخیره تصویر',
+    cancel: 'انصراف',
   },
   matrix: {
     title: 'ماتریس دسترسی‌ها',
@@ -670,6 +702,10 @@ export const STAFF_PAGE = {
     action: 'عملیات',
     at: 'زمان',
     detail: 'جزئیات',
+  },
+  errors: {
+    sessionExpired: 'نشست شما منقضی شده است. لطفاً دوباره وارد شوید.',
+    staffNotFound: 'این کارمند پیدا نشد.',
   },
 } as const satisfies Record<string, unknown>
 

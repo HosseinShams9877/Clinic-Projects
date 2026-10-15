@@ -44,6 +44,7 @@
     "@radix-ui/react-tooltip": "1.2.16",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/react-query": "5.104.0",
+    "@vercel/blob": "^2.8.2",
     "cmdk": "1.1.1",
     "date-fns-jalali": "4.4.0-0",
     "framer-motion": "13.5.0",

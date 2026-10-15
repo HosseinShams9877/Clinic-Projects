@@ -191,11 +191,11 @@ function RoleMatrix() {
             <tr className="border-b border-line bg-surface-2 text-ink-3">
               <Th>{STAFF_PAGE.columns.permissions}</Th>
               <Th>{ADMIN_STAFF.matrixDescription}</Th>
-             {Object.values(Role).map((role) => (
-  <Th key={role} align="center">
-    {ROLE_LABELS[role]}
-  </Th>
-))}
+              {Object.values(Role).map((role) => (
+                <Th key={role} align="center">
+                  {ROLE_LABELS[role]}
+                </Th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -294,20 +294,15 @@ function StaffList({
               <tr key={row.id} className="border-b border-line align-top last:border-b-0">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="grid size-9 shrink-0 place-items-center rounded-pill bg-brand-50 text-sm font-bold text-brand-700"
-                    >
-                      {row.user.firstName.slice(0, 1)}
-                    </span>
+                    <StaffAvatar user={row.user} />
                     <span className="font-semibold text-ink">{staffName(row)}</span>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-ink-2 tabular-nums">
-  <span dir="ltr" className="inline-block">
-    {formatPhone(row.user.mobile)}
-  </span>
-</td>
+                  <span dir="ltr" className="inline-block">
+                    {formatPhone(row.user.mobile)}
+                  </span>
+                </td>
                 <td className="px-4 py-3">
                   <RoleBadge role={row.role} />
                 </td>
@@ -347,6 +342,40 @@ function StaffList({
         <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
       </div>
     </section>
+  )
+}
+
+/**
+ * The staff member's avatar, or the initial of their first name when none is
+ * stored. The `<img>` is the stored URL — a blob URL or a public-folder path —
+ * and the fallback is the same letter badge the row carried before the avatar
+ * column existed, so a row without a picture is not a hole in the table.
+ */
+function StaffAvatar({
+  user,
+}: {
+  readonly user: {
+    readonly firstName: string
+    readonly avatarUrl: string | null
+  }
+}) {
+  if (user.avatarUrl !== null) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={user.avatarUrl}
+        alt=""
+        className="size-9 shrink-0 rounded-pill object-cover"
+      />
+    )
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-9 shrink-0 place-items-center rounded-pill bg-brand-50 text-sm font-bold text-brand-700"
+    >
+      {user.firstName.slice(0, 1)}
+    </span>
   )
 }
 

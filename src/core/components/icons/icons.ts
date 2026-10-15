@@ -79,6 +79,7 @@ import {
   EyeOff,
   Funnel,
   House,
+  Image,
   Info,
   LayoutDashboard,
   LoaderCircle,
@@ -266,6 +267,9 @@ export const ICONS = {
   retry: { glyph: Repeat, mirrorsInRtl: false },
   /** The §9 loading state's spinner. Rotated by the wrapper, never by a caller. */
   spinner: { glyph: LoaderCircle, mirrorsInRtl: false },
+
+  /* Media — a service's image, a staff member's avatar, a clinic's logo. */
+  image: { glyph: Image, mirrorsInRtl: false },
 
   /* Feedback — §20 alerts, §41 toasts. */
   alert: { glyph: TriangleAlert, mirrorsInRtl: false },

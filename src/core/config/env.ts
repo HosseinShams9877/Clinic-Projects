@@ -65,6 +65,12 @@ const environmentSchema = z.object({
   PAYMENT_PROVIDER_KEY: nonEmpty.optional(),
   LICENSE_KEY: nonEmpty.optional(),
 
+  // The blob store's read/write token. Present on Vercel when a Blob store is
+  // attached to the project; set by hand on a self-hosted installation that
+  // wants blob storage. Absent means the upload path falls back to the public
+  // folder on every write.
+  BLOB_READ_WRITE_TOKEN: nonEmpty.optional(),
+
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 
   // The worker's two knobs. `02-architecture.md` §12 lists the jobs; the
@@ -104,6 +110,8 @@ export interface Env {
   readonly smsProviderKey: string | undefined
   readonly paymentProviderKey: string | undefined
   readonly licenseKey: string | undefined
+  /** The blob store's read/write token, or undefined when none is configured. */
+  readonly blobReadWriteToken: string | undefined
   readonly logLevel: 'debug' | 'info' | 'warn' | 'error'
   readonly worker: WorkerConfig
 }
@@ -225,6 +233,7 @@ export function loadEnv(
     smsProviderKey: values.SMS_PROVIDER_KEY,
     paymentProviderKey: values.PAYMENT_PROVIDER_KEY,
     licenseKey: values.LICENSE_KEY,
+    blobReadWriteToken: values.BLOB_READ_WRITE_TOKEN,
     logLevel: values.LOG_LEVEL,
     worker: Object.freeze({
       pollIntervalMs: values.WORKER_POLL_INTERVAL_MS,

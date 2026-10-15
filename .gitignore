@@ -190,3 +190,5 @@ temp/
 # ── Local scratch ────────────────────────────────────────────────────────────
 scratch/
 notes.local.md
+/public/uploads/*
+!/public/uploads/.gitkeep

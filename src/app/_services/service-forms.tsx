@@ -1,8 +1,8 @@
 /**
- * The services catalogue's five writers, as the manager panel renders them.
+ * The services catalogue's writers, as the manager panel renders them.
  *
- * The catalogue is a read and five writes — a service is created, edited,
- * reactivated, deactivated, and assigned its doctors — and the five are one
+ * The catalogue is a read and six writes — a service is created, edited, reactivated,
+ * deactivated, assigned its doctors, and given a picture — and the six are one
  * client component because they are one row's own affordances and the row is what
  * the manager acts on. A failure the action returns lands on the row that raised
  * it, which is the same answer the lead cartable gives and for the same reason.
@@ -34,11 +34,28 @@
  * back on the way in, and `formatMoney` divides on the way out; this is the third
  * side of the same triangle, and leaving it out would show the row ten times its
  * price the moment the dialog opened.
+ *
+ * ## Why the picture is a separate dialog from the edit dialog
+ *
+ * A picture is bytes, and the edit dialog is a form of text fields the browser
+ * submits as one body. A file input in the same form would make every save that
+ * changed only a price carry the file input's own empty body — and the reader who
+ * chose a new picture would have it uploaded before the text fields were parsed.
+ * The picture is its own dialog, its own action, and its own progress: the manager
+ * chooses a file, the file is uploaded, and the row shows the result.
+ *
+ * ## Why the picture preview uses the URL the action returned
+ *
+ * The action stores the bytes and answers the URL the row will record. The dialog
+ * renders that URL as an `<img src>`, which is the one source of truth for what the
+ * row now names: a preview built from the chosen `File` would show the picture the
+ * manager selected, which is not necessarily the picture the row stores when the
+ * blob write and the public write disagree.
  */
 
 'use client'
 
-import { useId, useState, useTransition } from 'react'
+import { useId, useRef, useState, useTransition } from 'react'
 import type { ChangeEvent, FormEvent, MouseEvent, ReactNode } from 'react'
 
 import { Button } from '@/core/components/button'
@@ -58,9 +75,11 @@ import {
   createServiceAction,
   deactivateServiceAction,
   updateServiceAction,
+  uploadServiceImageAction,
   type ActionResult,
   type ServiceInput,
   type ServiceUpdateInput,
+  type UploadResult,
 } from './actions'
 
 /** The four categories the new-service form's select offers, from the constants' own set. */
@@ -191,9 +210,9 @@ export function NewServiceDialog() {
 /** The id the footer's submit button refers to, so the form and its button are one. */
 const NEW_SERVICE_FORM_ID = 'new-service-form'
 
-/* ── The row's own four actions ────────────────────────────────────────────── */
+/* ── The row's own five actions ────────────────────────────────────────────── */
 
-/** The row's own fields, as the two dialogs read them back. */
+/** The row's own fields, as the dialogs read them back. */
 export interface ServiceRowActionsProps {
   readonly service: {
     readonly id: string
@@ -207,6 +226,10 @@ export interface ServiceRowActionsProps {
     readonly isActive: boolean
     readonly showPriceOnSite: boolean
     readonly doctorIds: readonly string[]
+    /** The service's own picture, as the storage module recorded it. */
+    readonly imageUrl: string | null
+    readonly imageBackend: string | null
+    readonly imageKey: string | null
   }
   readonly doctorOptions: readonly { readonly value: string; readonly label: string }[]
 }
@@ -216,6 +239,7 @@ export function ServiceRowActions({ service, doctorOptions }: ServiceRowActionsP
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
   const [editing, setEditing] = useState(false)
   const [assigning, setAssigning] = useState(false)
+  const [picturing, setPicturing] = useState(false)
   const [askingOff, setAskingOff] = useState(false)
 
   function run(action: () => Promise<ActionResult>, onOk: () => void) {
@@ -243,6 +267,18 @@ export function ServiceRowActions({ service, doctorOptions }: ServiceRowActionsP
           }}
         >
           {SERVICES_PAGE.actions.edit}
+        </Button>
+        <Button
+          size="small"
+          variant="neutral"
+          leadingIcon="image"
+          disabled={pending}
+          onClick={() => {
+            setAnswer(null)
+            setPicturing(true)
+          }}
+        >
+          {SERVICES_PAGE.actions.picture}
         </Button>
         <Button
           size="small"
@@ -319,6 +355,20 @@ export function ServiceRowActions({ service, doctorOptions }: ServiceRowActionsP
           onDone={(outcome) => {
             if (outcome.ok) {
               setEditing(false)
+              return
+            }
+            setAnswer(outcome)
+          }}
+        />
+      ) : null}
+
+      {picturing ? (
+        <ServicePictureDialog
+          service={service}
+          onClose={() => setPicturing(false)}
+          onDone={(outcome) => {
+            if (outcome.ok) {
+              setPicturing(false)
               return
             }
             setAnswer(outcome)
@@ -477,6 +527,157 @@ function EditServiceDialog({
 /** The id the edit dialog's footer refers to. */
 const EDIT_FORM_ID = 'edit-service-form'
 
+/* ── The picture dialog ────────────────────────────────────────────────────── */
+
+/**
+ * «تصویر خدمت» — chooses one image, uploads it, and shows the stored result.
+ *
+ * The dialog holds the chosen file, the upload's own pending state, and the URL
+ * the action returned. A success closes the dialog because the row's own picture
+ * is what changed and the row is behind the dialog; a failure stays open, because
+ * the manager's own selected file is still in the input and a retry is one tap.
+ *
+ * The file input's `accept` is the storage module's own allowed list, written
+ * here so the platform's file picker refuses the types the server would refuse —
+ * a second check, not a replacement for the module's own.
+ */
+function ServicePictureDialog({
+  service,
+  onClose,
+  onDone,
+}: {
+  readonly service: ServiceRowActionsProps['service']
+  readonly onClose: () => void
+  readonly onDone: (outcome: { readonly ok: true } | { readonly ok: false; readonly message: string }) => void
+}) {
+  const [pending, startTransition] = useTransition()
+  const [chosen, setChosen] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(service.imageUrl)
+  const [answer, setAnswer] = useState<FormAnswer | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const titleId = useId()
+
+  function onPick(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0] ?? null
+    setChosen(file)
+    setAnswer(null)
+    if (file !== null) {
+      // The browser's own object URL, revoked when the next pick replaces it or
+      // the dialog closes — see the effect below.
+      setPreview(URL.createObjectURL(file))
+    }
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (chosen === null) {
+      setAnswer({ ok: false, message: SERVICES_PAGE.picture.noFile })
+      return
+    }
+    startTransition(async () => {
+      const bytes = new Uint8Array(await chosen.arrayBuffer())
+      const outcome: UploadResult = await uploadServiceImageAction(service.id, {
+        filename: chosen.name,
+        contentType: chosen.type,
+        bytes,
+        previousKey: service.imageKey ?? undefined,
+        previousBackend:
+          service.imageBackend === 'vercel-blob' || service.imageBackend === 'public'
+            ? service.imageBackend
+            : undefined,
+      })
+      if (outcome.ok) {
+        onDone({ ok: true })
+        return
+      }
+      setAnswer({ ok: false, message: outcome.message })
+    })
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[520px]"
+      >
+        <div className="h-1 rounded-t-xl bg-brand" aria-hidden="true" />
+
+        <header className="flex items-center justify-between gap-4 px-5 py-4">
+          <h2 id={titleId} className="flex items-center gap-2 text-lg font-bold text-ink">
+            <span className="grid size-8 shrink-0 place-items-center rounded-pill bg-brand-50 text-brand-700">
+              <Icon name="image" size="card" />
+            </span>
+            {SERVICES_PAGE.picture.title}
+          </h2>
+          <Button
+            size="icon"
+            variant="ghost"
+            icon="close"
+            aria-label={SERVICES_PAGE.edit.cancel}
+            onClick={onClose}
+          />
+        </header>
+
+        <form id={PICTURE_FORM_ID} className="flex flex-col gap-4 px-5 pb-2" onSubmit={submit}>
+          <p className="text-sm text-ink-2">{SERVICES_PAGE.picture.lead}</p>
+
+          <div className="flex items-center justify-center rounded-lg border border-dashed border-line-2 bg-surface-2 p-4">
+            {preview === null ? (
+              <span className="flex items-center gap-2 text-sm text-ink-3">
+                <Icon name="image" size="compact" />
+                {SERVICES_PAGE.picture.empty}
+              </span>
+            ) : (
+              // The URL is either the row's own stored URL or the browser's
+              // object URL for the chosen file; both are what the manager should
+              // see, and `alt` is the service's own name.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={preview}
+                alt={service.name}
+                className="max-h-56 rounded-md object-contain"
+              />
+            )}
+          </div>
+
+          <Field label={SERVICES_PAGE.picture.field}>
+            <input
+              ref={inputRef}
+              type="file"
+              name="file"
+              accept="image/jpeg,image/png,image/webp,image/avif"
+              onChange={onPick}
+              className="block inline-size-full cursor-pointer rounded-md border border-line-2 bg-surface px-3 py-2 text-sm text-ink file:me-3 file:rounded-xs file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100"
+            />
+          </Field>
+
+          {answer === null ? null : <FormAnswer answer={answer} />}
+        </form>
+
+        <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
+          <Button variant="ghost" onClick={onClose} disabled={pending}>
+            {SERVICES_PAGE.edit.cancel}
+          </Button>
+          <Button
+            type="submit"
+            form={PICTURE_FORM_ID}
+            variant="primary"
+            loading={pending}
+            disabled={chosen === null}
+          >
+            {SERVICES_PAGE.picture.save}
+          </Button>
+        </footer>
+      </div>
+    </Overlay>
+  )
+}
+
+/** The id the picture dialog's footer refers to. */
+const PICTURE_FORM_ID = 'service-picture-form'
+
 /* ── The doctors dialog ────────────────────────────────────────────────────── */
 
 function ServiceDoctorsDialog({
@@ -580,7 +781,7 @@ function ServiceDoctorsDialog({
 /** The id the doctors dialog's footer refers to. */
 const DOCTORS_FORM_ID = 'service-doctors-form'
 
-/* ── The pieces the five forms share ───────────────────────────────────────── */
+/* ── The pieces the six forms share ────────────────────────────────────────── */
 
 /** A form's own answer: its outcome and the sentence the outcome rendered. */
 type FormAnswer = { readonly ok: boolean; readonly message: string }

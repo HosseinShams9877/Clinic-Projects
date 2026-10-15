@@ -53,7 +53,18 @@ const STAFF_SELECT = {
   clinicId: true,
   isActive: true,
   overrides: true,
-  user: { select: { id: true, mobile: true, firstName: true, lastName: true, isActive: true } },
+  user: {
+    select: {
+      id: true,
+      mobile: true,
+      firstName: true,
+      lastName: true,
+      isActive: true,
+      avatarUrl: true,
+      avatarBackend: true,
+      avatarKey: true,
+    },
+  },
 } as const
 
 /** One staff row, as the page renders it. */
@@ -71,6 +82,9 @@ export interface StaffRow {
     readonly firstName: string
     readonly lastName: string
     readonly isActive: boolean
+    readonly avatarUrl: string | null
+    readonly avatarBackend: string | null
+    readonly avatarKey: string | null
   }
 }
 
@@ -553,6 +567,9 @@ function asStaffRow(row: StaffSelectRow): StaffRow {
       firstName: row.user.firstName,
       lastName: row.user.lastName,
       isActive: row.user.isActive,
+      avatarUrl: row.user.avatarUrl,
+      avatarBackend: row.user.avatarBackend,
+      avatarKey: row.user.avatarKey,
     },
   }
 }
@@ -571,6 +588,9 @@ type StaffSelectRow = {
     readonly firstName: string
     readonly lastName: string
     readonly isActive: boolean
+    readonly avatarUrl: string | null
+    readonly avatarBackend: string | null
+    readonly avatarKey: string | null
   }
 }
 

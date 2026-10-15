@@ -49,10 +49,15 @@ import {
   MESSAGES as SETTINGS_MESSAGES,
   type SettingsMessageKey,
 } from '@/modules/settings'
+import {
+  MESSAGES as STORAGE_MESSAGES,
+  type StorageMessageKey,
+} from '@/modules/storage'
 
 export function moduleFailureMessage(error: unknown): string {
   if (!isAppError(error)) return UNEXPECTED
   const key = error.messageKey
+  if (isStorageKey(key)) return STORAGE_MESSAGES[key]
   if (isSettingsKey(key)) return SETTINGS_MESSAGES[key]
   if (isAssistantKey(key)) return ASSISTANT_MESSAGES[key]
   if (isAudienceKey(key)) return AUDIENCE_MESSAGES[key]
@@ -68,6 +73,10 @@ export function moduleFailureMessage(error: unknown): string {
 }
 
 const UNEXPECTED = VALIDATION_MESSAGES['error.unhandledCase']
+
+function isStorageKey(key: string): key is StorageMessageKey {
+  return key in STORAGE_MESSAGES
+}
 
 function isDebtsKey(key: string): key is DebtsMessageKey {
   return key in DEBTS_MESSAGES
