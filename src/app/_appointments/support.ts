@@ -25,6 +25,7 @@ import {
 } from '@/modules/cycles'
 
 export function appointmentsFailureMessage(error: unknown): string {
+  console.error('[appointmentsFailureMessage] raw error:', error)
   if (!isAppError(error)) return UNEXPECTED
   if (isAppointmentKey(error.messageKey)) return APPOINTMENT_MESSAGES[error.messageKey]
   if (isCustomersKey(error.messageKey)) return CUSTOMER_MESSAGES[error.messageKey]

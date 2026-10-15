@@ -462,6 +462,12 @@ export const CYCLES_PAGE = {
     title: 'چرخه درمان',
     lead: 'دوره‌های درمانی که شما آن‌ها را انجام می‌دهید.',
   },
+  /** The desk's two tabs: the follow-up queue, and every open course. */
+  tabs: {
+    list: 'در لیست تماس',
+    active: 'همه‌ی فعال‌ها',
+    ariaLabel: 'نمایش چرخه‌های درمان',
+  },
   columns: {
     customer: 'مشتری',
     service: 'خدمت',
@@ -501,6 +507,7 @@ export const CYCLES_PAGE = {
   },
   empty: {
     list: 'هیچ دوره‌ای برای تماس در دسترس نیست.',
+    activeList: 'هیچ چرخه‌ی درمان فعالی وجود ندارد.',
     clinic: 'هنوز دوره‌ای ثبت نشده است.',
     doctor: 'شما هنوز دوره‌ای ندارید.',
   },

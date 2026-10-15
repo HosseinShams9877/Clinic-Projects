@@ -1,18 +1,19 @@
 /**
  * The desk's contact list — `02-architecture.md` §9's `reception/cycles.html`.
  *
- * The secretary's default holds `act_on_cycles` (`04-roles-permissions.md` §2.1's 1–12),
- * and the list the desk reads is the product's primary revenue query: the courses whose
- * day arrived and whose customer has no appointment yet. The read recomputes every row
- * it returns, so the list a receptionist opens is the list the clock already made — and
- * the one a booking empties in the request that booked it.
+ * ## The two tabs
  *
- * ## What the desk does from here
+ * «همه‌ی فعال‌ها» is the default: every open course, on the list or not — the set
+ * the desk books the next session against. «در لیست تماس» is the follow-up queue:
+ * the courses the clock has put on the list because their day arrived and the
+ * customer has not booked. The two are two reads over the same rows.
  *
- * The three writes the row offers: record a contact result with a day to try again, book
- * the next session, or record that the customer withdrew with a reason from the closed
- * list. The doctor's panel offers none of the three, and the manager's offers the two
- * that close a course.
+ * ## Why the page also reads the day grid
+ *
+ * «رزرو جلسه بعدی» opens the booking popup against the day's own doctors and
+ * slots, so the page loads the day grid as well and hands its `services`,
+ * `customers`, `doctorsByServiceId` and `freeSlotsByDoctorId` down to the row
+ * actions. The popup is the same one the appointments page opens.
  */
 
 import type { Metadata } from 'next'
@@ -23,30 +24,49 @@ import { fromUtcInstant, todayLocalDate } from '@/core/localization'
 
 import { CYCLES_PAGE } from '@/app/catalog'
 import { CyclesTable } from '@/app/_cycles/cycles-table'
-import { contactList, readUtcOffsetMinutes } from '@/modules/cycles'
-import { clinicDay } from '@/modules/appointments'
+import {
+  contactList,
+  readUtcOffsetMinutes,
+  receptionActiveCycles,
+} from '@/modules/cycles'
+
 import { todaysReminders } from '@/modules/notifications'
 import { requireStaffPanel } from '@/app/_shell/session'
+import { loadDayGrid } from '@/app/_appointments/page-data'
 
-import { CyclesChips, CyclesKpi, type CyclesCounts, type CyclesFilter } from './_components/cycles-board'
+import {
+  CyclesChips,
+  CyclesKpi,
+  CyclesTabs,
+  type CyclesCounts,
+  type CyclesFilter,
+  type CyclesTab,
+} from './_components/cycles-board'
 import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 
 export const metadata: Metadata = { title: CYCLES_PAGE.reception.title }
 
-/** The page's own route, as the chip filter links back to. */
 const BASE_PATH = '/reception/cycles'
 
 type PageSearchParams = Promise<{ readonly [key: string]: string | string[] | undefined }>
 
-/** The chip-filter value the URL names, or «all». */
 function filterFromParam(value: string | string[] | undefined): CyclesFilter {
   if (value === 'overdue' || value === 'notContacted') return value
   return 'all'
 }
 
 /**
- * «دوره‌های فعال با موعد رسیده» — the courses the desk owes a call about.
+ * The tab the URL names, or «همه‌ی فعال‌ها».
+ *
+ * The default is `active`, so the first load of the page shows every open course
+ * and not only the follow-up queue. A URL that names `list` explicitly is the desk
+ * asking for the queue.
  */
+function tabFromParam(value: string | string[] | undefined): CyclesTab {
+  if (value === 'list') return 'list'
+  return 'active'
+}
+
 export default async function ReceptionCyclesPage({
   searchParams,
 }: {
@@ -55,58 +75,79 @@ export default async function ReceptionCyclesPage({
   const session = await requireStaffPanel('reception')
   const now = realClock()
   const today = todayLocalDate(now)
-  const active = filterFromParam((await searchParams).filter)
+  const params = await searchParams
+  const active = filterFromParam(params.filter)
+  const tab = tabFromParam(params.tab)
 
-  const { rows, entries, offset, sessionsToday, autoSms } = await runInTenantScope(
+  const { listRows, activeRows, offset, sessionsToday, autoSms, day } = await runInTenantScope(
     session.permissions,
     prisma(),
     async (tx) => {
-      const [list, offset, dayAppointments, reminders] = await Promise.all([
+      const [list, active, offset, dayGrid, reminders] = await Promise.all([
         contactList({ tx, ctx: session.permissions, now }),
+        receptionActiveCycles({ tx, ctx: session.permissions, now }),
         readUtcOffsetMinutes(tx, session.tenantId),
-        clinicDay({ tx, ctx: session.permissions, clinicId: session.permissions.clinicId, localDate: today }),
+        loadDayGrid({
+          tx,
+          ctx: session.permissions,
+          clinicId: session.permissions.clinicId,
+          localDate: today,
+        }),
         todaysReminders(tx, session.tenantId, now),
       ])
       return {
-        rows: list,
+        listRows: list,
+        activeRows: active,
         offset,
-        entries: Object.fromEntries(list.map((entry) => [entry.id, entry])),
-        sessionsToday: dayAppointments.filter((row) => row.status === 'COMPLETED' || row.status === 'ARRIVED').length,
+        day: dayGrid,
+        sessionsToday: dayGrid.rows.filter(
+          (row) => row.status === 'COMPLETED' || row.status === 'ARRIVED',
+        ).length,
         autoSms: reminders.filter((row) => row.kind !== null).length,
       }
     },
   )
 
-  // The KPI and chip counts are computed from the real rows: overdue = a scheduled
-  // contact whose day has passed, today-contact = one due today, not-contacted = never
-  // called. Sessions-today and auto-SMS come from the day's appointments and the ledger.
-  const isOverdue = (row: (typeof rows)[number]) =>
+  const isOverdue = (row: (typeof listRows)[number]) =>
     row.nextContactAt !== null && row.nextContactAt.getTime() < now.getTime()
-  const isNotContacted = (row: (typeof rows)[number]) => row.lastContactAt === null
-  const isTodayContact = (row: (typeof rows)[number]) =>
+  const isNotContacted = (row: (typeof listRows)[number]) => row.lastContactAt === null
+  const isTodayContact = (row: (typeof listRows)[number]) =>
     row.nextContactAt !== null && fromUtcInstant(row.nextContactAt, offset).localDate === today
   const counts: CyclesCounts = {
-    overdue: rows.filter(isOverdue).length,
-    todayContact: rows.filter(isTodayContact).length,
+    overdue: listRows.filter(isOverdue).length,
+    todayContact: listRows.filter(isTodayContact).length,
     sessionsToday,
     autoSms,
   }
 
+  const sourceRows = tab === 'active' ? activeRows : listRows
   const visible =
-    active === 'overdue'
-      ? rows.filter(isOverdue)
-      : active === 'notContacted'
-        ? rows.filter(isNotContacted)
-        : rows
+    tab === 'active'
+      ? sourceRows
+      : active === 'overdue'
+        ? sourceRows.filter(isOverdue)
+        : active === 'notContacted'
+          ? sourceRows.filter(isNotContacted)
+          : sourceRows
 
-  const page = pageFromParam((await searchParams).page)
+  const entries = Object.fromEntries(visible.map((entry) => [entry.id, entry]))
+
+  const page = pageFromParam(params.page)
   const { slice, totalPages } = paginate(visible, page)
   const hrefFor = (next: number): string => {
     const sp = new URLSearchParams()
+    if (tab !== 'active') sp.set('tab', tab)
     if (active !== 'all') sp.set('filter', active)
     if (next > 1) sp.set('page', String(next))
     const qs = sp.toString()
     return qs === '' ? BASE_PATH : `${BASE_PATH}?${qs}`
+  }
+
+  const bookingOptions = {
+    services: day.services,
+    customers: day.customers,
+    doctorsByServiceId: day.doctorsByServiceId,
+    freeSlotsByDoctorId: day.freeSlotsByDoctorId,
   }
 
   return (
@@ -117,14 +158,18 @@ export default async function ReceptionCyclesPage({
       </div>
 
       <CyclesKpi counts={counts} />
-      <CyclesChips active={active} basePath={BASE_PATH} />
+
+      <CyclesTabs active={tab} basePath={BASE_PATH} filter={active} />
+
+      {tab === 'list' ? <CyclesChips active={active} basePath={BASE_PATH} tab={tab} /> : null}
 
       <CyclesTable
         rows={slice}
         contactEntries={entries}
         utcOffsetMinutes={offset}
         showDeskActions
-        emptyMessage={CYCLES_PAGE.empty.list}
+        bookingOptions={bookingOptions}
+        emptyMessage={tab === 'active' ? CYCLES_PAGE.empty.activeList : CYCLES_PAGE.empty.list}
       />
 
       <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />

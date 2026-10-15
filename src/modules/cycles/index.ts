@@ -74,6 +74,7 @@ export {
   customerCycles,
   CYCLE_STATUS_ORDER,
   doctorCycles,
+  receptionActiveCycles,
 } from './lib/queries'
 
 export {

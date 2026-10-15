@@ -17,6 +17,15 @@
  * already read, which is what keeps the module's three grid queries the three the pages
  * render and not a fourth per filter combination.
  *
+ * ## Why the day picker is beside the day navigation
+ *
+ * The desk's page has carried a `DayPicker` since the beginning — a calendar the desk
+ * opens to jump any day without stepping the arrows one day at a time. The manager
+ * needs the same affordance: the oversight grid is the surface the manager reads a
+ * week from, and stepping it one day per click is the wrong tool for that read. The
+ * picker writes the same `?day=` param the navigation does, so the two are one
+ * control with two ways in and not a second day state.
+ *
  * ## Why the page does not run the sweep
  *
  * The sweep's alarm surfaces **only** in the reception cartable
@@ -39,6 +48,7 @@ import { realClock } from '@/core/lib/clock'
 import { APPOINTMENTS_PAGE } from '@/app/catalog'
 import { BookingDialog } from '@/app/_appointments/booking-dialog'
 import { DayGrid, DayNav } from '@/app/_appointments/day-grid'
+import { DayPicker } from '@/app/_appointments/day-picker'
 import { FilterBar } from '@/app/_appointments/filter-bar'
 import { loadDayGrid, type DayRows } from '@/app/_appointments/page-data'
 import { requireStaffPanel } from '@/app/_shell/session'
@@ -106,7 +116,10 @@ export default async function AdminAppointmentsPage({
 
       <section className="flex flex-col rounded-md border border-line bg-surface">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-          <DayNav localDate={localDate} basePath={BASE_PATH} />
+          <div className="flex flex-wrap items-center gap-2">
+            <DayNav localDate={localDate} basePath={BASE_PATH} />
+            <DayPicker localDate={localDate} basePath={BASE_PATH} />
+          </div>
           <h2 className="font-bold text-ink">{APPOINTMENTS_PAGE.gridTitle}</h2>
         </header>
         <div className="overflow-x-auto p-4">
@@ -130,11 +143,6 @@ export default async function AdminAppointmentsPage({
 
 /**
  * The rows the URL's two filters leave, in one place.
- *
- * The two are independent and both are a row's own column, so a single pass keeps the
- * pair from being applied in two places that could disagree about which one holds. A
- * URL with no filter values returns the rows the query read, which is every row the day
- * holds.
  */
 function applyFilters(rows: DayRows, params: Awaited<PageSearchParams>): DayRows {
   const doctor = asString(params.doctor)
@@ -153,9 +161,6 @@ function asString(value: string | string[] | undefined): string {
 
 /**
  * The day the URL names, or today.
- *
- * The same parsing the desk's page uses, because the two pages share the day param and
- * a bookmark from one opens the other at the same day.
  */
 function dateFromParam(value: string | string[] | undefined): LocalDate {
   if (typeof value === 'string' && isValidLocalDate(value)) return asLocalDate(value)

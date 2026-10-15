@@ -15,12 +15,13 @@ import { readDebtSettings } from './settings'
 /** The most a bucket reads in one go; a list is scrolled, not paged. */
 const LIST_LIMIT = 200
 
-/** The four statuses a live booking can hold, with a charge on it. */
+/** The statuses a live booking can hold, with a charge on it. */
 const LIVE_STATUSES: string[] = [
   AppointmentStatus.Booked,
   AppointmentStatus.AwaitingArrival,
   AppointmentStatus.Arrived,
   AppointmentStatus.Completed,
+  AppointmentStatus.ResultNotRecorded,
 ]
 
 /** The columns a debt row reads off the appointment, and nothing more. */
@@ -31,6 +32,8 @@ const APPOINTMENT_SELECT = {
   serviceId: true,
   scheduledAt: true,
   priceAtBooking: true,
+  depositAmount: true,
+  status: true,
   debtFollowUpAt: true,
   debtFollowUpNote: true,
   debtNextContactAt: true,
@@ -46,6 +49,8 @@ type AppointmentRow = {
   readonly serviceId: string | null
   readonly scheduledAt: Date
   readonly priceAtBooking: bigint
+  readonly depositAmount: bigint
+  readonly status: string
   readonly debtFollowUpAt: Date | null
   readonly debtFollowUpNote: string | null
   readonly debtNextContactAt: Date | null
@@ -66,9 +71,6 @@ type PaymentSums = {
   readonly _sum: { readonly amount: bigint | null; readonly discountAmount: bigint | null }
 }
 
-/**
- * The three terms of `03-data-model.md` §4.1's formula, as one frozen summary.
- */
 function asBalance(
   charged: bigint,
   discount: bigint,
@@ -119,6 +121,7 @@ async function tenantDebts(
 
   for (const row of appointments) {
     if (row.customerId === null) continue
+
     const sumsForRow = byAppointment.get(row.id)
     const balance = asBalance(
       row.priceAtBooking,

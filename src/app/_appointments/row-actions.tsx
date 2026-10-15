@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 
 import { Button } from '@/core/components/button'
 import { Icon } from '@/core/components/icons'
@@ -37,7 +38,6 @@ export interface RowActionsProps {
   readonly status: string
   readonly panel: ActionPanel
   readonly charged?: bigint
-  /** The sum already recorded on this appointment's ledger. */
   readonly alreadyPaid?: bigint
   readonly isSlotBlock?: boolean
   readonly edit?: RowEditContext
@@ -52,28 +52,50 @@ export function RowActions({
   isSlotBlock = false,
   edit,
 }: RowActionsProps) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [message, setMessage] = useState<string | null>(null)
   const [confirmingCancel, setConfirmingCancel] = useState(false)
 
-  function run(action: (panel: ActionPanel, id: string) => Promise<ActionResult>) {
+  function run(
+    action: (panel: ActionPanel, id: string) => Promise<ActionResult>,
+    label: string,
+  ) {
     startTransition(async () => {
+      console.log(`[RowActions] running ${label} for ${appointmentId} (status=${status})`)
       const outcome = await action(panel, appointmentId)
-      setMessage(outcome.ok ? null : outcome.message)
+      console.log(`[RowActions] ${label} outcome:`, outcome)
+      if (outcome.ok) {
+        setMessage(null)
+        router.refresh()
+        return
+      }
+      setMessage(outcome.message)
     })
   }
 
   const canArriveAsBooking =
     !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.Arrived)
   const canCompleteAsBooking = !isSlotBlock && status === AppointmentStatus.Arrived
-  const canNoShow = !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.NoShow)
+  const canNoShow =
+    !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.NoShow)
   const canCancel = canTransition(status as AppointmentStatus, AppointmentStatus.Cancelled)
   const canCloseBlock =
     isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.Completed)
   const canEdit =
-    edit !== undefined && !edit.isSlotBlock && edit.serviceId !== null && (canArriveAsBooking || canCancel)
+    edit !== undefined &&
+    !edit.isSlotBlock &&
+    edit.serviceId !== null &&
+    (canArriveAsBooking || canCancel)
 
-  if (!canArriveAsBooking && !canCompleteAsBooking && !canNoShow && !canCancel && !canEdit && !canCloseBlock) {
+  if (
+    !canArriveAsBooking &&
+    !canCompleteAsBooking &&
+    !canNoShow &&
+    !canCancel &&
+    !canEdit &&
+    !canCloseBlock
+  ) {
     return null
   }
 
@@ -81,12 +103,15 @@ export function RowActions({
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1">
         {canArriveAsBooking ? (
-          <ActionButton
-            label={APPOINTMENTS_PAGE.controls.arrived}
-            icon="confirm"
-            disabled={pending}
-            onClick={() => run(markArrivedAction)}
-          />
+          <Button
+            size="small"
+            variant="neutral"
+            leadingIcon="confirm"
+            loading={pending}
+            onClick={() => run(markArrivedAction, 'markArrivedAction')}
+          >
+            {APPOINTMENTS_PAGE.controls.arrived}
+          </Button>
         ) : null}
         {canCloseBlock ? (
           <ResultDialog
@@ -110,7 +135,7 @@ export function RowActions({
             label={APPOINTMENTS_PAGE.controls.noShow}
             icon="blocked"
             disabled={pending}
-            onClick={() => run(markNoShowAction)}
+            onClick={() => run(markNoShowAction, 'markNoShowAction')}
           />
         ) : null}
         {canEdit && edit !== undefined ? (
@@ -150,12 +175,17 @@ export function RowActions({
               disabled={pending}
               onClick={() => {
                 setConfirmingCancel(false)
-                run(cancelAppointmentAction)
+                run(cancelAppointmentAction, 'cancelAppointmentAction')
               }}
             >
               {CANCEL_CONFIRM.confirm}
             </Button>
-            <Button size="small" variant="ghost" disabled={pending} onClick={() => setConfirmingCancel(false)}>
+            <Button
+              size="small"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => setConfirmingCancel(false)}
+            >
               {CANCEL_CONFIRM.dismiss}
             </Button>
           </div>

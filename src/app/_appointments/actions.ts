@@ -23,6 +23,7 @@ import {
   recordNoShow,
   recordResult,
   slotMinutesForDoctor,
+  unrecordedOnDay,
   updateAppointment,
 } from '@/modules/appointments'
 import { buildFreeSlots } from './page-data'
@@ -90,8 +91,16 @@ async function inTenantScope<T>(
 ): Promise<T | { readonly ok: false; readonly message: string }> {
   const session = await resolveStaffPanel(panel)
   return runInTenantScope(session.permissions, prisma(), (tx) =>
-    block({ tx, ctx: session.permissions, tenantId: session.tenantId, userId: session.permissions.userId }),
-  ).catch((error: unknown) => ({ ok: false as const, message: appointmentsFailureMessage(error) }))
+    block({
+      tx,
+      ctx: session.permissions,
+      tenantId: session.tenantId,
+      userId: session.permissions.userId,
+    }),
+  ).catch((error: unknown) => {
+    console.error('[inTenantScope] caught raw error:', error)
+    return { ok: false as const, message: appointmentsFailureMessage(error) }
+  })
 }
 
 function revalidateAppointments(): void {
@@ -119,11 +128,11 @@ function revalidateDebts(): void {
  * The receipt writer this file owns.
  *
  * A payment row for one appointment, written inside the same transaction as the
- * completion. The deposit is **not** written here at booking time: a booking is a
- * promise, not a receipt, and the deposit is the money the desk collects when the
- * customer arrives — through `/reception/debts` or through the result dialog's own
- * payment fields. Writing it here would show the deposit as paid before anyone
- * paid it, and the balance the desk reads would understate the debt.
+ * completion. A booking is a **promise**, not a receipt: writing the deposit here
+ * at booking time would show the desk's «پرداختی» column a figure nobody has
+ * collected, and the balance the debt read computes would be short by money the
+ * customer still holds. The deposit is written when the desk actually takes it —
+ * through `/reception/debts` or through the result dialog's own payment fields.
  */
 async function writeReceipt(args: {
   readonly tx: ScopeArgs['tx']
@@ -168,10 +177,13 @@ async function resolveBookingCustomer(args: {
 }): Promise<string> {
   if (args.input.customerId !== undefined) return args.input.customerId
   if (args.input.mobile === undefined || args.input.firstName === undefined) {
-    throw new ValidationError('A booking needs either a customer id or a mobile and a first name.', {
-      messageKey: 'error.unhandledCase',
-      detail: {},
-    })
+    throw new ValidationError(
+      'A booking needs either a customer id or a mobile and a first name.',
+      {
+        messageKey: 'error.unhandledCase',
+        detail: {},
+      },
+    )
   }
 
   return resolveCustomerId({
@@ -187,7 +199,7 @@ export async function createBookingAction(
   panel: Panel,
   input: BookingInput,
 ): Promise<ActionResult> {
-  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
+  const result = await inTenantScope(panel, async ({ tx, ctx }) => {
     const service = await loadBookableService({ tx, ctx, serviceId: input.serviceId })
     const customerId = await resolveBookingCustomer({ tx, ctx, input })
 
@@ -230,7 +242,7 @@ export async function createBookingAction(
 }
 
 export async function quickBookAction(panel: Panel, input: BookingInput): Promise<ActionResult> {
-  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
+  const result = await inTenantScope(panel, async ({ tx, ctx, userId }) => {
     const service = await loadBookableService({ tx, ctx, serviceId: input.serviceId })
     const customerId = await resolveBookingCustomer({ tx, ctx, input })
 
@@ -292,7 +304,10 @@ export async function blockHoursAction(panel: Panel, input: BlockInput): Promise
   return { ok: true, appointmentId: result.id }
 }
 
-export async function markArrivedAction(panel: Panel, appointmentId: string): Promise<ActionResult> {
+export async function markArrivedAction(
+  panel: Panel,
+  appointmentId: string,
+): Promise<ActionResult> {
   const result = await inTenantScope(panel, async ({ tx, ctx }) => {
     return recordArrival({ tx, ctx, appointmentId, now: realClock() })
   })
@@ -400,7 +415,10 @@ export async function cancelAppointmentAction(
   return { ok: true, appointmentId: result.id }
 }
 
-export async function updateAppointmentAction(panel: Panel, input: EditInput): Promise<ActionResult> {
+export async function updateAppointmentAction(
+  panel: Panel,
+  input: EditInput,
+): Promise<ActionResult> {
   const result = await inTenantScope(panel, async ({ tx, ctx }) => {
     const updated = await updateAppointment({
       tx,
@@ -421,6 +439,16 @@ export async function updateAppointmentAction(panel: Panel, input: EditInput): P
   return { ok: true, appointmentId: result.id }
 }
 
+/**
+ * The free slots of one doctor on one day.
+ *
+ * The read merges the two day queries `loadDayGrid` performs — the grid's own
+ * `clinicDay` and the alarm's `unrecordedOnDay` — because a slot already held by
+ * a `RESULT_NOT_RECORDED` row is as occupied as one held by an `ARRIVED` row, and
+ * the popup must not offer it. `excludeAppointmentId` is what keeps the row the
+ * desk is editing's own slot in the list: `buildFreeSlots` drops it from the
+ * occupied set by id.
+ */
 export async function loadFreeSlotsAction(
   panel: Panel,
   doctorId: string,
@@ -434,7 +462,7 @@ export async function loadFreeSlotsAction(
     const date = asLocalDate(localDate)
     const weekday = jalaliWeekday(date)
 
-    const [windows, rows, slotMinutes] = await Promise.all([
+    const [windows, gridRows, unrecordedRows, slotMinutes] = await Promise.all([
       doctorWindowsOnDay({
         tx,
         tenantId: ctx.tenantId,
@@ -442,6 +470,12 @@ export async function loadFreeSlotsAction(
         weekday,
       }),
       clinicDay({ tx, ctx, clinicId: ctx.clinicId, localDate: date }),
+      unrecordedOnDay({
+        tx,
+        ctx,
+        clinicId: ctx.clinicId,
+        localDate: date,
+      }),
       slotMinutesForDoctor({
         tx,
         tenantId: ctx.tenantId,
@@ -449,6 +483,8 @@ export async function loadFreeSlotsAction(
         weekday,
       }),
     ])
+
+    const rows = [...gridRows, ...unrecordedRows]
 
     const map = buildFreeSlots({
       windows,
@@ -463,6 +499,17 @@ export async function loadFreeSlotsAction(
   if (Array.isArray(result)) return { ok: true, slots: result }
   if (typeof result === 'object' && result !== null && 'message' in result) return result
   return { ok: false, message: SLOT_PICKER.error }
+}
+
+export async function loadFreeSlotsForCycleAction(
+  panel: Panel,
+  doctorId: string,
+  localDate: string,
+): Promise<
+  | { readonly ok: true; readonly slots: readonly string[] }
+  | { readonly ok: false; readonly message: string }
+> {
+  return loadFreeSlotsAction(panel, doctorId, localDate)
 }
 
 type Parsed<T> =

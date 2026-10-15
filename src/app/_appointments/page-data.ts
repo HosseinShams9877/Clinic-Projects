@@ -46,37 +46,19 @@ export type DayDoctors = Awaited<ReturnType<typeof doctorsOnDay>>
 /** The default slot step, in minutes, when a doctor has no override. */
 const DEFAULT_SLOT_MINUTES = 30
 
-/**
- * One day's complete grid: its columns, its rows, the doctors' windows, and the
- * popup's options.
- */
 export interface DayGridData {
   readonly doctors: DayDoctors
   readonly rows: DayRows
   readonly windows: readonly DoctorDayWindow[]
   readonly services: readonly ServiceOption[]
   readonly customers: readonly CustomerOption[]
-  /** The slot step for each doctor on the day, keyed by doctor id. */
   readonly slotMinutesByDoctorId: Readonly<Record<string, number | null>>
-  /** The service ids each doctor offers, keyed by doctor id. */
   readonly servicesByDoctorId: Readonly<Record<string, readonly string[]>>
-  /** The weekdays each doctor works (0=شنبه … 6=جمعه), keyed by doctor id. */
   readonly workingDaysByDoctorId: Readonly<Record<string, readonly number[]>>
-  /** The doctors who offer each service, keyed by service id. */
   readonly doctorsByServiceId: Readonly<Record<string, readonly DoctorColumn[]>>
-  /**
-   * The free slots of the day, keyed by `doctorId`, as stored `HH:mm` strings —
-   * the times the doctor is working, at their own step, and no appointment or
-   * block already holds. This is what the popup's time step offers: a booking is
-   * made against a slot the grid can show, never against a time that only exists
-   * in the popup's own head.
-   */
   readonly freeSlotsByDoctorId: Readonly<Record<string, readonly string[]>>
 }
 
-/**
- * One reminder card the side panel renders, flattened from the ledger row.
- */
 export interface ReminderCard {
   readonly id: string
   readonly time: string
@@ -88,9 +70,6 @@ export interface ReminderCard {
   readonly actionLabel: string | null
 }
 
-/**
- * The badge, tone and follow-up a reminder shows, by the message's kind.
- */
 function reminderMeta(kind: string | null): {
   readonly badge: string
   readonly tone: ReminderCard['badgeTone']
@@ -131,18 +110,12 @@ function reminderMeta(kind: string | null): {
   }
 }
 
-/**
- * One day of the week view, carrying its own doctors.
- */
 export interface WeekDayData {
   readonly localDate: LocalDate
   readonly doctors: DayGridData['doctors']
   readonly rows: DayGridData['rows']
 }
 
-/**
- * The day the page is showing, the week the week view holds, and the cartable.
- */
 export interface AppointmentsPageData {
   readonly day: DayGridData
   readonly week: readonly WeekDayData[]
@@ -150,10 +123,6 @@ export interface AppointmentsPageData {
   readonly reminders: readonly ReminderCard[]
 }
 
-/**
- * The day's own grid: the doctors who work it, the rows it holds, and the popup's
- * options.
- */
 export async function loadDayGrid(args: {
   readonly tx: TransactionClient
   readonly ctx: TenantContext
@@ -226,9 +195,6 @@ export async function loadDayGrid(args: {
   }
 }
 
-/**
- * The week the week view shows: the seven days of the Jalali week the anchor is in.
- */
 export async function loadWeek(args: {
   readonly tx: TransactionClient
   readonly ctx: TenantContext
@@ -247,9 +213,6 @@ export async function loadWeek(args: {
   )
 }
 
-/**
- * Everything the reception page's three tabs render, in one scope.
- */
 export async function loadAppointmentsPage(args: {
   readonly tx: TransactionClient
   readonly ctx: TenantContext

@@ -1,33 +1,27 @@
 /**
  * The cycle surfaces' writers, as the desk and the manager render them.
  *
- * The three pages (`reception/cycles`, `admin/cycles`, `doctor/cycles`) render one row and
- * differ in which writes belong on it, which is why the writers are components in one file
- * and the three pages each pick the ones their panel may offer. The doctor's page offers
- * none — a doctor reads their own courses, and the writes on a course are the desk's and
- * the manager's.
- *
  * ## Why the abandonment is a dialog and the contact result is not
  *
  * «منصرف شد» closes the row and the drop-off report counts it afterwards
  * (`03-data-model.md` §2.4.1 rule 6), so the desk picks a reason from the closed list
  * inside a dialog — the row stays, and a person who tapped by mistake is looking at a
- * state the report still holds. «نتیجه تماس» is the ordinary path and needs no dialog: a
- * contact result is a fact the desk just made true, and undoing it is a later contact
- * result, not a rollback.
+ * state the report still holds. «نتیجه تماس» is the ordinary path and needs no dialog.
  *
- * ## Why the next-session booking reuses the appointments action
+ * ## Why the next-session booking opens the booking popup
  *
- * «رزرو جلسه بعدی» is the appointments surface's own write, and the `cycleId` the form
- * hands the action is what makes the completed session find this course and what takes
- * the course off the list in the same transaction. A second action would be a second
- * scope for one write, and the two would be two requests rather than one.
+ * «رزرو جلسه بعدی» is the booking surface's own popup, opened with `continueCycle`
+ * set: the service, the customer and the doctor are the course's own, and the desk
+ * only chooses the day and the slot. The popup's own `createBookingAction` handles
+ * the write, and the `cycleId` it carries is what links the completed session back
+ * to its course in the same transaction.
  *
- * ## Why the contact date is the picker and not a text field
+ * ## Why the reason options come from the labels record
  *
- * The column stores an instant and the desk reads a day, so the day the picker hands the
- * action is a `LocalDate` and the action converts it (`07-localization.md` §6.1: the
- * conversion is the library's, and the second one would be the wrong one).
+ * `ABANDONMENT_REASON_LABELS` is the module's own `Record` over the closed list —
+ * the stored value as the key, the Persian sentence as the value. A `Combobox` wants
+ * `{ value, label }` pairs, and the record's own entries are exactly those two facts,
+ * so `Object.entries` is what builds the select.
  */
 
 'use client'
@@ -37,12 +31,12 @@ import type { FormEvent, MouseEvent, ReactNode } from 'react'
 
 import { Button } from '@/core/components/button'
 import { Combobox } from '@/core/components/combobox'
-import { Field, TextInput } from '@/core/components/form'
+import { Field } from '@/core/components/form'
 import { Icon } from '@/core/components/icons'
 import { JalaliDatePicker } from '@/core/components/date-picker'
 import { CYCLES_PAGE } from '@/app/catalog'
 import { realClock } from '@/core/lib/clock'
-import { isValidLocalTime, todayLocalDate } from '@/core/localization'
+import { todayLocalDate, type LocalDate } from '@/core/localization'
 import { cx } from '@/core/lib'
 import { ABANDONMENT_REASON_LABELS } from '@/modules/cycles'
 import type { ContactListEntry } from '@/modules/cycles'
@@ -53,9 +47,13 @@ import {
   recordContactResultAction,
   type ActionResult,
   type AbandonCycleInput,
-  ABANDONMENT_REASONS,
 } from './actions'
-import { createBookingAction } from '../_appointments/actions'
+import {
+  BookingDialog,
+  type CustomerOption,
+  type DoctorOption,
+  type ServiceOption,
+} from '../_appointments/booking-dialog'
 
 /** The panel the desk's writers resolve, which is the caller's own. */
 const RECEPTION_PANEL = 'reception' as const
@@ -64,29 +62,46 @@ const RECEPTION_PANEL = 'reception' as const
 const ADMIN_PANEL = 'admin' as const
 
 /** The reasons the abandonment form offers, labelled by the module's own catalog. */
-const REASON_OPTIONS = ABANDONMENT_REASONS.map((key) => ({ value: key, label: ABANDONMENT_REASON_LABELS[key] }))
+const REASON_OPTIONS = Object.entries(ABANDONMENT_REASON_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}))
 
 /* ── The desk's three row actions ───────────────────────────────────────────── */
 
-/** The props a cycle row hands the desk's actions: the entry the desk is acting on. */
+/**
+ * The props a cycle row hands the desk's actions.
+ *
+ * `doctorsByServiceId` and `freeSlotsByDoctorId` come from the page's own day grid
+ * read, and are what the booking popup renders its doctor select and its slot
+ * picker from. A page that does not hand them (the cartable) renders the actions
+ * without the booking popup's two pickers.
+ */
 export interface ContactListActionsProps {
   readonly entry: ContactListEntry
+  readonly services?: readonly ServiceOption[]
+  readonly customers?: readonly CustomerOption[]
+  readonly doctorsByServiceId?: Readonly<Record<string, readonly DoctorOption[]>>
+  readonly freeSlotsByDoctorId?: Readonly<Record<string, readonly string[]>>
+  readonly allowedServiceIds?: readonly string[]
+  readonly workingWeekdays?: readonly number[]
+  readonly slotMinutes?: number | null
 }
 
-/**
- * The three things the desk does to a course on its list.
- *
- * The row carries the customer and the course, so the booking form is pre-filled from
- * it: the doctor, the service and the customer are the course's own, and the desk only
- * chooses the slot. That is what makes «رزرو جلسه بعدی» a one-step action rather than
- * the booking popup's four fields.
- */
-export function ContactListActions({ entry }: ContactListActionsProps) {
+export function ContactListActions({
+  entry,
+  services,
+  customers,
+  doctorsByServiceId,
+  freeSlotsByDoctorId,
+  allowedServiceIds,
+  workingWeekdays,
+  slotMinutes,
+}: ContactListActionsProps) {
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
   const [contactOn, setContactOn] = useState(false)
   const [nextContactAt, setNextContactAt] = useState<string | null>(null)
-  const [bookingOn, setBookingOn] = useState(false)
   const [abandonOn, setAbandonOn] = useState(false)
 
   function run(action: () => Promise<ActionResult>, onOk: () => void) {
@@ -111,24 +126,34 @@ export function ContactListActions({ entry }: ContactListActionsProps) {
           onClick={() => {
             setAnswer(null)
             setContactOn((prev) => !prev)
-            setBookingOn(false)
           }}
         >
           {CYCLES_PAGE.actions.contact}
         </Button>
-        <Button
-          size="small"
-          variant="primary"
-          leadingIcon="appointment"
-          disabled={pending}
-          onClick={() => {
-            setAnswer(null)
-            setBookingOn((prev) => !prev)
-            setContactOn(false)
-          }}
-        >
-          {CYCLES_PAGE.actions.book}
-        </Button>
+        {services !== undefined && customers !== undefined ? (
+          <BookingDialog
+            variant="book"
+            panel={RECEPTION_PANEL}
+            triggerLabel={CYCLES_PAGE.actions.book}
+            triggerVariant="primary"
+            triggerSize="small"
+            triggerIcon="appointment"
+            localDate={today() as LocalDate}
+            services={services}
+            customers={customers}
+            doctorsByServiceId={doctorsByServiceId}
+            freeSlotsByDoctorId={freeSlotsByDoctorId}
+            allowedServiceIds={allowedServiceIds}
+            workingWeekdays={workingWeekdays}
+            slotMinutes={slotMinutes}
+            continueCycle={{
+              cycleId: entry.id,
+              serviceId: entry.serviceId,
+              customerId: entry.customerId,
+              doctorId: entry.doctorId,
+            }}
+          />
+        ) : null}
         <Button
           size="small"
           variant="ghost"
@@ -172,10 +197,6 @@ export function ContactListActions({ entry }: ContactListActionsProps) {
         </div>
       ) : null}
 
-      {bookingOn ? (
-        <BookNextSession entry={entry} onAnswer={setAnswer} onDone={() => setBookingOn(false)} />
-      ) : null}
-
       {abandonOn ? (
         <AbandonCycleDialog
           cycleId={entry.id}
@@ -190,95 +211,13 @@ export function ContactListActions({ entry }: ContactListActionsProps) {
   )
 }
 
-/**
- * «رزرو جلسه بعدی» — the course's own facts, and a slot the desk picks.
- *
- * The date is the picker and the time is the text field the booking popup uses for the
- * same field, because the surface has no slot control and the column holds an `HH:mm`
- * string either way.
- */
-function BookNextSession({
-  entry,
-  onAnswer,
-  onDone,
-}: {
-  readonly entry: ContactListEntry
-  readonly onAnswer: (answer: FormAnswer | null) => void
-  readonly onDone: () => void
-}) {
-  const [pending, startTransition] = useTransition()
-  const [localDate, setLocalDate] = useState<string | null>(null)
-  const [localTime, setLocalTime] = useState('')
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (localDate === null || !isValidLocalTime(localTime)) return
-    onAnswer(null)
-    startTransition(async () => {
-      const outcome: ActionResult = await createBookingAction(RECEPTION_PANEL, {
-        doctorId: entry.doctorId,
-        serviceId: entry.serviceId,
-        customerId: entry.customerId,
-        cycleId: entry.id,
-        localDate,
-        localTime,
-      })
-      if (outcome.ok) {
-        onDone()
-        return
-      }
-      onAnswer(outcome)
-    })
-  }
-
-  return (
-    <form
-      className="flex flex-col gap-3 rounded-sm border border-line-2 bg-surface-2 p-3"
-      onSubmit={submit}
-    >
-      <div className="flex flex-col gap-3 panel:flex-row">
-        <Field label={CYCLES_PAGE.actions.bookDate} required className="flex-1">
-          <JalaliDatePicker value={localDate} onChange={setLocalDate} min={today()} />
-        </Field>
-        <Field label={CYCLES_PAGE.actions.bookTime} required className="flex-1">
-          <TextInput
-            type="time"
-            name="localTime"
-            value={localTime}
-            onChange={(event) => setLocalTime(event.target.value)}
-          />
-        </Field>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button type="submit" size="small" variant="primary" loading={pending} disabled={localDate === null}>
-          {CYCLES_PAGE.actions.book}
-        </Button>
-        <Button type="button" size="small" variant="ghost" disabled={pending} onClick={onDone}>
-          {CYCLES_PAGE.actions.cancel}
-        </Button>
-      </div>
-    </form>
-  )
-}
-
 /* ── The manager's two row actions ──────────────────────────────────────────── */
 
-/** The props a cycle row hands the manager's actions: the course the manager is closing. */
 export interface OversightActionsProps {
   readonly cycleId: string
-  /** The cycle's status, which decides whether either write belongs on the row. */
   readonly status: string
 }
 
-/**
- * The two things the manager does to a course — complete it, or record why it was lost.
- *
- * A course that already ended offers neither: the two are terminal writes, and the
- * module would refuse them. Rendering neither is the honest answer rather than a button
- * the manager taps and reads a sentence about. A bounded course reaches `COMPLETED` on
- * its own, so the completion belongs on the unbounded ones — the row's own total is what
- * the page renders beside it.
- */
 export function OversightActions({ cycleId, status }: OversightActionsProps) {
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
@@ -360,7 +299,6 @@ export function OversightActions({ cycleId, status }: OversightActionsProps) {
 
 /* ── The dialog the two panels share ────────────────────────────────────────── */
 
-/** The reason form's own state, so the two panels' abandon dialog is one component. */
 function AbandonCycleDialog({
   cycleId,
   panel,
@@ -440,21 +378,12 @@ function AbandonCycleDialog({
   )
 }
 
-/** The id the footer's submit button refers to, so the form and its button are one. */
 const ABANDON_FORM_ID = 'abandon-cycle-form'
 
 /* ── The pieces the forms share ────────────────────────────────────────────── */
 
-/** A form's own answer: its outcome and the sentence the outcome rendered. */
 type FormAnswer = { readonly ok: boolean; readonly message: string }
 
-/**
- * A form's answer: nothing while the form is clean, a sentence once the action returned.
- *
- * The tone is the outcome's own and not a guess from the text, because the three forms
- * each have their own sentences and a comparison against them would be a fourth place
- * those sentences are spelled.
- */
 function FormAnswer({ answer }: { readonly answer: FormAnswer | null }) {
   if (answer === null) return null
   return (
@@ -469,7 +398,6 @@ function FormAnswer({ answer }: { readonly answer: FormAnswer | null }) {
   )
 }
 
-/** The dimmed backdrop a click outside and an Escape both close. */
 function Overlay({
   children,
   onClose,
@@ -490,18 +418,10 @@ function Overlay({
   )
 }
 
-/** Swallows a click so the backdrop does not close on a click inside the panel. */
 function stopPropagation(event: MouseEvent): void {
   event.stopPropagation()
 }
 
-/**
- * The day the pickers will not go before, as the `LocalDate` string they take.
- *
- * A contact date or a session in the past is not what either field is for; the picker's
- * own `min` keeps the desk on days it can still book, and the value is a plain string
- * because the picker's boundary is the string.
- */
 function today(): string {
   return todayLocalDate(realClock())
 }

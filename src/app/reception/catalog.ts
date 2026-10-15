@@ -45,7 +45,8 @@ export const RECEPTION_DESK = {
   actionSendMessage: 'ارسال پیام',
 } as const
 
-/** The cycles page's reception-specific copy — the KPI tiles and the chip filter. */
+
+/** The cycles page's reception-specific copy — the KPI tiles, the tabs, and the chip filter. */
 export const RECEPTION_CYCLES = {
   /** The four KPI tiles above the contact-list table. */
   kpi: {
@@ -53,6 +54,15 @@ export const RECEPTION_CYCLES = {
     todayContact: 'تماس امروز',
     sessionsToday: 'جلسه ثبت‌شده امروز',
     autoSms: 'پیامک خودکار رفته',
+  },
+  /**
+   * The page's two tabs: the follow-up queue the clock has made, and every open
+   * course beside it.
+   */
+  tabs: {
+    list: 'در لیست تماس',
+    active: 'همه‌ی فعال‌ها',
+    ariaLabel: 'نمایش چرخه‌های درمان',
   },
   /** The chip filter above the table. */
   filter: {

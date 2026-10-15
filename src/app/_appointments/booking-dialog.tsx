@@ -1,76 +1,31 @@
 /**
- * The booking popup — `02-architecture.md` §219's three-step booking popup, as the
- * reception desk and the doctor's quick-book both use it.
+ * The booking popup — `02-architecture.md` §219's three-step booking popup.
  *
- * ## The shorten-confirm, and why it is a dialog
+ * ## The continue-cycle mode
  *
- * A service whose `durationMinutes` is longer than the doctor's own `slotMinutes`
- * is a service the desk must confirm as a shorter booking: the doctor's own step is
- * the fact the column's cell was drawn against, and a booking that quietly ran past
- * it would be a slot the grid cannot show. The dialog is the one point in the flow
- * where the desk says "yes, in less time" — a "no" leaves the booking un-written.
+ * The desk's «رزرو جلسه بعدی» on a cycle opens the same popup with `continueCycle`
+ * set: the service, the customer and the doctor are the course's own facts, and
+ * the desk only chooses the day and the slot. The popup then renders **one step** —
+ * the time step — and skips the service and the customer steps entirely.
  *
- * ## The locked slot
+ * ## The date field in cycle mode
  *
- * When the popup opens from a grid cell (a free slot), the day and the time are the
- * facts the desk already chose by clicking. `lockedSlot` carries them, and step 2
- * renders them as read-only facts with a lock badge: the day strip and the time
- * input are shown selected and disabled, and the "next" gate already passes. The
- * desk changes the slot by returning to the grid, not by editing the step.
- *
- * ## The time step offers slots, not free text
- *
- * The step-2 time field is not a `<input type="time">`: the desk picks from the
- * times the day actually holds, not from the times the clock can express. The
- * `freeSlotsByDoctorId` map the page read carries those times, keyed by doctor and
- * sorted ascending; the step renders them as the same kind of button the day strip
- * is made of, and a slot already held by a booking or a block is not in the list
- * because the map is computed from the day's own rows. A locked slot skips the
- * picker and shows the day and the time as read-only facts, because the grid
- * already answered that question.
- *
- * ## Why the doctor survives a service change when the popup is locked
- *
- * A service change clears the doctor on the normal path, because the doctors a
- * service offers are the service's own (a facial is not performed by the same set
- * as a laser). A locked popup — one opened from a grid cell, where the doctor *is*
- * the column the cell sits in — has no such question to ask: the doctor is a fact
- * the grid already settled, and clearing it would silently unbook the very column
- * the desk clicked. The `onChange` therefore keeps the props' own doctor when the
- * popup was opened with one, and only clears it when the doctor is genuinely the
- * desk's to choose.
- *
- * ## Why a new customer is created without a second permission check
- *
- * Step 3 collects a mobile and a name for a customer the file may not hold, and
- * the write path turns that pair into a row through `customers`'s own
- * `createOrFindCustomer` (`src/app/_appointments/support.ts` → `resolveCustomerId`).
- * That function owns the mobile key, the dedupe, and the lead-to-customer
- * conversion, and it is *the* path every booking takes — a popup that created a
- * customer here, in the dialog, would be a popup whose creation a lead-desk booking
- * never made. So the popup's part is to send the pair the write path needs, and
- * nothing more: a mobile alone is not a booking, and a mobile with a name is the
- * pair `createOrFindCustomer` reads.
- *
- * ## The visual language
- *
- * The dialog is the booking flow's own surface, and the design system's tokens are
- * the vocabulary: the brand bar at the top is `bg-brand`, the current step's disc
- * is `bg-brand` with `shadow-brand`, a completed step's disc is `bg-ok-bg` with a
- * check, and a day or a slot that is selected is filled rather than outlined —
- * `bg-brand text-ink-inverse shadow-brand` — so the reader's eye lands on the
- * choice, not on the border around it. The error and the two empty states are
- * cards, not bare sentences: a failure is `bg-danger-bg`, an empty picker is
- * `bg-surface-2`, and both carry an icon the eye can find before it reads.
+ * The cycle mode renders **two** day controls: a `JalaliDatePicker` so the desk can
+ * pick any day at all (a month out, three months out), and the seven-day strip so
+ * the common case — this week — is one tap. The two write the same `values.localDate`,
+ * so switching between them is not a second source of truth. The ordinary booking
+ * popup keeps only the seven-day strip, because its day is usually the grid's own
+ * anchor.
  */
 
 'use client'
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 
 import { Button } from '@/core/components/button'
 import type { ButtonProps, ButtonSize } from '@/core/components/button'
+import { JalaliDatePicker } from '@/core/components/date-picker'
 import { Field, TextInput } from '@/core/components/form'
 import { CONTROL_CLASSES } from '@/core/components/form/control-classes'
 import { Icon } from '@/core/components/icons'
@@ -95,20 +50,19 @@ import { BOOKING_POPUP } from '@/app/catalog'
 import { LOCKED_SLOT, SLOT_PICKER } from './catalog'
 import {
   createBookingAction,
+  loadFreeSlotsAction,
   quickBookAction,
   type ActionResult,
   type BookingInput,
 } from './actions'
 import { ShortenDialog } from './shorten-dialog'
 
-/** One service the first step offers, as the page read it. */
 export interface ServiceOption {
   readonly id: string
   readonly name: string
   readonly durationMinutes: number
 }
 
-/** The shape of the row the third step's customer search returns. */
 export interface CustomerOption {
   readonly id: string
   readonly firstName: string
@@ -116,19 +70,24 @@ export interface CustomerOption {
   readonly mobile: string
 }
 
-/** One doctor the popup's own doctor select may offer. */
 export interface DoctorOption {
   readonly id: string
   readonly name: string
 }
 
-/** The day-and-time pair the popup is opened against, when it is opened from a cell. */
 export interface LockedSlot {
   readonly localDate: LocalDate
   readonly localTime: string
 }
 
-/** The dialog's own props: the column it was opened from, and what it may book. */
+export interface ContinueCycle {
+  readonly cycleId: string
+  readonly serviceId: string
+  readonly customerId: string
+  readonly doctorId: string
+  readonly defaultLocalDate?: LocalDate | null
+}
+
 export interface BookingDialogProps {
   readonly doctorId?: string
   readonly doctorName?: string
@@ -143,33 +102,17 @@ export interface BookingDialogProps {
   readonly allowedServiceIds?: readonly string[]
   readonly workingWeekdays?: readonly number[]
   readonly doctorsByServiceId?: Readonly<Record<string, readonly DoctorOption[]>>
-  /**
-   * The free slots of the day, keyed by doctor id, as stored `HH:mm` strings. The
-   * time step offers exactly these; a day with none left renders the picker's own
-   * empty sentence rather than a free-text field.
-   */
   readonly freeSlotsByDoctorId?: Readonly<Record<string, readonly string[]>>
-  /**
-   * The doctor's own slot step for the day, when they have one. `null` is the
-   * default and the dialog behaves exactly as before the override existed.
-   */
   readonly slotMinutes?: number | null
-  /**
-   * The day and the time the popup was opened against, when it was opened from a
-   * grid cell. Their presence locks step 2 — the day strip and the time input are
-   * shown selected and disabled, and the desk changes the slot by returning to the
-   * grid rather than by editing the step.
-   */
   readonly lockedSlot?: LockedSlot
+  readonly continueCycle?: ContinueCycle
   readonly triggerVariant?: ButtonProps['variant']
   readonly triggerSize?: Exclude<ButtonSize, 'icon'>
   readonly triggerIcon?: IconName | null
 }
 
-/** The three steps, as the progress strip numbers them. */
 type Step = 1 | 2 | 3
 
-/** What the dialog holds across the steps. */
 interface BookingValues {
   readonly serviceId: string
   readonly doctorId: string
@@ -181,10 +124,6 @@ interface BookingValues {
   readonly lastName: string
 }
 
-/**
- * The popup. A client component because the three steps are three states of one
- * form, and the module's answer is a sentence the same form renders.
- */
 export function BookingDialog(props: BookingDialogProps) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>(1)
@@ -192,7 +131,40 @@ export function BookingDialog(props: BookingDialogProps) {
   const [result, setResult] = useState<ActionResult | null>(null)
   const [pending, setPending] = useState(false)
   const [confirmShorten, setConfirmShorten] = useState(false)
+  const [remoteSlots, setRemoteSlots] = useState<readonly string[] | null>(null)
   const titleId = useId()
+
+  const firstStep: Step = props.continueCycle === undefined ? 1 : 2
+  const lastStep: Step = props.continueCycle === undefined ? 3 : 2
+  const inCycle = props.continueCycle !== undefined
+
+  useEffect(() => {
+    if (!open) return
+    if (values.doctorId === '') return
+    if (
+      props.freeSlotsByDoctorId !== undefined &&
+      values.localDate === props.localDate &&
+      !inCycle
+    ) {
+      return
+    }
+    let alive = true
+    void loadFreeSlotsAction(props.panel, values.doctorId, values.localDate).then((outcome) => {
+      if (!alive) return
+      setRemoteSlots(outcome.ok ? outcome.slots : [])
+    })
+    return () => {
+      alive = false
+    }
+  }, [
+    open,
+    props.panel,
+    props.freeSlotsByDoctorId,
+    props.localDate,
+    values.doctorId,
+    values.localDate,
+    inCycle,
+  ])
 
   if (!open) {
     return (
@@ -201,10 +173,11 @@ export function BookingDialog(props: BookingDialogProps) {
         size={props.triggerSize ?? 'small'}
         leadingIcon={props.triggerIcon === null ? undefined : (props.triggerIcon ?? 'appointment')}
         onClick={() => {
-          setStep(1)
+          setStep(firstStep)
           setResult(null)
           setValues(emptyValues(props))
           setConfirmShorten(false)
+          setRemoteSlots(null)
           setOpen(true)
         }}
       >
@@ -218,15 +191,14 @@ export function BookingDialog(props: BookingDialogProps) {
   const weekdays = offeredWeekdaysOf(props)
   const doctorChoices = doctorsForChosenService(props, values.serviceId)
   const lockedSlot = props.lockedSlot ?? null
-  const freeSlots = freeSlotsFor(props, values.doctorId, values.localDate)
+  const freeSlots = freeSlotsFor(props, values.doctorId, values.localDate, remoteSlots, inCycle)
 
   async function submit() {
-    const gate = wholeFormError(values)
+    const gate = wholeFormError(values, props)
     if (gate !== null) {
       setResult({ ok: false, message: gate })
       return
     }
-
     const step = props.slotMinutes ?? service?.durationMinutes ?? 0
     if (step > 0 && service !== undefined && service.durationMinutes > step) {
       setConfirmShorten(true)
@@ -236,7 +208,7 @@ export function BookingDialog(props: BookingDialogProps) {
   }
 
   async function runSubmit() {
-    const gate = wholeFormError(values)
+    const gate = wholeFormError(values, props)
     if (gate !== null) {
       setResult({ ok: false, message: gate })
       return
@@ -251,6 +223,7 @@ export function BookingDialog(props: BookingDialogProps) {
       mobile: values.mobile,
       firstName: values.firstName,
       lastName: values.lastName === '' ? undefined : values.lastName,
+      cycleId: props.continueCycle?.cycleId,
     }
     const outcome =
       props.variant === 'quickBook'
@@ -275,8 +248,6 @@ export function BookingDialog(props: BookingDialogProps) {
           aria-labelledby={titleId}
           className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-xl bg-surface shadow-3 panel:max-w-[680px]"
         >
-          {/* The brand bar — one hairline that tells the reader this is a booking
-              surface before the eye reads a single word. */}
           <div className="h-1 rounded-t-xl bg-brand" aria-hidden="true" />
 
           <header className="flex items-center justify-between gap-4 px-5 py-4">
@@ -284,7 +255,7 @@ export function BookingDialog(props: BookingDialogProps) {
               <span className="grid size-8 shrink-0 place-items-center rounded-pill bg-brand-50 text-brand-700">
                 <Icon name="appointment" size="card" />
               </span>
-              {BOOKING_POPUP.titles[titleForStep(step)]}
+              {BOOKING_POPUP.titles[titleForStep(step, props)]}
             </h2>
             <Button
               size="icon"
@@ -295,45 +266,47 @@ export function BookingDialog(props: BookingDialogProps) {
             />
           </header>
 
-          <ol className="flex flex-wrap items-center gap-2 px-5 pb-1" aria-hidden="true">
-            {stepNames().map((name, index) => {
-              const number = (index + 1) as Step
-              const reached = step >= number
-              const done = step > number
-              return (
-                <li key={name} className="flex items-center gap-2">
-                  {index === 0 ? null : (
-                    <span
-                      className={cx(
-                        'h-[2px] w-[26px] rounded-[2px]',
-                        done ? 'bg-brand-300' : 'bg-line-2',
-                      )}
-                    />
-                  )}
-                  <span
-                    className={cx(
-                      'flex items-center gap-2 text-sm',
-                      reached ? 'font-bold text-ink' : 'text-ink-3',
+          {!inCycle ? (
+            <ol className="flex flex-wrap items-center gap-2 px-5 pb-1" aria-hidden="true">
+              {stepNames().map((name, index) => {
+                const number = (index + 1) as Step
+                const reached = step >= number
+                const done = step > number
+                return (
+                  <li key={name} className="flex items-center gap-2">
+                    {index === 0 ? null : (
+                      <span
+                        className={cx(
+                          'h-[2px] w-[26px] rounded-[2px]',
+                          done ? 'bg-brand-300' : 'bg-line-2',
+                        )}
+                      />
                     )}
-                  >
                     <span
                       className={cx(
-                        'grid size-7 shrink-0 place-items-center rounded-pill text-xs font-bold',
-                        done
-                          ? 'bg-ok-bg text-ok'
-                          : number === step
-                            ? 'bg-brand text-ink-inverse shadow-brand'
-                            : 'border border-dashed border-line-2 bg-surface text-ink-3',
+                        'flex items-center gap-2 text-sm',
+                        reached ? 'font-bold text-ink' : 'text-ink-3',
                       )}
                     >
-                      {done ? <Icon name="confirm" size="compact" /> : formatNumber(number)}
+                      <span
+                        className={cx(
+                          'grid size-7 shrink-0 place-items-center rounded-pill text-xs font-bold',
+                          done
+                            ? 'bg-ok-bg text-ok'
+                            : number === step
+                              ? 'bg-brand text-ink-inverse shadow-brand'
+                              : 'border border-dashed border-line-2 bg-surface text-ink-3',
+                        )}
+                      >
+                        {done ? <Icon name="confirm" size="compact" /> : formatNumber(number)}
+                      </span>
+                      {name}
                     </span>
-                    {name}
-                  </span>
-                </li>
-              )
-            })}
-          </ol>
+                  </li>
+                )
+              })}
+            </ol>
+          ) : null}
 
           <div className="flex flex-col gap-4 p-5">
             {step === 1 ? (
@@ -384,6 +357,7 @@ export function BookingDialog(props: BookingDialogProps) {
                           doctorId: event.target.value,
                           localTime: '',
                         })
+                        setRemoteSlots(null)
                         setResult(null)
                       }}
                     >
@@ -396,6 +370,23 @@ export function BookingDialog(props: BookingDialogProps) {
                     </select>
                   </Field>
                 )}
+
+                {/* The date field. In cycle mode, the picker renders above the strip
+                    so the desk can jump any day at all; the strip stays below as the
+                    one-tap answer for the current week. Outside cycle mode, only the
+                    strip renders. */}
+                {inCycle && lockedSlot === null ? (
+                  <Field label={BOOKING_POPUP.fields.localDate} required>
+                    <JalaliDatePicker
+                      value={values.localDate}
+                      onChange={(next) => {
+                        setValues({ ...values, localDate: next as LocalDate, localTime: '' })
+                        setRemoteSlots(null)
+                      }}
+                    />
+                  </Field>
+                ) : null}
+
                 <fieldset className="flex flex-col gap-2">
                   <legend className="flex items-center gap-1.5 text-sm font-semibold text-ink-2">
                     <Icon name="calendar" size="compact" />
@@ -408,9 +399,10 @@ export function BookingDialog(props: BookingDialogProps) {
                         day={day}
                         selected={day === values.localDate}
                         disabled={lockedSlot !== null}
-                        onSelect={() =>
+                        onSelect={() => {
                           setValues({ ...values, localDate: day, localTime: '' })
-                        }
+                          setRemoteSlots(null)
+                        }}
                       />
                     ))}
                   </div>
@@ -437,6 +429,11 @@ export function BookingDialog(props: BookingDialogProps) {
                     <Icon name="info" size="compact" />
                     {SLOT_PICKER.doctorFirst}
                   </p>
+                ) : freeSlots === null ? (
+                  <p className="flex items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-ink-3">
+                    <Icon name="info" size="compact" />
+                    {SLOT_PICKER.loading}
+                  </p>
                 ) : freeSlots.length === 0 ? (
                   <p className="flex items-center gap-2 rounded-md bg-warn-bg px-3 py-2 text-sm text-warn" role="status">
                     <Icon name="warning" size="compact" />
@@ -454,9 +451,7 @@ export function BookingDialog(props: BookingDialogProps) {
                           key={slot}
                           time={slot}
                           selected={slot === values.localTime}
-                          onSelect={() =>
-                            setValues({ ...values, localTime: slot })
-                          }
+                          onSelect={() => setValues({ ...values, localTime: slot })}
                         />
                       ))}
                     </div>
@@ -509,20 +504,18 @@ export function BookingDialog(props: BookingDialogProps) {
               {BOOKING_POPUP.actions.close}
             </Button>
             <div className="flex gap-2">
-              {step > 1 ? (
+              {step > firstStep && !inCycle ? (
                 <Button
                   variant="neutral"
-                 
                   onClick={() => setStep((step - 1) as Step)}
                   disabled={pending}
                 >
                   {BOOKING_POPUP.actions.back}
                 </Button>
               ) : null}
-              {step < 3 ? (
+              {step < lastStep ? (
                 <Button
                   variant="primary"
-
                   onClick={() => {
                     if (stepErrorMessage(step, values, props) === null) setStep((step + 1) as Step)
                   }}
@@ -559,8 +552,6 @@ export function BookingDialog(props: BookingDialogProps) {
   )
 }
 
-/* ── The three filters ─────────────────────────────────────────────────────── */
-
 function offeredServicesOf(props: BookingDialogProps): readonly ServiceOption[] {
   if (props.doctorId === undefined) {
     if (props.allowedServiceIds === undefined) return props.services
@@ -583,14 +574,12 @@ function doctorsForChosenService(
   serviceId: string,
 ): readonly DoctorOption[] | null {
   if (props.doctorsByServiceId === undefined) return null
-  if (props.doctorId !== undefined) {
-    const locked = props.doctorsByServiceId[serviceId] ?? []
-    const onlyThis = locked.filter((option) => option.id === props.doctorId)
-    return onlyThis.length === 0 && props.doctorName !== undefined
-      ? [{ id: props.doctorId, name: props.doctorName }, ...onlyThis]
-      : onlyThis
-  }
-  return props.doctorsByServiceId[serviceId] ?? []
+  const fromMap = props.doctorsByServiceId[serviceId] ?? []
+  if (props.doctorId === undefined) return fromMap
+  const onlyThis = fromMap.filter((option) => option.id === props.doctorId)
+  if (onlyThis.length > 0) return onlyThis
+  if (props.doctorName !== undefined) return [{ id: props.doctorId, name: props.doctorName }, ...fromMap]
+  return fromMap
 }
 
 function doctorNameOf(
@@ -605,32 +594,48 @@ function doctorNameOf(
   return props.doctorName ?? ''
 }
 
-/**
- * The free slots the time step offers, for the doctor and day the popup is on.
- */
 function freeSlotsFor(
   props: BookingDialogProps,
   doctorId: string,
   localDate: LocalDate,
-): readonly string[] {
+  remoteSlots: readonly string[] | null,
+  inCycle: boolean,
+): readonly string[] | null {
   if (doctorId === '') return []
-  if (localDate !== props.localDate && props.lockedSlot === undefined) return []
-  return props.freeSlotsByDoctorId?.[doctorId] ?? []
+  if (!inCycle && props.freeSlotsByDoctorId !== undefined) {
+    if (localDate === props.localDate || props.lockedSlot !== undefined) {
+      return props.freeSlotsByDoctorId[doctorId] ?? []
+    }
+  }
+  return remoteSlots
 }
-
-/* ── The step's own helpers ───────────────────────────────────────────────── */
 
 function stepNames(): readonly string[] {
   return [BOOKING_POPUP.steps.service, BOOKING_POPUP.steps.time, BOOKING_POPUP.steps.customer]
 }
 
-function titleForStep(step: Step): 'service' | 'time' | 'customer' {
-  if (step === 1) return 'service'
+function titleForStep(step: Step, props: BookingDialogProps): 'service' | 'time' | 'customer' {
   if (step === 2) return 'time'
-  return 'customer'
+  if (step === 3) return 'customer'
+  return props.continueCycle === undefined ? 'service' : 'time'
 }
 
 function emptyValues(props: BookingDialogProps): BookingValues {
+  if (props.continueCycle !== undefined) {
+    return {
+      serviceId: props.continueCycle.serviceId,
+      doctorId: props.continueCycle.doctorId,
+      localDate:
+        props.continueCycle.defaultLocalDate ??
+        props.lockedSlot?.localDate ??
+        props.localDate,
+      localTime: props.lockedSlot?.localTime ?? props.defaultTime ?? '',
+      customerId: props.continueCycle.customerId,
+      mobile: '',
+      firstName: '',
+      lastName: '',
+    }
+  }
   return {
     serviceId: props.defaultServiceId ?? '',
     doctorId: props.doctorId ?? '',
@@ -650,10 +655,8 @@ function stepErrorMessage(
 ): string | null {
   if (step === 1 && values.serviceId === '') return BOOKING_POPUP.chooseService
   if (step === 2) {
+    if (values.doctorId === '') return BOOKING_POPUP.chooseDoctor
     if (!isValidLocalTime(values.localTime)) return BOOKING_POPUP.chooseTime
-    if (props.doctorsByServiceId !== undefined && values.doctorId === '') {
-      return BOOKING_POPUP.chooseDoctor
-    }
     if (offeredServicesOf(props).length === 0) return BOOKING_POPUP.noServices
   }
   if (step === 3) {
@@ -662,11 +665,13 @@ function stepErrorMessage(
   return null
 }
 
-function wholeFormError(values: BookingValues): string | null {
+function wholeFormError(values: BookingValues, props: BookingDialogProps): string | null {
   if (values.serviceId === '') return BOOKING_POPUP.chooseService
   if (values.doctorId === '') return BOOKING_POPUP.chooseDoctor
   if (!isValidLocalTime(values.localTime)) return BOOKING_POPUP.chooseTime
-  if (values.customerId === '' && values.mobile === '') return BOOKING_POPUP.chooseCustomer
+  if (props.continueCycle === undefined) {
+    if (values.customerId === '' && values.mobile === '') return BOOKING_POPUP.chooseCustomer
+  }
   return null
 }
 
@@ -820,7 +825,6 @@ function CustomerSearch({
       {chosen === null ? (
         <div className="rounded-md border border-dashed border-line-2 bg-surface-2 p-4">
           <p className="flex items-center gap-1.5 text-sm font-semibold text-ink-2">
-            
             {BOOKING_POPUP.newCustomer.label}
           </p>
           <p className="mt-1 text-xs text-ink-3">{BOOKING_POPUP.newCustomer.lead}</p>

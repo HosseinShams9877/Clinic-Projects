@@ -1,10 +1,11 @@
 /**
  * The module's reads — the three surfaces of `02-architecture.md` §9 that render a
- * cycle, and the one the customer profile reads.
+ * cycle, and the two the desk's own page and the customer profile read.
  *
  * | Read | Surface | Scope |
  * |---|---|---|
  * | `contactList` | `reception/cycles.html` | the clinic's cycles that are on the list |
+ * | `receptionActiveCycles` | `reception/cycles.html` | every open cycle, on the list or not |
  * | `clinicCycles` | `admin/cycles.html` | the clinic's cycles, read-only oversight |
  * | `doctorCycles` | `doctor/cycles.html` | the caller's own, by `doctorId` |
  * | `customerCycles` | the customer profile | one customer's courses |
@@ -16,6 +17,18 @@
  * read therefore runs the recompute over every cycle it returns, which is the same
  * function the sweep and the booking path run — one rule, three callers — and the list a
  * receptionist opens is the list the clock has already made.
+ *
+ * ## Why the desk's second tab reads every open cycle
+ *
+ * `contactList` is the follow-up queue: the courses whose day arrived and whose
+ * customer has not booked. That is the queue the desk works through, and it is the
+ * right default. But a course whose day has *not* arrived yet is a course the desk may
+ * still book the next session against — the customer who calls early, or the one who
+ * books the next session while they are still at the desk. `receptionActiveCycles` is
+ * that second read: every cycle in the three open statuses, recomputed like the
+ * contact list so `inContactList` is honest, and ordered so the soonest due day is
+ * first. The two tabs are two questions over the same rows, and neither re-derives
+ * the other's set.
  *
  * ## Why the names are relations and not columns
  *
@@ -50,6 +63,13 @@ import { readUtcOffsetMinutes } from './settings'
 /** The most a page reads in one go; a list is scrolled, not paged. */
 const LIST_LIMIT = 200
 
+/** The three open statuses, as the read's own filter array. */
+const OPEN_STATUSES: string[] = [
+  CycleStatus.Active,
+  CycleStatus.Due,
+  CycleStatus.AtRisk,
+]
+
 /**
  * «دوره‌های فعال با موعد رسیده» — the desk's contact list.
  *
@@ -78,10 +98,6 @@ export async function contactList(args: {
 
   const entries: ContactListEntry[] = []
   for (const row of onList) {
-    // The recompute is the same one the sweep runs, so a cycle whose future appointment
-    // landed between the sweep's tick and this read leaves the list in this read rather
-    // than on the next sweep. Its cost is one bounded query per row, and the list is the
-    // one query the product runs constantly.
     const stillOnList = await refreshContactListForCycle({
       tx: args.tx,
       tenantId: args.ctx.tenantId,
@@ -90,6 +106,54 @@ export async function contactList(args: {
     })
     if (!stillOnList) continue
 
+    entries.push(asContactListEntry(row, offset))
+  }
+
+  return entries
+}
+
+/**
+ * «همه‌ی چرخه‌های فعال» — every open cycle, whether or not it is on the desk's list.
+ *
+ * The read is the one the desk's second tab renders. It answers the question "which
+ * courses is the clinic still running", which is what the desk needs when the
+ * customer calls *before* the due day to book the next session. The recompute runs
+ * per row for the same reason it runs in `contactList`: the row's `inContactList`
+ * flag is what tells the desk which courses are already queued for a call, and a
+ * stale flag would put a row on the wrong tab.
+ *
+ * @throws PermissionError — no `act_on_cycles`.
+ */
+export async function receptionActiveCycles(args: {
+  readonly tx: TransactionClient
+  readonly ctx: TenantContext
+  readonly now: Date
+}): Promise<readonly ContactListEntry[]> {
+  requirePermission(args.ctx, 'act_on_cycles')
+
+  const offset = await readUtcOffsetMinutes(args.tx, args.ctx.tenantId)
+
+  const rows = await args.tx.treatmentCycle.findMany({
+    where: {
+      tenantId: args.ctx.tenantId,
+      status: { in: OPEN_STATUSES },
+    },
+    select: CONTACT_LIST_SELECT,
+    orderBy: [
+      { nextDueDate: { sort: 'asc', nulls: 'last' } },
+      { startedAt: 'desc' },
+    ],
+    take: LIST_LIMIT,
+  })
+
+  const entries: ContactListEntry[] = []
+  for (const row of rows) {
+    await refreshContactListForCycle({
+      tx: args.tx,
+      tenantId: args.ctx.tenantId,
+      cycleId: row.id,
+      now: args.now,
+    })
     entries.push(asContactListEntry(row, offset))
   }
 
@@ -115,17 +179,16 @@ function asContactListEntry(row: ContactListSelectRow, utcOffsetMinutes: number)
 
 /** The shape Prisma hands back from the contact list's read. */
 type ContactListSelectRow = CycleSelectRow & {
-  readonly customer: { readonly firstName: string; readonly lastName: string | null; readonly mobile: string }
+  readonly customer: {
+    readonly firstName: string
+    readonly lastName: string | null
+    readonly mobile: string
+  }
 }
 
 /**
  * The clinic's cycles — the manager's read-only oversight, and the drop-off curve's
  * entry point.
- *
- * Read-only is the page's, not the query's: the same rows are the ones the manager's
- * own `act_on_cycles` writes close, and the oversight table is where the manager reads
- * the courses before deciding which one to abandon. Ordered by the last session so a
- * manager scanning for stalled courses finds them at the top.
  *
  * @throws PermissionError — no `act_on_cycles`.
  */
@@ -148,11 +211,7 @@ export async function clinicCycles(args: {
 /**
  * «چرخه درمان» — the doctor's own cycles, scoped by `doctorId`.
  *
- * The `where` clause is the 404-not-403 rule's read half: another doctor's cycles are
- * absent from this read, and the doctor's page cannot render a course that is not
- * theirs. `doctorId` holds the `User` id, which is `TenantContext.userId`.
- *
- * @throws PermissionError — no `view_own_cycles`, which §2.1's 1, 5, 10 gives the doctor.
+ * @throws PermissionError — no `view_own_cycles`.
  */
 export async function doctorCycles(args: {
   readonly tx: TransactionClient
@@ -163,10 +222,7 @@ export async function doctorCycles(args: {
   const rows = await args.tx.treatmentCycle.findMany({
     where: { tenantId: args.ctx.tenantId, doctorId: args.ctx.userId },
     select: CYCLE_SELECT,
-    orderBy: [
-      { status: 'asc' },
-      { lastSessionAt: { sort: 'desc', nulls: 'last' } },
-    ],
+    orderBy: [{ status: 'asc' }, { lastSessionAt: { sort: 'desc', nulls: 'last' } }],
     take: LIST_LIMIT,
   })
 
@@ -174,12 +230,7 @@ export async function doctorCycles(args: {
 }
 
 /**
- * One customer's cycles — the cycle table on the customer profile, and the progress bar
- * in the customer panel.
- *
- * Takes no permission: the caller is a page that already established its own scope (the
- * profile's `view_all_customers` or the doctor's `view_own_customer_records`), and the
- * tenant scoping is still enforced by the `where` clause.
+ * One customer's cycles.
  */
 export async function customerCycles(args: {
   readonly tx: TransactionClient
