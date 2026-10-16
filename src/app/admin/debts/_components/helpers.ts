@@ -82,10 +82,37 @@ export function bucketFromParam(value: string | string[] | undefined): DebtBucke
 
 /** Whether a row matches the toolbar's query, by the two columns a debt is known by. */
 export function matchesQuery(row: DebtRow, query: string): boolean {
-  if (query === '') return true
-  const needle = normalizeForSearch(query)
+  const tokens = tokenizeQuery(query)
+  if (tokens.length === 0) return true
+
   const name = normalizeForSearch(
-    row.customerLastName === null ? row.customerFirstName : `${row.customerFirstName} ${row.customerLastName}`,
+    row.customerLastName === null
+      ? row.customerFirstName
+      : `${row.customerFirstName} ${row.customerLastName}`,
   )
-  return name.includes(needle) || normalizeMobile(row.customerMobile).includes(normalizeMobile(query))
+  const mobile = normalizeMobile(row.customerMobile)
+
+  return tokens.every((token) => name.includes(token) || mobile.includes(token))
+}
+
+/**
+ * The typed query as the tokens each must match.
+ *
+ * The search reads one token per word and requires all of them, so a name typed in
+ * either order finds the same row and a mobile typed in part of its digits finds it
+ * too. A token that is only digits is folded with `normalizeMobile` — which folds
+ * the Persian and Arabic digits to Latin and strips the country prefix — and every
+ * other token is folded with `normalizeForSearch`, which is the same fold the
+ * name column went through. An all-whitespace query is no tokens at all.
+ */
+function tokenizeQuery(query: string): readonly string[] {
+  return query
+    .trim()
+    .split(/\s+/)
+    .map((token) =>
+      /^[\d\u06F0-\u06F9\u0660-\u0669]+$/.test(token)
+        ? normalizeMobile(token)
+        : normalizeForSearch(token),
+    )
+    .filter((token) => token !== '')
 }
