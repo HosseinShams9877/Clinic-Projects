@@ -35,14 +35,14 @@
  * (the one the appointment's day picker uses), so the date the desk picks and
  * the date the grid drew are one control and one calendar.
  *
- * ## Why the search, the doctor filter, the date filter and the total are one block
+ * ## Why the total under the table is the page's rows and not the whole list
  *
- * The desk asks four questions of the same list — "which one is this customer",
- * "is this my doctor's", "which day is this follow-up for", and "how much is this
- * in total" — and the four are answered from the same rows. The total under the
- * table follows all three filters, so the desk can read a single day's worth by
- * picking the day and reading the number beneath. The server does the filtering;
- * the client only types and picks.
+ * The total under the table sums the rows the *current page* holds, not every row
+ * every filter left. The whole list's total is the KPI row's own — `totalRial` above
+ * — and a page-level read that repeated it would be two places the same sum is
+ * computed and one place it drifts. The label names the scope it covers, so the
+ * number under the table is the number of the table and the count under the tabs is
+ * the count of the tabs, and the two cannot be mistaken for one another.
  */
 
 import type { Metadata } from 'next'
@@ -51,7 +51,7 @@ import Link from 'next/link'
 import { prisma, runInTenantScope } from '@/core/db'
 import { realClock } from '@/core/lib/clock'
 import { cx } from '@/core/lib'
-import { formatMoney, isValidLocalDate } from '@/core/localization'
+import { formatMoney, formatNumber, isValidLocalDate } from '@/core/localization'
 import { isMember } from '@/core/constants'
 
 import { DEBTS_PAGE } from '@/app/catalog'
@@ -147,12 +147,20 @@ export default async function ReceptionDebtsPage({
   const tabRows = rowsForTab(allRows, tab, now, offset)
   const filteredRows = applyFilters(tabRows, search, doctorFilter, followUpDate, offset)
 
-  const visibleTotal = filteredRows.reduce((total, row) => total + row.balance, 0n)
   const isFiltered = search !== '' || doctorFilter !== '' || followUpDate !== null
-  const totalLabel = isFiltered ? DEBTS_PAGE.total.filteredLabel : DEBTS_PAGE.total.label
 
   const page = pageFromParam(params.page)
   const { slice, totalPages } = paginate(filteredRows, page)
+
+  /**
+   * The total of the rows the current page renders, not the whole filtered list.
+   *
+   * The figure the desk reads beneath the table answers "what does this page hold",
+   * which is the only question a number under a paginated table can answer without
+   * lying about the scope it covers.
+   */
+  const pageRial = slice.reduce((total, row) => total + row.balance, 0n)
+
   const hrefFor = (next: number): string => {
     const sp = new URLSearchParams()
     if (tab !== DEFAULT_TAB) sp.set('tab', tab)
@@ -172,6 +180,10 @@ export default async function ReceptionDebtsPage({
         doctor.lastName === '' ? doctor.firstName : `${doctor.firstName} ${doctor.lastName}`,
     })),
   ]
+
+  const totalLabel = isFiltered
+    ? DEBTS_PAGE.total.filteredLabel
+    : DEBTS_PAGE.total.label
 
   return (
     <div className="flex flex-col gap-6">
@@ -205,10 +217,12 @@ export default async function ReceptionDebtsPage({
 
       <DebtsTable rows={slice} showActions paymentOptions={PAYMENT_OPTIONS} />
 
-      <p className="flex items-center justify-between rounded-lg border border-line bg-surface px-4 py-3 text-sm">
-        <span className="text-ink-3">{totalLabel}</span>
-        <span className="font-semibold text-ink tabular-nums">{formatMoney(visibleTotal)}</span>
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
+        <span className="text-ink-3">
+          {`${totalLabel} (${formatNumber(slice.length)} ${DEBTS_PAGE.total.pageRows})`}
+        </span>
+        <span className="font-semibold text-ink tabular-nums">{formatMoney(pageRial)}</span>
+      </div>
 
       <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
     </div>
@@ -276,17 +290,6 @@ function DebtsTabs({
 /**
  * The search field, the doctor filter, and the follow-up date filter, as a GET form
  * that preserves the tab.
- *
- * A real `<form>` with `method="get"` and no `action`, so a browser without
- * JavaScript still submits it, and the search param is a URL fact the same way every
- * other filter in the product is. The hidden `tab` input is what keeps the person on
- * the tab they were on when the search runs.
- *
- * The follow-up date field is the shell's own `JalaliDatePicker`, wrapped in a
- * `Field` so it inherits the form shell's label and wiring. The picker writes a
- * `name="due"` hidden input the browser submits with the form, so the field is
- * the same shape as the search input beside it and the form does not need a
- * JavaScript handler.
  */
 function DebtsFilters({
   activeTab,
@@ -389,12 +392,6 @@ function compareByNextContact(a: DebtRow, b: DebtRow, now: Date): number {
 
 /**
  * The rows a search, a doctor filter, and a follow-up date leave.
- *
- * The follow-up date is a *day identity*, not an instant: the row's
- * `nextContactAt` is stored as a UTC instant, and the desk's chosen day is a
- * Jalali `YYYY-MM-DD`. The two are compared through the tenant's own offset —
- * the same `dayKey` the «پیگیری امروز» tab uses — so the day the desk picked
- * and the day the row carries are one day and not an off-by-one.
  */
 function applyFilters(
   rows: readonly DebtRow[],
@@ -431,11 +428,6 @@ function asString(value: string | string[] | undefined): string {
 /**
  * The `?due=` param as a Jalali `LocalDate`, or `null` when it is absent or not a
  * date.
- *
- * `isValidLocalDate` is the same guard every page uses on a day param, so a URL a
- * hand-edited `?due=foo` reaches the page as "no filter" and not as an error. A
- * malformed date is the desk's mistake, and the honest answer is the unfiltered
- * list, not a crash.
  */
 function asLocalDateParam(value: string | string[] | undefined): string | null {
   if (typeof value !== 'string') return null

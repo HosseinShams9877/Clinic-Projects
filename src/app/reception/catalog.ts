@@ -196,6 +196,8 @@ export const DEBTS_PAGE = {
   total: {
     label: 'جمع کل',
     filteredLabel: 'جمع نتایج فیلترشده',
+        pageRows: 'ردیف این صفحه',
+
   },
   actions: {
     payment: 'ثبت پرداخت',
