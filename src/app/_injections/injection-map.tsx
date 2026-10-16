@@ -66,17 +66,16 @@ function FaceSvg({
     <svg
       role="img"
       aria-label={INJECTION_MAP.title}
-      viewBox="120 8 420 534"
+      viewBox="400 85 650 900"
       className="mx-auto block h-auto w-full max-w-[420px]"
     >
       <image
-        href="/face.svg"
-        x={120}
-        y={8}
-        width={420}
-        height={534}
+        href="/face-map.svg"
+        x={400}
+        y={85}
+        width={650}
+        height={900}
         preserveAspectRatio="xMidYMid meet"
-        className="dark:invert dark:hue-rotate-180"
       />
 
       {rows.map((row) => {
