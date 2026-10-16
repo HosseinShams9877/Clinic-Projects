@@ -26,6 +26,18 @@
  * `in` on the first read's ids rather than a query per row, because a query per cycle
  * is a hundred queries for a hundred customers, and the set the join exists to answer
  * — which of these customers already booked — is one question with one answer.
+ *
+ * ## Why «بدهکاران» reads appointments newest first
+ *
+ * The debt group used to read `orderBy: { scheduledAt: 'asc' }` with a `take` of 500.
+ * The bound is right — a group is a bounded set — but the order was backwards: the
+ * 500 appointments it kept were the clinic's **oldest**, and an old appointment is
+ * one the desk has already collected or written off, so the group the manager's page
+ * rendered was the one set of balances that were least likely to still be open. The
+ * read is now newest first, which is what the desk's debt list reads
+ * (`payment_tenant_customer_paid_idx` orders by `paidAt desc` for the same reason):
+ * the debts worth calling about are the recent ones, and the bound clips the tail
+ * that is already paid.
  */
 
 import {
@@ -156,12 +168,24 @@ async function loyal({ tx, tenantId }: EvaluatorArgs): Promise<readonly string[]
  * disagreed with the desk's debt list would be two numbers the clinic cannot
  * reconcile. The due date is `debts`' effective one, so a promise the desk recorded
  * wins over arithmetic for the same reason it does on the reminder.
+ *
+ * The read is newest-first: a completed appointment the desk has not yet collected
+ * for is a recent one, and the bound clips the tail that is already paid. The old
+ * order was `asc`, which put the clinic's oldest 500 appointments in the group and
+ * left every recent balance out — the reason the group rendered as empty for a clinic
+ * whose debts were all young. `notNull` on `customerId` replaces the per-row check
+ * the previous version ran: the schema does not allow a completed appointment without
+ * a customer, and filtering at the query keeps the loop below about arithmetic.
  */
 async function debtors({ tx, tenantId, now }: EvaluatorArgs): Promise<readonly string[]> {
   const settings = await readDebtSettings(tx, tenantId)
 
   const appointments = await tx.appointment.findMany({
-    where: { tenantId, status: AppointmentStatus.Completed },
+    where: {
+      tenantId,
+      status: AppointmentStatus.Completed,
+      customerId: { not: null },
+    },
     select: {
       id: true,
       customerId: true,
@@ -169,18 +193,17 @@ async function debtors({ tx, tenantId, now }: EvaluatorArgs): Promise<readonly s
       priceAtBooking: true,
       debtDueDateOverride: true,
     },
-    orderBy: { scheduledAt: 'asc' },
+    orderBy: { scheduledAt: 'desc' },
     take: GROUP_BATCH,
   })
+  if (appointments.length === 0) return []
 
   const ids = appointments.map((row) => row.id)
-  const sums = ids.length
-    ? await tx.payment.groupBy({
-        by: ['appointmentId'],
-        where: { tenantId, appointmentId: { in: ids } },
-        _sum: { amount: true, discountAmount: true },
-      })
-    : []
+  const sums = await tx.payment.groupBy({
+    by: ['appointmentId'],
+    where: { tenantId, appointmentId: { in: ids } },
+    _sum: { amount: true, discountAmount: true },
+  })
   const byAppointment = new Map(sums.map((sum) => [sum.appointmentId, sum]))
 
   const debtors: string[] = []

@@ -15,6 +15,14 @@
  * and the field disagreeing after a refresh, and the page's own read is already the
  * param's. The form has no `action`, so it submits to the route it is rendered on,
  * which is the one place the param is read.
+ *
+ * ## Why the clear button is inline inside the field
+ *
+ * The «پاک کردن» control used to sit beside the field as a second bordered box, and
+ * in the manager's narrow toolbar it read as a second search box. It is now the
+ * field's own affordance — the small × at the end of the input, the way every search
+ * field in the product offers it — so the toolbar holds one control and not two, and
+ * a search that has not been typed carries no clear button at all.
  */
 
 import { CUSTOMERS_PAGE } from '@/app/catalog'
@@ -35,32 +43,36 @@ export function CustomerSearchForm({
   readonly basePath: string
 }) {
   return (
-    <form action={basePath} className="flex flex-col gap-2 panel:flex-row panel:items-center">
-      <div className="relative flex-1">
-        <span className="absolute inset-y-0 flex items-center ps-3 text-ink-3" aria-hidden="true">
+    <form action={basePath} className="w-full">
+      <label className="sr-only" htmlFor="customer-search">
+        {CUSTOMERS_PAGE.search.label}
+      </label>
+      <div className="relative w-full">
+        <span
+          className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-ink-3"
+          aria-hidden="true"
+        >
           <Icon name="search" size="compact" />
         </span>
-        <label className="sr-only" htmlFor="customer-search">
-          {CUSTOMERS_PAGE.search.label}
-        </label>
         <input
           id="customer-search"
           type="search"
           name={CUSTOMER_QUERY_PARAM}
           defaultValue={query}
           placeholder={CUSTOMERS_PAGE.search.placeholder}
-          className={cx(CONTROL_CLASSES, 'ps-9')}
+          className={cx(CONTROL_CLASSES, 'ps-9', query === '' ? 'pe-3' : 'pe-10')}
         />
+        {query === '' ? null : (
+          <a
+            href={basePath}
+            aria-label={CUSTOMERS_PAGE.search.clear}
+            title={CUSTOMERS_PAGE.search.clear}
+            className="absolute inset-y-0 end-0 flex items-center pe-3 text-ink-3 no-underline hover:text-danger"
+          >
+            <Icon name="close" size="compact" />
+          </a>
+        )}
       </div>
-      {query === '' ? null : (
-        <a
-          href={basePath}
-          className="inline-flex items-center justify-center gap-1 rounded-sm border border-line-2 bg-surface px-4 py-2 text-sm font-semibold text-ink-2 no-underline hover:bg-surface-2"
-        >
-          <Icon name="close" size="compact" />
-          {CUSTOMERS_PAGE.search.clear}
-        </a>
-      )}
     </form>
   )
 }

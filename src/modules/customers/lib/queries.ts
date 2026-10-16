@@ -31,6 +31,22 @@
  * and «کیانی» are one row (`01-tech-stack.md` §8.4). A query that compared the raw
  * typed text against it would miss every customer whose name was entered on a
  * keyboard with a different layout, which is most of them.
+ *
+ * ## Why the query is split into tokens
+ *
+ * A whole-string `contains` required the typed text to appear in the stored name in
+ * the same order, so «حسن نیلو» found nothing and a two-word mobile number found
+ * nothing. The search now splits on whitespace and requires **every** token, which
+ * makes «حسن نیلو» find «نیلوفر حسن‌زاده» and «۹۱۲ ۳۳» find a mobile that carries
+ * both fragments. Each token is folded the same way the stored column was, so the
+ * comparison stays one normalisation and not two.
+ *
+ * ## Why `doctorNote` is in the list select
+ *
+ * The profile renders the note beside the row, and the list row's own shape is what
+ * the profile spreads — so the column the profile renders has to be one the list
+ * select carries, or the spread silently drops it. The `asListRow` mapper names it,
+ * and the profile reads the same field from the same shape.
  */
 
 import type { TenantContext } from '@/core/tenant'
@@ -52,6 +68,10 @@ const LIST_LIMIT = 100
  * because the file is one read and the two pages that render it are two scopes of it;
  * a desk that does not show the columns still carries the fields, which is cheaper
  * than a second query the manager's page would have had to open on its own.
+ *
+ * `doctorNote` is here because the profile spreads the list row and re-declares
+ * nothing the mapper drops — a field the profile renders but the select omitted
+ * would be a field the spread silently set to `undefined`.
  */
 const LIST_SELECT = {
   id: true,
@@ -69,6 +89,7 @@ const LIST_SELECT = {
   chargedTotal: true,
   paidTotal: true,
   consentWhatsApp: true,
+  doctorNote: true,
 } as const
 
 /**
@@ -98,14 +119,17 @@ export interface CustomerListRow {
   readonly paidTotal: bigint
   /** Whether the customer consented to WhatsApp, which the file's «پیام» cell answers. */
   readonly consentWhatsApp: boolean
+  /** The clinical note the profile's own card renders. */
+  readonly doctorNote: string | null
 }
 
 /**
  * The customer file, searched by name or mobile.
  *
  * An empty query returns the tenant's customers by their last visit, which is the
- * order a desk works in; a query is matched against the normalised `searchName` and
- * the stored mobile, which is why the two are the two columns a search reads.
+ * order a desk works in; a query is split into whitespace-separated tokens and
+ * **every** token must match the normalised `searchName` or the mobile, so
+ * «حسن نیلو» finds «نیلوفر حسن‌زاده» and «۹۱۲» finds every mobile that carries it.
  *
  * @throws PermissionError — the caller holds neither customer permission.
  */
@@ -116,16 +140,18 @@ export async function searchCustomers(args: {
 }): Promise<readonly CustomerListRow[]> {
   requireCustomerRead(args.ctx)
 
-  const query = args.query?.trim() ?? ''
+  const tokens = tokenizeQuery(args.query)
   const where =
-    query === ''
+    tokens.length === 0
       ? { tenantId: args.ctx.tenantId }
       : {
           tenantId: args.ctx.tenantId,
-          OR: [
-            { searchName: { contains: normalizeForSearch(query) } },
-            { mobile: { contains: normalizeMobile(query) } },
-          ],
+          AND: tokens.map((token) => ({
+            OR: [
+              { searchName: { contains: token } },
+              { mobile: { contains: token } },
+            ],
+          })),
         }
 
   const rows = await args.tx.customer.findMany({
@@ -142,9 +168,9 @@ export async function searchCustomers(args: {
  * The doctor's own patients — `doctor/customers.html`, `view_own_customer_records`.
  *
  * Scoped by `primaryDoctorId`, which is the column `customer_tenant_doctor_idx`
- * exists to serve. A patient the doctor has seen but who has no recorded primary
- * doctor is not in this list, which is the honest reading of «مراجعین من»: the
- * doctor's own patients, not the clinic's.
+ * exists to serve. The search splits on whitespace and requires every token, the
+ * same way `searchCustomers` does — the two reads ask one question and answer it
+ * the same way.
  *
  * @throws PermissionError — the caller holds no `view_own_customer_records`.
  */
@@ -155,17 +181,19 @@ export async function ownPatients(args: {
 }): Promise<readonly CustomerListRow[]> {
   requirePermission(args.ctx, 'view_own_customer_records')
 
-  const query = args.query?.trim() ?? ''
+  const tokens = tokenizeQuery(args.query)
   const where =
-    query === ''
+    tokens.length === 0
       ? { tenantId: args.ctx.tenantId, primaryDoctorId: args.ctx.userId }
       : {
           tenantId: args.ctx.tenantId,
           primaryDoctorId: args.ctx.userId,
-          OR: [
-            { searchName: { contains: normalizeForSearch(query) } },
-            { mobile: { contains: normalizeMobile(query) } },
-          ],
+          AND: tokens.map((token) => ({
+            OR: [
+              { searchName: { contains: token } },
+              { mobile: { contains: token } },
+            ],
+          })),
         }
 
   const rows = await args.tx.customer.findMany({
@@ -201,17 +229,11 @@ export async function customerProfile(args: {
     where: customerScope(args.ctx, args.customerId),
     select: {
       ...LIST_SELECT,
-      birthDate: true,
-      acquisitionSource: true,
       residenceArea: true,
       medicalHistory: true,
       sensitivities: true,
-      doctorNote: true,
       firstVisitAt: true,
-      chargedTotal: true,
-      paidTotal: true,
       consentSms: true,
-      consentWhatsApp: true,
       consentPhone: true,
       consentBeforeAfter: true,
       primaryClinicId: true,
@@ -261,18 +283,18 @@ export async function customerProfile(args: {
     consentPhone: row.consentPhone,
     consentBeforeAfter: row.consentBeforeAfter,
     primaryClinicId: row.primaryClinicId,
-    appointments: appointments.map((row) => ({
-      id: row.id,
-      scheduledAt: row.scheduledAt,
-      localDate: row.localDate,
-      localTime: row.localTime,
-      status: row.status,
-      priceAtBooking: row.priceAtBooking,
-      serviceName: row.service?.name ?? null,
+    appointments: appointments.map((appointment) => ({
+      id: appointment.id,
+      scheduledAt: appointment.scheduledAt,
+      localDate: appointment.localDate,
+      localTime: appointment.localTime,
+      status: appointment.status,
+      priceAtBooking: appointment.priceAtBooking,
+      serviceName: appointment.service?.name ?? null,
       doctorName:
-        row.doctor.lastName === null
-          ? row.doctor.firstName
-          : `${row.doctor.firstName} ${row.doctor.lastName}`,
+        appointment.doctor.lastName === null
+          ? appointment.doctor.firstName
+          : `${appointment.doctor.firstName} ${appointment.doctor.lastName}`,
     })),
     payments,
   }
@@ -280,17 +302,11 @@ export async function customerProfile(args: {
 
 /** The profile's own shape: the row, plus the history the profile renders. */
 export interface CustomerProfile extends CustomerListRow {
-  readonly birthDate: string | null
-  readonly acquisitionSource: string | null
   readonly residenceArea: string | null
   readonly medicalHistory: string | null
   readonly sensitivities: string | null
-  readonly doctorNote: string | null
   readonly firstVisitAt: Date | null
-  readonly chargedTotal: bigint
-  readonly paidTotal: bigint
   readonly consentSms: boolean
-  readonly consentWhatsApp: boolean
   readonly consentPhone: boolean
   readonly consentBeforeAfter: boolean
   readonly primaryClinicId: string | null
@@ -377,7 +393,31 @@ function asListRow(row: ListSelectRow): CustomerListRow {
     chargedTotal: row.chargedTotal,
     paidTotal: row.paidTotal,
     consentWhatsApp: row.consentWhatsApp,
+    doctorNote: row.doctorNote,
   }
+}
+
+/**
+ * The typed query as the tokens each must match.
+ *
+ * The search reads one token per word and requires all of them, so a name typed in
+ * either order finds the same row and a mobile typed in part of its digits finds it
+ * too. A token that is only digits is folded with `normalizeMobile` — which folds
+ * the Persian and Arabic digits to Latin and strips the country prefix — and every
+ * other token is folded with `normalizeForSearch`, which is the same fold the
+ * stored column went through. An all-whitespace query is no tokens at all.
+ */
+function tokenizeQuery(query: string | undefined): readonly string[] {
+  if (query === undefined) return []
+  return query
+    .trim()
+    .split(/\s+/)
+    .map((token) =>
+      /^[\d\u06F0-\u06F9\u0660-\u0669]+$/.test(token)
+        ? normalizeMobile(token)
+        : normalizeForSearch(token),
+    )
+    .filter((token) => token !== '')
 }
 
 /** The shape Prisma hands back from `LIST_SELECT`, named once so the mapper reads. */
@@ -397,4 +437,5 @@ type ListSelectRow = {
   readonly chargedTotal: bigint
   readonly paidTotal: bigint
   readonly consentWhatsApp: boolean
+  readonly doctorNote: string | null
 }

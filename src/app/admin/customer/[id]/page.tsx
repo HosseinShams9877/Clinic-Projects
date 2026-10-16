@@ -140,14 +140,14 @@ export default async function CustomerProfilePage({
       />
 
       {tab === 'injections' ? (
-       <InjectionTab
-  rows={injections}
-  counts={injectionCounts}
-  panel="admin"
-  customerId={profile.id}
-  view={injectionView}
-  basePath={`${basePath}?tab=injections`}
-/>
+        <InjectionTab
+          rows={injections}
+          counts={injectionCounts}
+          panel="admin"
+          customerId={profile.id}
+          view={injectionView}
+          basePath={`${basePath}?tab=injections`}
+        />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
@@ -202,6 +202,10 @@ export default async function CustomerProfilePage({
                   totalPages={pays.totalPages}
                   hrefFor={(next) => historyHref({ appts: apptsPage, pays: next })}
                 />
+              </Card>
+
+              <Card title={CUSTOMER_PROFILE_PAGE.note.history}>
+                <SavedNote note={profile.doctorNote} />
               </Card>
             </div>
 
@@ -355,6 +359,32 @@ function KpiTile({
   )
 }
 
+/* ── The saved note ──────────────────────────────────────────────────────────── */
+
+/**
+ * The note the profile currently holds, inside its own card.
+ *
+ * The form writes the note, and this card is what proves the write landed: the card
+ * and the form are the two halves of one fact, and a page with only the form leaves
+ * the manager guessing whether the save took. An empty note renders the card's own
+ * empty sentence rather than a box with a dash in it.
+ */
+function SavedNote({ note }: { readonly note: string | null }) {
+  const trimmed = note?.trim() ?? ''
+
+  if (trimmed === '') {
+    return (
+      <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">
+        {CUSTOMER_PROFILE_PAGE.note.historyEmpty}
+      </p>
+    )
+  }
+
+  return (
+    <p className="whitespace-pre-wrap text-sm leading-6 text-ink">{trimmed}</p>
+  )
+}
+
 /* ── The courses ─────────────────────────────────────────────────────────────── */
 
 /** The customer's courses, as the profile's left column renders them. */
@@ -484,7 +514,7 @@ function AppointmentHistory({
               <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.service}</Th>
               <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.doctor}</Th>
               <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.status}</Th>
-              <Th className="text-end">{ADMIN_CUSTOMER_PROFILE.visitColumns.amount}</Th>
+              <Th align="end">{ADMIN_CUSTOMER_PROFILE.visitColumns.amount}</Th>
             </tr>
           </thead>
           <tbody>
@@ -538,7 +568,7 @@ function PaymentHistory({
           <thead>
             <tr className="border-b border-line-2 text-ink-3">
               <Th>{CUSTOMER_PROFILE_PAGE.history.paidAt}</Th>
-              <Th className="text-end">{CUSTOMER_PROFILE_PAGE.history.amount}</Th>
+              <Th>{CUSTOMER_PROFILE_PAGE.history.amount}</Th>
               <Th>{CUSTOMER_PROFILE_PAGE.history.method}</Th>
               <Th>{CUSTOMER_PROFILE_PAGE.history.kind}</Th>
             </tr>
@@ -549,7 +579,7 @@ function PaymentHistory({
                 <td className="px-3 py-2 text-ink-2 tabular-nums">
                   {row.paidAt === null ? '—' : formatDate(dateToLocalDate(row.paidAt), 'short')}
                 </td>
-                <td className="px-3 py-2 text-end font-semibold text-ink tabular-nums">
+                <td className="px-3 py-2 font-semibold text-ink tabular-nums">
                   {formatMoney(row.amount)}
                 </td>
                 <td className="px-3 py-2 text-ink-2">{methodLabel(row.method)}</td>
@@ -757,18 +787,21 @@ function EmptyState({ sentence }: { readonly sentence: string }) {
   )
 }
 
-/** One column header, with the alignment the design system's tables keep. */
+/** One column header, aligned the same way as the cells beneath it. */
 function Th({
   children,
-  className,
+  align = 'start',
 }: {
   readonly children: React.ReactNode
-  readonly className?: string
+  readonly align?: 'start' | 'center' | 'end'
 }) {
   return (
     <th
       scope="col"
-      className={cx('whitespace-nowrap px-3 py-2 text-start text-xs font-semibold', className)}
+      className={cx(
+        'whitespace-nowrap px-3 py-2 text-xs font-semibold',
+        align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : 'text-start',
+      )}
     >
       {children}
     </th>

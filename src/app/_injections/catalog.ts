@@ -40,6 +40,7 @@ export const INJECTION_TAB = {
     batch: 'شماره بچ',
     session: 'جلسه',
     note: 'یادداشت',
+    actions: 'عملیات',
   },
   /** The add dialog's own chrome. */
   dialog: {
@@ -74,6 +75,10 @@ export const INJECTION_TAB = {
   },
   /** The blue info bar under the table. */
   hint: 'این داده پزشکی پرونده است — در دسترس مدیر، پزشک معالج و منشی.',
+  /** The delete button's own label, confirm and error copy. */
+  deleteLabel: 'حذف',
+  deleteConfirm: 'این تزریق حذف شود؟',
+  deleteFailed: 'حذف انجام نشد. دوباره تلاش کنید.',
 } as const
 
 export const INJECTION_MAP = {

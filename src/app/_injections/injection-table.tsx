@@ -37,6 +37,7 @@ import {
   type InjectionRow,
 } from '@/modules/injections'
 
+import { DeleteInjectionButton } from './delete-injection-button'
 import { INJECTION_TAB } from './catalog'
 
 export function InjectionTable({ rows }: { readonly rows: readonly InjectionRow[] }) {
@@ -64,6 +65,7 @@ export function InjectionTable({ rows }: { readonly rows: readonly InjectionRow[
             <Th>{INJECTION_TAB.columns.batch}</Th>
             <Th>{INJECTION_TAB.columns.session}</Th>
             <Th>{INJECTION_TAB.columns.note}</Th>
+            <Th>{INJECTION_TAB.columns.actions}</Th>
           </tr>
         </thead>
         <tbody>
@@ -110,6 +112,9 @@ export function InjectionTable({ rows }: { readonly rows: readonly InjectionRow[
                 <span className="text-ink-2">
                   {row.note === null || row.note === '' ? <Dash /> : row.note}
                 </span>
+              </Td>
+              <Td>
+                <DeleteInjectionButton id={row.id} />
               </Td>
             </tr>
           ))}

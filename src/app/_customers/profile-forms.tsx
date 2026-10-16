@@ -14,6 +14,17 @@
  * that raised it, because the form is what the manager was acting on — the same
  * answer the day grid's row actions give, and for the same reason.
  *
+ * ## Why the doctor note refreshes the route
+ *
+ * `revalidatePath` alone re-renders the route's data, but a `TextArea` with a
+ * `defaultValue` reads that value once, when it mounts, and keeps the typed text
+ * afterwards. A note saved, then re-rendered with the same `defaultValue`, would
+ * look like it had not saved at all — the textarea would still hold the pre-save
+ * text and the form would still say «ذخیره». The form now calls `router.refresh()`
+ * on success, and the `TextArea`'s `key` is the note itself: when the server's note
+ * comes back different, the key changes and React mounts a fresh `TextArea` whose
+ * `defaultValue` is the saved text.
+ *
  * ## Why the mobile is not on the edit form
  *
  * The mobile is the person's identity — the key `customer_mobile_key` exists on it and
@@ -25,6 +36,7 @@
 'use client'
 
 import { useId, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import type { FormEvent, MouseEvent, ReactNode } from 'react'
 
 import { Button } from '@/core/components/button'
@@ -251,6 +263,10 @@ function ConsentCheckbox({
  *
  * The note is the one field the form clears as well as fills, because a note that was
  * true and stopped being true is a note the file should not keep telling.
+ *
+ * The form refreshes the route after a successful save, and keys the `TextArea` on
+ * the note, so the field the manager sees after the save is the field the database
+ * holds — the reason is in the file header.
  */
 export function DoctorNoteForm({
   customerId,
@@ -259,6 +275,7 @@ export function DoctorNoteForm({
   readonly customerId: string
   readonly note: string | null
 }) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
 
@@ -271,7 +288,12 @@ export function DoctorNoteForm({
         customerId,
         next === '' ? null : next,
       )
-      setAnswer(outcome.ok ? { ok: true, message: CUSTOMER_PROFILE_PAGE.note.saved } : outcome)
+      if (outcome.ok) {
+        setAnswer({ ok: true, message: CUSTOMER_PROFILE_PAGE.note.saved })
+        router.refresh()
+        return
+      }
+      setAnswer(outcome)
     })
   }
 
@@ -279,6 +301,7 @@ export function DoctorNoteForm({
     <form className="flex flex-col gap-3" onSubmit={submit}>
       <Field label={CUSTOMER_PROFILE_PAGE.fields.doctorNote}>
         <TextArea
+          key={note ?? ''}
           name="note"
           defaultValue={note ?? ''}
           placeholder={CUSTOMER_PROFILE_PAGE.note.placeholder}

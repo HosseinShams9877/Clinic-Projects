@@ -346,10 +346,12 @@ export const CUSTOMER_PROFILE_PAGE = {
     save: 'ذخیره تنظیمات ارسال',
     saved: 'تنظیمات ارسال ذخیره شد.',
   },
-  note: {
+   note: {
     save: 'ذخیره یادداشت',
     saved: 'یادداشت ذخیره شد.',
     placeholder: 'یادداشت بالینی این مشتری را اینجا بنویسید.',
+    history: 'یادداشت‌های ثبت‌شده',
+    historyEmpty: 'هنوز یادداشتی ثبت نشده است.',
   },
   edit: {
     title: 'ویرایش پرونده',
@@ -373,6 +375,7 @@ export const CUSTOMER_PROFILE_PAGE = {
     appointments: 'این مشتری هنوز نوبتی نداشته است.',
     payments: 'برای این مشتری پرداختی ثبت نشده است.',
   },
+  
 } as const satisfies Record<string, unknown>
 
 /**

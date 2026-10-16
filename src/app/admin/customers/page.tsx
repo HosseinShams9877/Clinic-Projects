@@ -22,6 +22,17 @@
  * the page's restatement of it — the one place a group's name is written is the one
  * place a manager recognises it from the campaign builder.
  *
+ * ## Why the debt chip re-checks the balance column
+ *
+ * The «بدهکاران» evaluator answers the campaign's question — which appointments
+ * still carry an open balance — and the file's مانده column answers the reader's
+ * question — what the customer as a whole still owes. The two are computed from the
+ * same ledger but on different rows, and a customer whose appointment-level balance
+ * had been settled since that appointment, while the customer's own
+ * `chargedTotal − paidTotal` reads zero, was a row the group held and the column
+ * showed an em-dash against. The page now applies the column's own subtraction
+ * again, so a row the group holds is a row the column shows a number against.
+ *
  * ## What this page does not render, and why
  *
  * The demo's checkbox column and the «N مشتری انتخاب شده» bar it opens. A group is
@@ -131,8 +142,7 @@ export default async function AdminCustomersPage({
     return { list, month, groupIds } as const
   })
 
-  const rows =
-    data.groupIds === null ? data.list.rows : data.list.rows.filter((row) => data.groupIds!.includes(row.id))
+  const rows = applyGroupFilter(data.list.rows, data.groupIds, group)
   const page = pageFromParam(params.page)
   const { slice, totalPages } = paginate(rows, page)
   const hrefFor = (next: number): string => {
@@ -182,7 +192,7 @@ export default async function AdminCustomersPage({
                   <Th>{ADMIN_CUSTOMERS.columns.source}</Th>
                   <Th>{ADMIN_CUSTOMERS.columns.lastVisit}</Th>
                   <Th align="center">{ADMIN_CUSTOMERS.columns.visits}</Th>
-<Th align="center">{ADMIN_CUSTOMERS.columns.balance}</Th>
+                  <Th align="center">{ADMIN_CUSTOMERS.columns.balance}</Th>
                   <Th>{ADMIN_CUSTOMERS.columns.message}</Th>
                   <Th>{ADMIN_CUSTOMERS.columns.profile}</Th>
                 </tr>
@@ -209,6 +219,31 @@ export default async function AdminCustomersPage({
       </section>
     </div>
   )
+}
+
+/* ── The row filter ──────────────────────────────────────────────────────────── */
+
+/**
+ * The rows a group and the balance column agree on.
+ *
+ * When no group is active, every row is the file's. When a group is active, the
+ * group's own ids decide membership — with one correction: the «بدهکاران» group
+ * answers the campaign's question on the appointment, and this file's column
+ * answers the reader's question on the customer, so a row the group holds but the
+ * column reads zero against is dropped. The two are the same subtraction on two
+ * rows, and the file must not show a debt where the column shows an em-dash.
+ */
+function applyGroupFilter(
+  rows: readonly CustomerListRow[],
+  groupIds: readonly string[] | null,
+  group: AudienceGroupKey | null,
+): readonly CustomerListRow[] {
+  if (groupIds === null) return rows
+  return rows.filter((row) => {
+    if (!groupIds.includes(row.id)) return false
+    if (group !== AudienceGroupKey.Debtors) return true
+    return row.chargedTotal - row.paidTotal > 0n
+  })
 }
 
 /* ── The chip bar ─────────────────────────────────────────────────────────────── */
