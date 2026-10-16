@@ -34,6 +34,15 @@
  * resolves to no membership at all, so it takes the staff login rather than a guess
  * about which panel a customer wants.
  *
+ * ## Why the two shared surfaces use `resolveAnyStaffPanel`
+ *
+ * The campaigns page is reached from both `/admin` and `/reception`, and its Server
+ * Actions are one set of files rather than two — a secretary holding
+ * `manage_campaigns` calls the same `previewAudienceCountAction` a manager does.
+ * A hard-coded panel in that action would refuse the secretary the manager's own
+ * door, so the action asks the resolver for whichever panel the session's role
+ * opens and lets `resolveStaffPanel` keep enforcing the one door a shell names.
+ *
  * ## Why this is not a `middleware.ts`
  *
  * It is the same work at the same place in the lifecycle, done by a function instead
@@ -159,6 +168,43 @@ export async function resolveStaffPanel(panel: Panel): Promise<PanelSession> {
       'no-membership',
     )
   }
+
+  return Object.freeze({
+    permissions: permissionContext(resolved),
+    tenantId: resolved.tenantId,
+    role: resolved.role,
+  })
+}
+
+/**
+ * The same resolution, accepting any of the three staff panels.
+ *
+ * A surface both the manager and the secretary reach — the campaigns page is one —
+ * cannot name a single panel: a manager's token resolves under `admin`, a
+ * secretary's under `reception`, and a hard-coded panel in the shared action would
+ * refuse one of the two. The resolution answers whichever panel the session's role
+ * opens, which is the panel the caller's own shell already resolved under, so a
+ * person who can open the page can also act on it.
+ *
+ * The panel check `resolveStaffPanel` performs is what keeps a shell honest about
+ * the door it names; this function is for the shared surfaces whose action files
+ * are one set and whose callers are two roles. A caller that names a panel uses
+ * `resolveStaffPanel` and keeps the check.
+ *
+ * @throws `TenantResolutionError` — the session is not usable for any staff panel.
+ */
+export async function resolveAnyStaffPanel(): Promise<PanelSession> {
+  const token = await sessionToken()
+  if (token === null) {
+    throw new TenantResolutionError('The request carries no session cookie.', 'session-not-found')
+  }
+
+  const resolved = await getTenantContext({
+    client: unscopedPrisma(),
+    token,
+    now: realClock(),
+    multiTenant: getMultiTenant(),
+  })
 
   return Object.freeze({
     permissions: permissionContext(resolved),

@@ -18,6 +18,15 @@
  * sends every step at once. Validation is the module's own and arrives as a sentence
  * under the step the field belongs to.
  *
+ * ## Why the date field is the picker
+ *
+ * The Jalali date the campaign runs on is a `LocalDate` string, which is the same
+ * shape the `JalaliDatePicker` emits and the same shape the module stores — so the
+ * field binds the picker's own `onChange` to a controlled `localDate` state and the
+ * picker's popover is the calendar the manager reads. A text input that accepted
+ * `۱۴۰۵-۰۷-۰۱` had the manager typing digits into a format the picker itself writes,
+ * which is a control whose value a person had to know by heart.
+ *
  * ## Why the count is fetched and not computed
  *
  * `previewCampaignAudience` is the same evaluation the dispatch runs, which is what makes
@@ -58,6 +67,7 @@ import { Button } from '@/core/components/button'
 import { Combobox } from '@/core/components/combobox'
 import { Field, TextArea, TextInput } from '@/core/components/form'
 import { Icon } from '@/core/components/icons'
+import { JalaliDatePicker } from '@/core/components/date-picker'
 import { CAMPAIGNS_PAGE } from '@/app/catalog'
 import { cx } from '@/core/lib'
 import { DEFAULT_CLINIC_UTC_OFFSET_MINUTES } from '@/core/constants'
@@ -149,6 +159,12 @@ export function CampaignBuilder({
   const [scheduleKind, setScheduleKind] = useState<string>(presetProposal?.scheduleKind ?? 'ONE_TIME')
   const [type, setType] = useState<string>(presetType ?? presetProposal?.type ?? 'OCCASION')
   const [channel, setChannel] = useState<string>(presetProposal?.channel ?? 'SMS')
+  const [localDate, setLocalDate] = useState<string>(
+    presetProposal?.scheduledAt == null
+      ? ''
+      : fromUtcInstant(new Date(presetProposal.scheduledAt), DEFAULT_CLINIC_UTC_OFFSET_MINUTES)
+          .localDate,
+  )
   const titleId = useId()
 
   // The count follows the group, because the count is the group's and not the form's.
@@ -164,7 +180,7 @@ export function CampaignBuilder({
       audienceGroupId: asFormString(form, 'audienceGroupId'),
       messageText: asFormString(form, 'messageText'),
       scheduleKind: asFormString(form, 'scheduleKind'),
-      localDate: asFormString(form, 'localDate'),
+      localDate,
       localTime: asFormString(form, 'localTime'),
       isRecurring: checked(form, 'isRecurring'),
       dailyCap: asFormString(form, 'dailyCap'),
@@ -316,12 +332,10 @@ export function CampaignBuilder({
                   required
                   className="flex-1"
                 >
-                  <TextInput
+                  <JalaliDatePicker
                     name="localDate"
-                    dir="ltr"
-                    inputMode="numeric"
-                    defaultValue={dateFromProposal(proposal)}
-                    placeholder={CAMPAIGNS_PAGE.builder.hints.datePlaceholder}
+                    value={localDate}
+                    onChange={setLocalDate}
                   />
                 </Field>
                 {scheduleKind === 'ONE_TIME' ? (
@@ -518,12 +532,6 @@ function nameFromProposal(
 ): string {
   if (proposal === null || proposal.type === null) return ''
   return typeOptions.find((option) => option.value === proposal.type)?.label ?? ''
-}
-
-/** The Jalali date a proposal's first run lands on, as the date field holds it. */
-function dateFromProposal(proposal: AssistantProposal | null): string {
-  if (proposal === null || proposal.scheduledAt === null) return ''
-  return fromUtcInstant(new Date(proposal.scheduledAt), DEFAULT_CLINIC_UTC_OFFSET_MINUTES).localDate
 }
 
 /**

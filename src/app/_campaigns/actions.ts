@@ -1,5 +1,6 @@
 /**
- * The campaigns surface's eight actions, as the manager panel renders them.
+ * The campaigns surface's eight actions, as the manager and the secretary panels
+ * render them.
  *
  * The page is a builder, an assistant and a results table, and the seven are what move a
  * campaign between them: the assistant reads a brief, the preview counts an audience, the
@@ -23,6 +24,17 @@
  * different rows, and the create path has no argument for an approver because the module
  * offers none. The gate's server-side assertion is `activateCampaign`'s own
  * `assertApprovalFacts`, and no action here can reach around it.
+ *
+ * ## Why the shared actions resolve *any* staff panel
+ *
+ * The campaigns surface is reached from two panels — the manager's `/admin/campaigns`
+ * and the secretary's `/reception/campaigns` — and both render the same
+ * `CampaignWorkspace` and the same `CampaignBuilder`. The workspace's live count, the
+ * assistant's interpretation, and the builder's create are the same Server Actions for
+ * both, so a hard-coded panel would refuse one of the two. `resolveAnyStaffPanel`
+ * answers whichever panel the caller's role opens, and the manager's own page keeps
+ * calling `requireStaffPanel('admin')` in its shell, so a secretary who cannot open
+ * the manager's page also cannot act as one.
  */
 
 'use server'
@@ -38,8 +50,7 @@ import { realClock } from '@/core/lib/clock'
 import { asLocalDate, asLocalTime, toUtcInstant } from '@/core/localization'
 
 import { CAMPAIGNS_PAGE } from '@/app/catalog'
-import type { Panel } from '@/app/_shell/navigation'
-import { resolveStaffPanel } from '@/app/_shell/session'
+import { resolveAnyStaffPanel } from '@/app/_shell/session'
 import { moduleFailureMessage } from '@/app/_shared/module-failure'
 import {
   type CampaignInput,
@@ -61,9 +72,6 @@ import {
   listAudienceGroups,
   loadAudienceGroup,
 } from '@/modules/audience-groups'
-
-/** The manager panel the seven actions run under. */
-const CAMPAIGNS_PANEL: Panel = 'admin'
 
 /** The answer every form reads: a done, or a sentence about why it was not done. */
 export type ActionResult = { readonly ok: true } | FormFailure
@@ -111,7 +119,7 @@ export interface CampaignFormInput {
 export async function interpretBriefAction(
   text: string,
 ): Promise<{ readonly ok: true; readonly proposal: AssistantProposal } | FormFailure> {
-  const session = await resolveStaffPanel(CAMPAIGNS_PANEL)
+  const session = await resolveAnyStaffPanel()
   const result = await interpretCampaignBrief({
     brief: { text, channel: Channel.Sms },
     now: realClock(),
@@ -154,7 +162,7 @@ export async function interpretBriefAction(
 export async function previewAudienceCountAction(
   audienceGroupId: string,
 ): Promise<{ readonly ok: true; readonly count: number } | FormFailure> {
-  const session = await resolveStaffPanel(CAMPAIGNS_PANEL)
+  const session = await resolveAnyStaffPanel()
   try {
     const count = await runInTenantScope(session.permissions, prisma(), (tx) =>
       previewCampaignAudience({
@@ -194,7 +202,7 @@ const SAMPLE_SIZE = 5
 export async function previewAudienceSampleAction(
   audienceGroupId: string,
 ): Promise<{ readonly ok: true; readonly sample: AudienceSample } | FormFailure> {
-  const session = await resolveStaffPanel(CAMPAIGNS_PANEL)
+  const session = await resolveAnyStaffPanel()
   try {
     const sample = await runInTenantScope(session.permissions, prisma(), async (tx) => {
       const group = await loadAudienceGroup(tx, session.permissions.tenantId, audienceGroupId)
@@ -363,7 +371,7 @@ interface ScopeArgs {
 }
 
 /**
- * One action's write, inside the tenant scope the shell resolved.
+ * One action's write, inside the tenant scope the caller's own role resolved.
  *
  * The catch is the one place the file speaks Persian: a module's `AppError` carries an
  * English message and a catalog key, and the form reads the key's own sentence.
@@ -371,7 +379,7 @@ interface ScopeArgs {
 async function inTenantScope<T>(
   block: (args: ScopeArgs) => Promise<T>,
 ): Promise<T | { readonly ok: false; readonly message: string }> {
-  const session = await resolveStaffPanel(CAMPAIGNS_PANEL)
+  const session = await resolveAnyStaffPanel()
   return runInTenantScope(session.permissions, prisma(), (tx) =>
     block({ tx, ctx: session.permissions }),
   ).catch((error: unknown) => ({ ok: false, message: moduleFailureMessage(error) }) as const)
@@ -380,9 +388,16 @@ async function inTenantScope<T>(
 /** The sentinel a block returns when it has nothing but a success to report. */
 const SUCCESS = { succeeded: true } as const
 
-/** The page the builder and the results table both render on. */
+/**
+ * The two pages the builder and the results table render on.
+ *
+ * The campaigns surface is reached from both panels, and a create or a state change
+ * lands on whichever page the caller is looking at — so both are revalidated and the
+ * one the caller is not looking at simply has a fresh cache for the next visit.
+ */
 function revalidateCampaigns(): void {
   revalidatePath('/admin/campaigns')
+  revalidatePath('/reception/campaigns')
 }
 
 /* ── The builder's own parse ───────────────────────────────────────────────── */

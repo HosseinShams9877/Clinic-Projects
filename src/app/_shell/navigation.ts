@@ -186,7 +186,7 @@ const PANEL_PAGES: Readonly<Record<Panel, readonly NavItem[]>> = {
      The desk is the panel's own home and the one page that needs no permission of its
      own: it composes the queues the permissions below gate, and a section a role
      cannot act on is a section the page does not render rather than one it refuses. */
-  reception: [
+    reception: [
     {
       label: NAV_LABELS.desk,
       href: '/reception/desk',
@@ -203,6 +203,12 @@ const PANEL_PAGES: Readonly<Record<Panel, readonly NavItem[]>> = {
       href: '/reception/cycles',
       icon: 'treatment',
       permission: Permission.ActOnCycles,
+    },
+    {
+      label: NAV_LABELS.campaigns,
+      href: '/reception/campaigns',
+      icon: 'notification',
+      permission: Permission.ManageCampaigns,
     },
     {
       label: NAV_LABELS.debts,

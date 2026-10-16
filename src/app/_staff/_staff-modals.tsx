@@ -382,9 +382,10 @@ export function PermissionModal({
                     type="checkbox"
                     checked={held.has(cell.permission)}
                     onChange={(event) => {
+                      const isChecked = event.currentTarget.checked
                       setHeld((prev) => {
                         const nextSet = new Set(prev)
-                        if (event.currentTarget.checked) nextSet.add(cell.permission)
+                        if (isChecked) nextSet.add(cell.permission)
                         else nextSet.delete(cell.permission)
                         return nextSet
                       })
