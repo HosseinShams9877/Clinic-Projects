@@ -1,79 +1,6 @@
-'use client'
+// src/app/_appointments/day-grid.tsx
 
-/**
- * The day grid — one column per doctor, one row per time.
- *
- * ## The per-range slot granularity
- *
- * The axis is the union of every range's own slot *starts*, at the range's own
- * `slotMinutes`. A doctor with a 10–12 range at 120 minutes contributes 10:00; a
- * doctor with a 14–17 range at 45 minutes contributes 14:00, 14:45, 15:30, 16:15.
- * The rows are the union, and a slot's cell spans the rows between its start and the
- * next start.
- *
- * ## Why the step is per range and not per doctor
- *
- * A doctor who works 10–12 at 120 minutes and 14–17 at 45 minutes has two ranges
- * with two different steps, and the two must not interfere. A single step on the
- * doctor would have to choose between them, and whichever it chose would break the
- * other range. The step is therefore a property of the *range* — the field the
- * schema already stores — and the grid reads it there.
- *
- * ## Why the table is `min-w-full w-max table-fixed`
- *
- * Three utilities, three jobs, and each one is load-bearing:
- *
- * - **`table-fixed`** makes every declared width the column's width, so a doctor
- *   whose name is long and a doctor whose name is short render the same column —
- *   the grid's columns are a set and not a reflection of their content.
- * - **`w-max`** lets the table grow past the container when the columns' widths
- *   add up to more than the viewport, so the container's `overflow-auto` scrolls
- *   horizontally instead of the columns shrinking to fit.
- * - **`min-w-full`** keeps the table at least as wide as its container when the
- *   columns' widths add up to *less* — with one doctor, an unqualified `w-max`
- *   would leave a strip of empty container beside a narrow table.
- *
- * ## The width lives on the header, not on every cell
- *
- * `table-fixed` reads each column's width from the first row's cells — the header —
- * and gives every body cell that width. Declaring a width on every `<td>` would be
- * redundant at best and, because a `min-w` on a `<td>` competes with the header's
- * own width in the engine's sizing pass, actively wrong: one doctor's column grew
- * because one `<td>` under her name carried content the fixed layout could not
- * ignore. The header carries the width, and the body inherits it.
- *
- * ## Why every cell is the same height
- *
- * The desk reads the grid row by row, and a cell that is taller because its doctor
- * happens to have a booking on that minute and shorter because the next doctor does
- * not is a cell whose height is a fact about its content. `min-h-[96px]` on the
- * three cell variants — a booking, a free slot, an off-schedule gap — makes the
- * height a fact about the grid: every cell is at least 96px whatever is in it, and
- * the columns line up down the page. A cell whose content is taller than the floor
- * still grows — the booking card's four action buttons are the one thing that does
- * — and its neighbours in the same row grow with it, because a table row is one
- * height for every cell in it.
- *
- * ## Why the table is `border-separate`
- *
- * `position: sticky` on a `<th>` does not work inside a `<table>` with
- * `border-collapse: collapse` — the browser shares the collapsed border between
- * adjacent cells, and a cell that is sticking cannot own the half it needs. The
- * table therefore uses `border-separate` with `border-spacing-0`, so each cell's
- * border is its own and the sticky cells in the hour column can stick in both
- * directions. The `border-spacing-0` is what keeps the layout identical to the
- * collapsed version — the only visual difference is that each cell draws its own
- * border instead of sharing one with its neighbour.
- *
- * ## The time column is sticky in both directions
- *
- * The hour column is the grid's scaffold: it holds no booking surface, and it is
- * the only thing on screen that tells a reader *when* a slot is. It is `sticky` on
- * the inline-start edge, so a horizontal pan does not carry it off-screen, and
- * `sticky top-0` inside the header row, so a vertical scroll does not either. The
- * `bg-surface-sunken` is what makes the stickiness legible — without an opaque
- * background the sticky cell would let the cells behind it show through.
- */
+'use client'
 
 import Link from 'next/link'
 
@@ -115,6 +42,8 @@ export interface DayGridProps {
   readonly servicesByDoctorId?: Readonly<Record<string, readonly string[]>>
   readonly workingDaysByDoctorId?: Readonly<Record<string, readonly number[]>>
   readonly slotMinutesByDoctorId?: Readonly<Record<string, number | null>>
+  /** اگر true باشد، جدول تمام ارتفاع کانتینر را پر می‌کند (برای حالت فول‌اسکرین) */
+  readonly fullHeight?: boolean
 }
 
 /** The default slot length, in minutes. */
@@ -154,7 +83,10 @@ export function DayGrid(props: DayGridProps) {
     <>
       <div
         ref={containerRef}
-        className="hidden max-h-[70vh] overflow-auto rounded-lg border border-line bg-surface shadow-sh-1 panel:block"
+        className={cx(
+          'hidden overflow-auto rounded-lg border border-line bg-surface shadow-sh-1 panel:block',
+          props.fullHeight ? 'h-full' : 'max-h-[70vh]',
+        )}
       >
         <table className="min-w-full w-max table-fixed border-separate border-spacing-0 text-sm">
           <thead>

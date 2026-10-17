@@ -1,10 +1,3 @@
-// src/app/admin/appointments/page.tsx
-
-/**
- * The manager's appointments oversight page — `02-architecture.md` §9's
- * `admin/appointments.html`.
- */
-
 import type { Metadata } from 'next'
 
 import { prisma, runInTenantScope } from '@/core/db'
@@ -21,8 +14,9 @@ import { BookingDialog } from '@/app/_appointments/booking-dialog'
 import { DayGrid, DayNav } from '@/app/_appointments/day-grid'
 import { DayPicker } from '@/app/_appointments/day-picker'
 import { FilterBar } from '@/app/_appointments/filter-bar'
-import { loadDayGrid } from '@/app/_appointments/page-data' // <-- DayRows حذف شد
+import { loadDayGrid } from '@/app/_appointments/page-data'
 import { requireStaffPanel } from '@/app/_shell/session'
+import { FullscreenWrapper } from '@/app/_appointments/fullscreen-wrapper'
 
 export const metadata: Metadata = { title: APPOINTMENTS_PAGE.admin.title }
 
@@ -66,7 +60,8 @@ export default async function AdminAppointmentsPage({
     : data.windows
 
   return (
-    <div className="flex flex-col gap-4">
+    // h-[calc(100vh-120px)] باعث می‌شود صفحه دقیقاً به اندازه ارتفاع مرورگر باز شود
+    <div className="flex h-[calc(100vh-120px)] flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold text-ink">{APPOINTMENTS_PAGE.admin.title}</h1>
@@ -87,8 +82,8 @@ export default async function AdminAppointmentsPage({
         />
       </div>
 
-      <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-1.5">
+      <FullscreenWrapper>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-1.5 pl-12">
           <div className="flex flex-wrap items-center gap-2">
             <DayNav localDate={localDate} basePath={BASE_PATH} />
             <DayPicker localDate={localDate} basePath={BASE_PATH} />
@@ -100,8 +95,9 @@ export default async function AdminAppointmentsPage({
               day={typeof params.day === 'string' ? params.day : null}
             />
           </div>
-        </header>
-        <div className="overflow-x-auto">
+        </div>
+        
+        <div className="flex flex-1 flex-col overflow-hidden">
           <DayGrid
             localDate={localDate}
             doctors={filteredDoctors}
@@ -113,9 +109,10 @@ export default async function AdminAppointmentsPage({
             workingDaysByDoctorId={data.workingDaysByDoctorId}
             panel="admin"
             writable={true}
+            fullHeight={true} // بسیار مهم
           />
         </div>
-      </section>
+      </FullscreenWrapper>
     </div>
   )
 }

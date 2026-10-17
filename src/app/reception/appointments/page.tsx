@@ -45,6 +45,7 @@ import { RowActions } from '@/app/_appointments/row-actions'
 import { ViewTabs } from '@/app/_appointments/view-tabs'
 import { WeekGrid } from '@/app/_appointments/week-grid'
 import { requireStaffPanel } from '@/app/_shell/session'
+import { FullscreenWrapper } from '@/app/_appointments/fullscreen-wrapper'
 
 export const metadata: Metadata = { title: APPOINTMENTS_PAGE.reception.title }
 
@@ -109,7 +110,7 @@ export default async function ReceptionAppointmentsPage({
     : data.day.windows
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="flex h-[calc(100vh-120px)] flex-col gap-3">
       {/* هدر صفحه (عنوان و دکمه‌ها) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
@@ -155,10 +156,10 @@ export default async function ReceptionAppointmentsPage({
         </div>
       </div>
 
-      {/* کادر اصلی (جدول) */}
-      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
+      {/* کادر اصلی با قابلیت فول‌اسکرین */}
+      <FullscreenWrapper>
         {/* هدر جدول: شامل تب‌ها، دکمه‌های تاریخ و فیلترها */}
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-1.5 pl-12">
           <div className="flex flex-wrap items-center gap-3">
             <ViewTabs
               view={view}
@@ -166,9 +167,7 @@ export default async function ReceptionAppointmentsPage({
               basePath={BASE_PATH}
               search={rest}
             />
-            
-            <div className="h-4 w-px bg-line-2" /> {/* جداکننده ظریف */}
-            
+            <div className="h-4 w-px bg-line-2" />
             <DayNav localDate={localDate} basePath={BASE_PATH} />
             <DayPicker localDate={localDate} basePath={BASE_PATH} />
             <FilterBar
@@ -179,10 +178,10 @@ export default async function ReceptionAppointmentsPage({
               day={typeof params.day === 'string' ? params.day : null}
             />
           </div>
-        </header>
-        
+        </div>
+
         {/* بدنه جدول */}
-        <div className="flex-1 overflow-x-auto">
+        <div className="flex flex-1 flex-col overflow-hidden">
           {view === 'cartable' ? (
             <Cartable rows={data.cartable} />
           ) : view === 'week' ? (
@@ -205,10 +204,11 @@ export default async function ReceptionAppointmentsPage({
               workingDaysByDoctorId={data.day.workingDaysByDoctorId}
               panel="reception"
               writable
+              fullHeight={true} // <-- بسیار مهم
             />
           )}
         </div>
-        
+
         {/* فوتر (فقط برای حالت روز) */}
         {view === 'day' && (
           <div className="flex flex-wrap items-center gap-5 border-t border-line px-4 py-2 text-xs text-ink-3">
@@ -222,7 +222,7 @@ export default async function ReceptionAppointmentsPage({
             </span>
           </div>
         )}
-      </section>
+      </FullscreenWrapper>
     </div>
   )
 }
@@ -255,7 +255,7 @@ function Cartable({ rows }: { readonly rows: AppointmentsPageData['cartable'] })
   }
 
   return (
-    <ul className="flex flex-col gap-3 p-4">
+    <ul className="flex flex-1 flex-col gap-3 overflow-auto p-4">
       {rows.map((row) => (
         <li key={row.id} className="flex flex-col gap-2 rounded-md border border-line bg-surface p-4">
           <div className="flex items-baseline justify-between gap-2">
