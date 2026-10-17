@@ -1,49 +1,4 @@
-/**
- * The desk's debt list — `02-architecture.md` §9's `reception/debts.html`.
- *
- * The secretary's default holds `view_debts` and `follow_up_debt`
- * (`04-roles-permissions.md` §2.1's 1–12), and the list the desk reads is the product's
- * follow-up queue: the appointments whose balance is open, stacked by how late they are.
- * The balance is computed by the read and never stored, so the list a receptionist opens
- * is the list the ledger just made — and the one a receipt empties in the request that
- * recorded it.
- *
- * ## The four tabs, and what each one is for
- *
- * The desk's work is a follow-up queue, and a queue is only useful if it says what to
- * do *next*. The four tabs are the four answers to that:
- *
- * - **همه بدهکاران** — every open debt, no follow-up filter. This is the tab the desk
- *   opens to see the whole picture, and the default because the first thing a
- *   receptionist asks is "what is owed" and not "what have I called about".
- * - **پیگیری امروز** — the debts whose `debtNextContactAt` is today. The tab a
- *   follow-up lands in the moment its date is recorded for today.
- * - **همه پیگیری‌ها** — every debt the desk has called about, sorted by the nearest
- *   next-contact date. Overdue follow-ups rise to the top, because those are the calls
- *   the desk promised and then missed.
- * - **بدون پیگیری** — the debts the desk has never called about. This is the tab that
- *   grows when the desk stops calling, and the one whose emptiness is the design goal.
- *
- * ## The follow-up date filter, and how it differs from the «پیگیری امروز» tab
- *
- * The «پیگیری امروز» tab is *today* — the day the desk opens the page. The
- * follow-up date filter is *any day the desk names*: the 27th of Mordad, the
- * 3rd of Shahrivar, whichever. The two are one predicate with two sources of
- * truth — the tab's "today" and the filter's chosen day — and the filter wins
- * when both are present, because a desk that has typed a date is asking about
- * that date and not about today. The field is the shell's own `JalaliDatePicker`
- * (the one the appointment's day picker uses), so the date the desk picks and
- * the date the grid drew are one control and one calendar.
- *
- * ## Why the total under the table is the page's rows and not the whole list
- *
- * The total under the table sums the rows the *current page* holds, not every row
- * every filter left. The whole list's total is the KPI row's own — `totalRial` above
- * — and a page-level read that repeated it would be two places the same sum is
- * computed and one place it drifts. The label names the scope it covers, so the
- * number under the table is the number of the table and the count under the tabs is
- * the count of the tabs, and the two cannot be mistaken for one another.
- */
+// src/app/reception/debts/page.tsx
 
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -70,9 +25,6 @@ import { DebtsFollowUpDateField } from './_components/debts-follow-up-date-field
 
 export const metadata: Metadata = { title: DEBTS_PAGE.reception.title }
 
-/**
- * «ثبت پرداخت»'s two closed lists, labelled from the module that owns them.
- */
 const PAYMENT_OPTIONS = {
   method: [
     { value: 'CASH', label: PAYMENT_METHOD_LABELS.CASH },
@@ -85,25 +37,14 @@ const PAYMENT_OPTIONS = {
   ],
 } as const
 
-/** The page's own route, as the tab links link back to. */
 const BASE_PATH = '/reception/debts'
 
-/** The four views the tab bar offers, keyed as the search param is. */
 type DebtsTab = 'everyone' | 'today' | 'all' | 'unfollowed'
-
-/** The tab values, in the order the tab bar renders them. */
 const TAB_VALUES: readonly DebtsTab[] = ['everyone', 'today', 'all', 'unfollowed']
-
-/** The default tab, which is the whole picture the desk opens to first. */
 const DEFAULT_TAB: DebtsTab = 'everyone'
 
 type PageSearchParams = Promise<{ readonly [key: string]: string | string[] | undefined }>
 
-/**
- * «مانده حساب» — the debts the desk owes a call about, as a KPI row, four tabs, a
- * search, a doctor filter, a follow-up date filter, one flat table, and the running
- * total beneath it.
- */
 export default async function ReceptionDebtsPage({
   searchParams,
 }: {
@@ -117,7 +58,7 @@ export default async function ReceptionDebtsPage({
   const doctorFilter = asString(params.doctor)
   const followUpDate = asLocalDateParam(params.due)
 
-  const { buckets, collectedRial, offset, doctors } = await runInTenantScope(
+  const { buckets, collectedRial, offset, doctors, followUpsMap } = await runInTenantScope(
     session.permissions,
     prisma(),
     async (tx) => {
@@ -131,7 +72,30 @@ export default async function ReceptionDebtsPage({
           orderBy: { firstName: 'asc' },
         }),
       ])
-      return { buckets, collectedRial, offset: settings.utcOffsetMinutes, doctors }
+
+      const appointmentIds = buckets.overdue30
+        .concat(buckets.overdue7, buckets.overdue, buckets.dueSoon)
+        .map((row) => row.appointmentId)
+
+      // خواندن پیگیری‌ها
+      const allFollowUps = await tx.debtFollowUp.findMany({
+        where: { tenantId: session.tenantId, appointmentId: { in: appointmentIds } },
+        orderBy: { createdAt: 'desc' },
+        include: { createdBy: { select: { firstName: true, lastName: true } } },
+      })
+
+      // گروه‌بندی امن
+      const followUpsMap: Record<string, typeof allFollowUps> = {}
+      for (const f of allFollowUps) {
+        const existing = followUpsMap[f.appointmentId]
+        if (existing) {
+          existing.push(f)
+        } else {
+          followUpsMap[f.appointmentId] = [f]
+        }
+      }
+
+      return { buckets, collectedRial, offset: settings.utcOffsetMinutes, doctors, followUpsMap }
     },
   )
 
@@ -152,13 +116,6 @@ export default async function ReceptionDebtsPage({
   const page = pageFromParam(params.page)
   const { slice, totalPages } = paginate(filteredRows, page)
 
-  /**
-   * The total of the rows the current page renders, not the whole filtered list.
-   *
-   * The figure the desk reads beneath the table answers "what does this page hold",
-   * which is the only question a number under a paginated table can answer without
-   * lying about the scope it covers.
-   */
   const pageRial = slice.reduce((total, row) => total + row.balance, 0n)
 
   const hrefFor = (next: number): string => {
@@ -181,9 +138,7 @@ export default async function ReceptionDebtsPage({
     })),
   ]
 
-  const totalLabel = isFiltered
-    ? DEBTS_PAGE.total.filteredLabel
-    : DEBTS_PAGE.total.label
+  const totalLabel = isFiltered ? DEBTS_PAGE.total.filteredLabel : DEBTS_PAGE.total.label
 
   return (
     <div className="flex flex-col gap-6">
@@ -215,7 +170,12 @@ export default async function ReceptionDebtsPage({
         basePath={BASE_PATH}
       />
 
-      <DebtsTable rows={slice} showActions paymentOptions={PAYMENT_OPTIONS} />
+      <DebtsTable
+        rows={slice}
+        showActions
+        paymentOptions={PAYMENT_OPTIONS}
+        followUpsMap={followUpsMap} // <-- پاس دادن لیست پیگیری‌ها به جدول
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
         <span className="text-ink-3">
@@ -229,16 +189,9 @@ export default async function ReceptionDebtsPage({
   )
 }
 
-/* ── The four tabs ─────────────────────────────────────────────────────────── */
+/* ── بقیه کدها (DebtsTabs, DebtsFilters, rowsForTab, ...) بدون تغییر ─────────── */
 
-/** The tab bar — the four views the desk's follow-up queue offers. */
-function DebtsTabs({
-  active,
-  basePath,
-  search,
-  doctor,
-  followUpDate,
-}: {
+function DebtsTabs({ active, basePath, search, doctor, followUpDate }: {
   readonly active: DebtsTab
   readonly basePath: string
   readonly search: string
@@ -285,20 +238,7 @@ function DebtsTabs({
   )
 }
 
-/* ── The filters ───────────────────────────────────────────────────────────── */
-
-/**
- * The search field, the doctor filter, and the follow-up date filter, as a GET form
- * that preserves the tab.
- */
-function DebtsFilters({
-  activeTab,
-  search,
-  doctor,
-  doctorOptions,
-  followUpDate,
-  basePath,
-}: {
+function DebtsFilters({ activeTab, search, doctor, doctorOptions, followUpDate, basePath }: {
   readonly activeTab: DebtsTab
   readonly search: string
   readonly doctor: string
@@ -348,14 +288,7 @@ function DebtsFilters({
   )
 }
 
-/* ── The four tab predicates ───────────────────────────────────────────────── */
-
-function rowsForTab(
-  rows: readonly DebtRow[],
-  tab: DebtsTab,
-  now: Date,
-  utcOffsetMinutes: number,
-): readonly DebtRow[] {
+function rowsForTab(rows: readonly DebtRow[], tab: DebtsTab, now: Date, utcOffsetMinutes: number): readonly DebtRow[] {
   if (tab === 'everyone') return rows
   if (tab === 'unfollowed') return rows.filter((row) => row.lastFollowUp === null)
   if (tab === 'today') return rows.filter((row) => isToday(row.nextContactAt, now, utcOffsetMinutes))
@@ -364,7 +297,6 @@ function rowsForTab(
     .sort((a, b) => compareByNextContact(a, b, now))
 }
 
-/** Whether the given instant is the same clinic-local day as `now`. */
 function isToday(instant: Date | null, now: Date, utcOffsetMinutes: number): boolean {
   if (instant === null) return false
   return dayKey(instant, utcOffsetMinutes) === dayKey(now, utcOffsetMinutes)
@@ -388,18 +320,7 @@ function compareByNextContact(a: DebtRow, b: DebtRow, now: Date): number {
   return aTime - bTime
 }
 
-/* ── The search, doctor and date predicates ────────────────────────────────── */
-
-/**
- * The rows a search, a doctor filter, and a follow-up date leave.
- */
-function applyFilters(
-  rows: readonly DebtRow[],
-  search: string,
-  doctorFilter: string,
-  followUpDate: string | null,
-  utcOffsetMinutes: number,
-): readonly DebtRow[] {
+function applyFilters(rows: readonly DebtRow[], search: string, doctorFilter: string, followUpDate: string | null, utcOffsetMinutes: number): readonly DebtRow[] {
   return rows.filter((row) => {
     if (doctorFilter !== '' && row.doctorId !== doctorFilter) return false
     if (followUpDate !== null) {
@@ -412,23 +333,15 @@ function applyFilters(
   })
 }
 
-/* ── The params ────────────────────────────────────────────────────────────── */
-
-/** The tab the URL names, or the default. */
 function tabFromParam(value: string | string[] | undefined): DebtsTab {
   const name = typeof value === 'string' ? value : ''
   return isMember(TAB_VALUES, name) ? name : DEFAULT_TAB
 }
 
-/** One search param as a plain string, or '' when the URL does not carry one. */
 function asString(value: string | string[] | undefined): string {
   return typeof value === 'string' ? value : ''
 }
 
-/**
- * The `?due=` param as a Jalali `LocalDate`, or `null` when it is absent or not a
- * date.
- */
 function asLocalDateParam(value: string | string[] | undefined): string | null {
   if (typeof value !== 'string') return null
   if (value === '') return null

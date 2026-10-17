@@ -1,7 +1,10 @@
+// src/app/_appointments/fullscreen-wrapper.tsx
+
 'use client'
 
 import { useState, useEffect } from 'react'
 import { cx } from '@/core/lib'
+import { APPOINTMENTS_PAGE } from '@/app/catalog' // <-- اضافه شد
 
 export function FullscreenWrapper({ children }: { readonly children: React.ReactNode }) {
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -30,7 +33,7 @@ export function FullscreenWrapper({ children }: { readonly children: React.React
           type="button"
           onClick={() => setIsFullscreen(!isFullscreen)}
           className="rounded-md bg-surface/80 p-1.5 text-ink-3 backdrop-blur-sm transition-colors hover:bg-surface-2 hover:text-ink"
-          title={isFullscreen ? 'خروج از حالت تمام‌صفحه' : 'تمام‌صفحه'}
+          title={isFullscreen ? APPOINTMENTS_PAGE.controls.exitFullscreen : APPOINTMENTS_PAGE.controls.fullscreen}
         >
           {isFullscreen ? (
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -44,7 +47,6 @@ export function FullscreenWrapper({ children }: { readonly children: React.React
         </button>
       </div>
 
-      {/* محتوای جدول باید h-full داشته باشد تا فضای باقیمانده را پر کند */}
       <div className="flex h-full w-full flex-1 flex-col overflow-hidden">
         {children}
       </div>

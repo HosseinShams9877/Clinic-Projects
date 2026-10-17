@@ -199,7 +199,7 @@ export const DEBTS_PAGE = {
         pageRows: 'ردیف این صفحه',
 
   },
-  actions: {
+   actions: {
     payment: 'ثبت پرداخت',
     paymentTitle: 'ثبت پرداخت',
     amount: 'مبلغ پرداختی',
@@ -225,6 +225,10 @@ export const DEBTS_PAGE = {
     rescheduleTitle: 'تغییر سررسید',
     dueDate: 'سررسید جدید',
     saved: 'ثبت شد.',
+    historyTitle: 'تاریخچه پیگیری‌ها',
+    noNote: 'بدون یادداشت',
+    systemUser: 'سیستم',
+    viewAllHistory: 'مشاهده همه پیگیری‌ها',
   },
   dash: '—',
   days: 'روز',

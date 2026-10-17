@@ -166,6 +166,8 @@ export const APPOINTMENTS_PAGE = {
     today: 'برای امروز',
     previousDay: 'روز قبل',
     nextDay: 'روز بعد',
+    fullscreen: 'تمام‌صفحه',
+    exitFullscreen: 'خروج از تمام‌صفحه',
   },
   /** The column header of the grid's time axis. */
   timeColumn: 'ساعت',

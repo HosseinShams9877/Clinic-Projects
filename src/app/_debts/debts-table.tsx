@@ -1,32 +1,7 @@
+// src/app/_debts/debts-table.tsx
+
 /**
  * The debt surfaces' shared table — the one row the three staff pages render.
- *
- * The three pages (`reception/debts`, `admin/debts`, `doctor/debts`) are one row read
- * through three permissions, which is why the table is one component and the three
- * pages differ only in the copy block they hand it and the writes they offer. The
- * customer's own history is a fourth surface and renders a different row, because a
- * customer does not see the desk's follow-up columns.
- *
- * ## Why the money is not summed again here
- *
- * `charged`, `discount`, `paid` and `balance` are the module's own terms and the row
- * carries them; the page formats each through `formatMoney` and never re-derives the
- * balance from the three. A second arithmetic would be a second place the formula could
- * disagree with `03-data-model.md` §4.1.
- *
- * ## Why the four lists are stacked and not paged
- *
- * The buckets are four severities and the desk reads the worst first, so the page
- * stacks the four lists in `DEBT_BUCKET_ORDER` and each one's empty state is its own
- * sentence. A page of 20 rows sorted by date would put the row the desk loses the most
- * by not calling at the bottom.
- *
- * ## Why the days-overdue column is the module's number
- *
- * `daysOverdue` is computed once, in `buckets.ts`, from the same `now` the read ran
- * with — the same clock the bucket was decided against. Re-deriving it from
- * `dueLocalDate` and `todayLocalDate()` here would be a second arithmetic and a second
- * clock, and the two could disagree on the row the desk is looking at.
  */
 
 import { DEBTS_PAGE } from '@/app/catalog'
@@ -43,39 +18,46 @@ import { cx } from '@/core/lib'
 
 import { DebtRowActions, type PaymentOptions } from './debts-forms'
 
-/**
- * The table's own props: the four buckets, the writes the caller's panel may offer, and
- * the two closed lists the payment form renders when it does.
- *
- * The options travel with `showActions` because they are the form's: a page that renders
- * the desk's actions without them renders a form whose two selects have nothing to show,
- * so the cell is only drawn when both are present.
- */
+type FollowUpRecord = {
+  readonly id: string
+  readonly note: string | null
+  readonly createdAt: Date
+  readonly createdBy: { readonly firstName: string; readonly lastName: string | null } | null
+}
+
 export interface DebtsTableProps {
   readonly rows: readonly DebtRow[]
-  /** Whether the desk's three row actions belong on the table. */
   readonly showActions?: boolean
-  /** The payment form's two closed lists, which only the desk's table renders. */
   readonly paymentOptions?: PaymentOptions
+  readonly followUpsMap?: Readonly<Record<string, readonly FollowUpRecord[]>>
 }
 
-/**
- * The debts, as one flat table — the four severity buckets are a chip filter on the
- * page now, not stacked sections, so the table renders whatever slice the page passes.
- */
-export function DebtsTable({ rows, showActions, paymentOptions }: DebtsTableProps) {
-  return <BucketTable rows={rows} showActions={showActions} paymentOptions={paymentOptions} />
+export function DebtsTable({
+  rows,
+  showActions,
+  paymentOptions,
+  followUpsMap = {},
+}: DebtsTableProps) {
+  return (
+    <BucketTable
+      rows={rows}
+      showActions={showActions}
+      paymentOptions={paymentOptions}
+      followUpsMap={followUpsMap}
+    />
+  )
 }
 
-/** One bucket's rows, or its own empty sentence when there are none. */
 function BucketTable({
   rows,
   showActions,
   paymentOptions,
+  followUpsMap,
 }: {
   readonly rows: readonly DebtRow[]
   readonly showActions?: boolean
   readonly paymentOptions?: PaymentOptions
+  readonly followUpsMap: Readonly<Record<string, readonly FollowUpRecord[]>>
 }) {
   if (rows.length === 0) {
     return (
@@ -112,6 +94,7 @@ function BucketTable({
               row={row}
               showActions={showActions}
               paymentOptions={paymentOptions}
+              followUps={followUpsMap[row.appointmentId] ?? []}
             />
           ))}
         </tbody>
@@ -120,15 +103,16 @@ function BucketTable({
   )
 }
 
-/** One debt, as the table renders it. */
 function DebtRowMarkup({
   row,
   showActions,
   paymentOptions,
+  followUps,
 }: {
   readonly row: DebtRow
   readonly showActions?: boolean
   readonly paymentOptions?: PaymentOptions
+  readonly followUps: readonly FollowUpRecord[]
 }) {
   return (
     <tr className="border-b border-line last:border-b-0 hover:bg-surface-2">
@@ -163,21 +147,23 @@ function DebtRowMarkup({
       </td>
       {showActions && paymentOptions !== undefined ? (
         <td className="px-4 py-3">
-          <DebtRowActions row={row} options={paymentOptions} />
+          <DebtRowActions
+            row={row}
+            options={paymentOptions}
+            followUps={followUps}
+          />
         </td>
       ) : null}
     </tr>
   )
 }
 
-/** The customer's name, with the last name only when the row carries one. */
 function customerName(row: DebtRow): string {
   return row.customerLastName === null
     ? row.customerFirstName
     : `${row.customerFirstName} ${row.customerLastName}`
 }
 
-/** One column header, with the alignment the design system's tables keep. */
 function Th({
   children,
   className,

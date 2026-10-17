@@ -1,39 +1,4 @@
-/**
- * The debt surfaces' writers, as the desk renders them.
- *
- * The three staff pages render one row and differ in which writes belong on it. The
- * manager's and the doctor's offer none — the manager's page is read-only oversight
- * and the doctor's is the doctor's own view — and the desk's row carries the two
- * writes the debt list exists to serve: take the money, record the call.
- *
- * ## Why the two forms are dialogs and not inline panels
- *
- * The receipt is a fact about one row, and the row is what the desk is looking at —
- * but a form rendered inline under the row's buttons pushes the rest of the table
- * down and makes the desk scroll to see the fields it just opened. The dialog is
- * the shell's own overlay: one panel, one backdrop, one close button, and the row
- * stays where it was. The two forms are the only writes the desk's row carries, and
- * both open in the same shell so the desk learns one interaction and reuses it.
- *
- * ## Why the due date is the picker and not a text field
- *
- * The column stores an instant and the desk reads a day, so the day the picker hands
- * the action is a `LocalDate` and the action converts it — the library's conversion,
- * and a second one would be the one that lands on the wrong day.
- *
- * ## Why the amount is the `MoneyInput` and not a `TextInput`
- *
- * `06-constants.md` §6: money on screen is Toman, in Persian digits, with the `٬`
- * thousands separator. The desk types a number, not a formatted string; the input
- * shows the formatted value and hands the action the digit string.
- *
- * ## Why the follow-up form shows the previous note
- *
- * The desk's next call needs the last call's context, and a row that hides it is a
- * row the desk re-asks the customer about money they already discussed. The
- * previous note is rendered above the new one, with its own date, so the two facts
- * sit beside each other — what was said, and when it was said.
- */
+// src/app/_debts/debts-forms.tsx
 
 'use client'
 
@@ -58,28 +23,33 @@ import {
   type ActionResult,
 } from './actions'
 
-/** The panel the desk's writers resolve, which is the caller's own. */
 const RECEPTION_PANEL = 'reception' as const
 
-/** The payment form's two closed lists, as the page hands them to the row. */
 export interface PaymentOptions {
   readonly method: readonly ComboboxOption[]
   readonly kind: readonly ComboboxOption[]
 }
 
-/**
- * The two things the desk does to a debt on its list, as two dialog triggers.
- */
+type FollowUpRecord = {
+  readonly id: string
+  readonly note: string | null
+  readonly createdAt: Date
+  readonly createdBy: { readonly firstName: string; readonly lastName: string | null } | null
+}
+
 export function DebtRowActions({
   row,
   options,
+  followUps = [],
 }: {
   readonly row: DebtRow
   readonly options: PaymentOptions
+  readonly followUps?: readonly FollowUpRecord[]
 }) {
   const [answer, setAnswer] = useState<ActionResult | null>(null)
   const [paymentOn, setPaymentOn] = useState(false)
   const [followUpOn, setFollowUpOn] = useState(false)
+  const [historyOn, setHistoryOn] = useState(false)
 
   return (
     <div className="flex flex-col items-start gap-2">
@@ -118,7 +88,17 @@ export function DebtRowActions({
       ) : null}
 
       {followUpOn ? (
-        <FollowUpDialog row={row} onAnswer={setAnswer} onClose={() => setFollowUpOn(false)} />
+        <FollowUpDialog
+          row={row}
+          previousFollowUps={followUps}
+          onViewAllHistory={() => setHistoryOn(true)}
+          onAnswer={setAnswer}
+          onClose={() => setFollowUpOn(false)}
+        />
+      ) : null}
+
+      {historyOn ? (
+        <HistoryDialog followUps={followUps} onClose={() => setHistoryOn(false)} />
       ) : null}
 
       <FormAnswer answer={answer} />
@@ -126,10 +106,6 @@ export function DebtRowActions({
   )
 }
 
-/**
- * «ثبت دریافت» — the amount received, the balance left after it, the method, and
- * (when it does not settle) an optional new due date, all in one dialog.
- */
 function PaymentDialog({
   row,
   options,
@@ -232,16 +208,16 @@ function PaymentDialog({
   )
 }
 
-/**
- * «ثبت پیگیری» — the call the desk just made, the day it promised to try again, and
- * the note the next call reads back.
- */
 function FollowUpDialog({
   row,
+  previousFollowUps,
+  onViewAllHistory,
   onAnswer,
   onClose,
 }: {
   readonly row: DebtRow
+  readonly previousFollowUps: readonly FollowUpRecord[]
+  readonly onViewAllHistory: () => void
   readonly onAnswer: (answer: ActionResult | null) => void
   readonly onClose: () => void
 }) {
@@ -250,6 +226,8 @@ function FollowUpDialog({
   const [note, setNote] = useState('')
   const formId = useId()
   const titleId = useId()
+
+  const lastFollowUp = previousFollowUps[0]
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -270,21 +248,55 @@ function FollowUpDialog({
 
   return (
     <Dialog onClose={onClose} titleId={titleId} title={DEBTS_PAGE.actions.followUp}>
-      <form id={formId} className="flex flex-col gap-4 px-5 pb-4" onSubmit={submit}>
-        <PreviousFollowUp row={row} />
-        <Field label={DEBTS_PAGE.actions.nextContactAt} required>
-          <JalaliDatePicker value={nextContactAt} onChange={setNextContactAt} min={today()} />
-        </Field>
-        <Field label={DEBTS_PAGE.actions.followUpNote}>
-          <TextArea
-            name="note"
-            value={note}
-            rows={3}
-            placeholder={DEBTS_PAGE.actions.followUpNotePlaceholder}
-            onChange={(event) => setNote(event.target.value)}
-          />
-        </Field>
-      </form>
+      <div className="flex flex-col gap-4 px-5 pb-4">
+        {lastFollowUp && (
+          <div className="flex flex-col gap-2 rounded-md border border-line-2 bg-surface-2 p-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-ink-2">
+                {DEBTS_PAGE.actions.previousFollowUp}
+              </span>
+              <span className="text-ink-3">
+                {formatDate(dateToLocalDate(lastFollowUp.createdAt), 'short')}
+              </span>
+            </div>
+            <p className="whitespace-pre-wrap text-ink">
+              {lastFollowUp.note ?? DEBTS_PAGE.actions.noNote}
+            </p>
+            <span className="text-ink-3">
+              {lastFollowUp.createdBy
+                ? `${lastFollowUp.createdBy.firstName} ${lastFollowUp.createdBy.lastName ?? ''}`.trim()
+                : DEBTS_PAGE.actions.systemUser}
+            </span>
+
+            {previousFollowUps.length > 1 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="small"
+                className="mt-2 w-fit text-xs"
+                onClick={onViewAllHistory}
+              >
+                {DEBTS_PAGE.actions.viewAllHistory}
+              </Button>
+            )}
+          </div>
+        )}
+
+        <form id={formId} className="flex flex-col gap-4" onSubmit={submit}>
+          <Field label={DEBTS_PAGE.actions.nextContactAt} required>
+            <JalaliDatePicker value={nextContactAt} onChange={setNextContactAt} min={today()} />
+          </Field>
+          <Field label={DEBTS_PAGE.actions.followUpNote}>
+            <TextArea
+              name="note"
+              value={note}
+              rows={3}
+              placeholder={DEBTS_PAGE.actions.followUpNotePlaceholder}
+              onChange={(event) => setNote(event.target.value)}
+            />
+          </Field>
+        </form>
+      </div>
 
       <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-4">
         <Button variant="ghost" onClick={onClose} disabled={pending}>
@@ -304,9 +316,40 @@ function FollowUpDialog({
   )
 }
 
-/**
- * The shell's own dialog: one backdrop, one panel, one close button.
- */
+function HistoryDialog({
+  followUps,
+  onClose,
+}: {
+  readonly followUps: readonly FollowUpRecord[]
+  readonly onClose: () => void
+}) {
+  const titleId = useId()
+
+  return (
+    <Dialog onClose={onClose} titleId={titleId} title={DEBTS_PAGE.actions.historyTitle}>
+      <div className="max-h-[60vh] overflow-y-auto px-5 pb-6">
+        <ul className="flex flex-col gap-3">
+          {followUps.map((followUp) => (
+            <li key={followUp.id} className="rounded-md border border-line-2 bg-surface-2 p-3 text-sm">
+              <p className="whitespace-pre-wrap text-ink">
+                {followUp.note ?? DEBTS_PAGE.actions.noNote}
+              </p>
+              <div className="mt-2 flex items-center justify-between border-t border-line-2 pt-2 text-xs text-ink-3">
+                <span>
+                  {followUp.createdBy
+                    ? `${followUp.createdBy.firstName} ${followUp.createdBy.lastName ?? ''}`.trim()
+                    : DEBTS_PAGE.actions.systemUser}
+                </span>
+                <span>{formatDate(dateToLocalDate(followUp.createdAt), 'short')}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Dialog>
+  )
+}
+
 function Dialog({
   children,
   onClose,
@@ -355,24 +398,6 @@ function Dialog({
     </div>
   )
 }
-
-/**
- * The previous follow-up, as the two facts the desk reads before the new call.
- */
-function PreviousFollowUp({ row }: { readonly row: DebtRow }) {
-  if (row.lastFollowUp === null) return null
-  if (row.lastFollowUp.note === null) return null
-  const at = formatDate(dateToLocalDate(row.lastFollowUp.at), 'short')
-  return (
-    <div className="flex flex-col gap-1 rounded-md border border-line-2 bg-surface-2 px-3 py-2 text-xs">
-      <span className="font-semibold text-ink-2">{DEBTS_PAGE.actions.previousFollowUp}</span>
-      <span className="text-ink-3">{at}</span>
-      <p className="whitespace-pre-line text-ink">{row.lastFollowUp.note}</p>
-    </div>
-  )
-}
-
-/* ── The pieces the dialogs share ──────────────────────────────────────────── */
 
 function FormAnswer({ answer }: { readonly answer: ActionResult | null }) {
   if (answer === null || answer.ok) return null

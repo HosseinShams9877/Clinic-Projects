@@ -49,7 +49,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "sqlite"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -96,6 +96,7 @@ model Tenant {
   otpChallenges  OtpChallenge[]
   notificationReads NotificationRead[]
    injectionRecords  InjectionRecord[]
+   debtFollowUps DebtFollowUp[]
 
   @@map("tenants")
 }
@@ -225,7 +226,8 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
+  
+  debtFollowUps DebtFollowUp[]
   memberships        Membership[]
   sessions           Session[]
   primaryFor         Customer[]        @relation("CustomerPrimaryDoctor")
@@ -669,7 +671,8 @@ model Appointment {
   debtFollowUpNote    String?
   debtNextContactAt   DateTime?
   debtDueDateOverride DateTime?
-
+  
+  followUps DebtFollowUp[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -685,6 +688,23 @@ model Appointment {
   @@map("appointments")
 }
 
+model DebtFollowUp {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  
+  note          String?
+  nextContactAt DateTime?
+  
+  createdAt     DateTime @default(now())
+  createdById   String?
+  createdBy     User?    @relation(fields: [createdById], references: [id])
+
+  @@index([tenantId, appointmentId, createdAt(sort: Desc)], map: "followup_tenant_appt_created_idx")
+  @@map("debt_follow_ups")
+}
 // The clinic's working shifts, and the base the doctor's own hours are a
 // sub-range of. `weekday` is 0–6 with Saturday as 0 (`06-constants.md`).
 model ClinicShift {
