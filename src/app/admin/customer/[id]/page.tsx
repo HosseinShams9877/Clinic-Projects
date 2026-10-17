@@ -10,7 +10,7 @@ import { prisma, runInTenantScope } from '@/core/db'
 import type { TransactionClient } from '@/core/db/scope'
 import { realClock } from '@/core/lib/clock'
 import { APPOINTMENT_STATUS_LABELS } from '@/modules/appointments'
-import { ACQUISITION_SOURCE_LABELS } from '@/modules/customers'
+import { ACQUISITION_SOURCE_LABELS, getCustomerNotes } from '@/modules/customers'
 import {
   AppointmentStatus,
   AudienceGroupKey,
@@ -57,16 +57,10 @@ import { requireStaffPanel } from '@/app/_shell/session'
 
 export const metadata: Metadata = { title: CUSTOMER_PROFILE_PAGE.title }
 
-/** The two history list params, each paging one of the profile's own tables. */
 const APPTS_PAGE_PARAM = 'appts'
 const PAYS_PAGE_PARAM = 'pays'
-
-/** A month, as the messages card's thirty-day window counts it. */
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 
-/**
- * One customer's full record, or the 404 a row outside the caller's scope answers.
- */
 export default async function CustomerProfilePage({
   params,
   searchParams,
@@ -84,7 +78,7 @@ export default async function CustomerProfilePage({
 
   const data = await loadProfile(session.permissions, id)
 
-  const { profile, cycles, messages, groups, injections, injectionCounts } = data
+  const { profile, cycles, messages, groups, injections, injectionCounts, notes } = data
   const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
   const balance = profile.chargedTotal - profile.paidTotal
   const activeCycles = cycles.filter(
@@ -97,7 +91,6 @@ export default async function CustomerProfilePage({
   const appts = paginate(profile.appointments, apptsPage)
   const pays = paginate(profile.payments, paysPage)
   const basePath = `/admin/customer/${id}`
-  /** One href keeping whichever of the two history pages the URL already names. */
   const historyHref = (next: { readonly appts: number; readonly pays: number }): string => {
     const sp = new URLSearchParams()
     if (next.appts > 1) sp.set(APPTS_PAGE_PARAM, String(next.appts))
@@ -205,7 +198,7 @@ export default async function CustomerProfilePage({
               </Card>
 
               <Card title={CUSTOMER_PROFILE_PAGE.note.history}>
-                <SavedNote note={profile.doctorNote} />
+                <NotesList notes={notes} />
               </Card>
             </div>
 
@@ -243,7 +236,7 @@ export default async function CustomerProfilePage({
               </Card>
 
               <Card title={CUSTOMER_PROFILE_PAGE.sections.medical}>
-                <DoctorNoteForm customerId={profile.id} note={profile.doctorNote} />
+                <DoctorNoteForm customerId={profile.id} />
               </Card>
             </div>
           </div>
@@ -253,29 +246,25 @@ export default async function CustomerProfilePage({
   )
 }
 
-/** The injection view the URL names, or the default (the map). */
 function injectionViewFromParam(value: string | string[] | undefined): InjectionView {
   if (value === 'table') return 'table'
   return DEFAULT_INJECTION_VIEW
 }
 
-/**
- * The profile and the three reads beside it, in the caller's scope, or the 404 a row
- * outside it answers.
- */
 async function loadProfile(
   ctx: Parameters<typeof loadCustomerProfile>[0]['ctx'],
   customerId: string,
 ) {
   try {
     return await runInTenantScope(ctx, prisma(), async (tx) => {
-      const [base, cycles, messages, groups] = await Promise.all([
+      const [base, cycles, messages, groups, notes] = await Promise.all([
         loadCustomerProfile({ tx, ctx, customerId }),
         customerCycles({ tx, tenantId: ctx.tenantId, customerId }),
         customerMessageHistory({ tx, tenantId: ctx.tenantId, customerId }),
         groupMemberships(tx, ctx.tenantId, customerId),
+        getCustomerNotes({ tx, tenantId: ctx.tenantId, customerId }),
       ])
-      return { ...base, cycles, messages, groups } as const
+      return { ...base, cycles, messages, groups, notes } as const
     })
   } catch (error: unknown) {
     if (isAppError(error) && error instanceof NotFoundError) notFound()
@@ -283,9 +272,6 @@ async function loadProfile(
   }
 }
 
-/**
- * The built-in groups this customer is in, evaluated now.
- */
 async function groupMemberships(
   tx: TransactionClient,
   tenantId: string,
@@ -306,9 +292,6 @@ async function groupMemberships(
   return memberships.filter(([, isMember]) => isMember).map(([key]) => key)
 }
 
-/* ── The page's own cards ────────────────────────────────────────────────────── */
-
-/** One card, with the heading and the optional count or action its head carries. */
 function Card({
   title,
   note,
@@ -334,7 +317,6 @@ function Card({
   )
 }
 
-/** One KPI tile, in the shape the manager's home renders the day in. */
 function KpiTile({
   label,
   value,
@@ -359,20 +341,8 @@ function KpiTile({
   )
 }
 
-/* ── The saved note ──────────────────────────────────────────────────────────── */
-
-/**
- * The note the profile currently holds, inside its own card.
- *
- * The form writes the note, and this card is what proves the write landed: the card
- * and the form are the two halves of one fact, and a page with only the form leaves
- * the manager guessing whether the save took. An empty note renders the card's own
- * empty sentence rather than a box with a dash in it.
- */
-function SavedNote({ note }: { readonly note: string | null }) {
-  const trimmed = note?.trim() ?? ''
-
-  if (trimmed === '') {
+function NotesList({ notes }: { readonly notes: readonly { id: string; text: string; createdAt: Date; authorName: string | null }[] }) {
+  if (notes.length === 0) {
     return (
       <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">
         {CUSTOMER_PROFILE_PAGE.note.historyEmpty}
@@ -381,13 +351,19 @@ function SavedNote({ note }: { readonly note: string | null }) {
   }
 
   return (
-    <p className="whitespace-pre-wrap text-sm leading-6 text-ink">{trimmed}</p>
+    <div className="flex flex-col gap-3">
+      {notes.map((note) => (
+        <div key={note.id} className="rounded-md bg-surface-2 p-3 text-sm">
+          <p className="whitespace-pre-wrap text-ink">{note.text}</p>
+          <span className="mt-2 block text-xs text-ink-3">
+            {note.authorName ?? CUSTOMER_PROFILE_PAGE.note.authorUnknown} — {formatDate(dateToLocalDate(note.createdAt), 'short')}
+          </span>
+        </div>
+      ))}
+    </div>
   )
 }
 
-/* ── The courses ─────────────────────────────────────────────────────────────── */
-
-/** The customer's courses, as the profile's left column renders them. */
 function CyclesTable({ rows }: { readonly rows: readonly CycleRow[] }) {
   if (rows.length === 0) {
     return <EmptyState sentence={ADMIN_CUSTOMER_PROFILE.empty.cycles} />
@@ -416,7 +392,6 @@ function CyclesTable({ rows }: { readonly rows: readonly CycleRow[] }) {
   )
 }
 
-/** One course, with the progress its sessions column draws. */
 function CycleRow({ row }: { readonly row: CycleRow }) {
   return (
     <tr className="border-b border-line last:border-b-0">
@@ -446,7 +421,6 @@ function CycleRow({ row }: { readonly row: CycleRow }) {
   )
 }
 
-/** The course's own spacing, as the week or the day the interval counts. */
 function intervalLabel(intervalDays: number): string {
   if (intervalDays % 7 === 0) {
     return `${toPersianDigits(intervalDays / 7)} ${ADMIN_CUSTOMER_PROFILE.unitWeeks}`
@@ -454,7 +428,6 @@ function intervalLabel(intervalDays: number): string {
   return `${toPersianDigits(intervalDays)} ${ADMIN_CUSTOMER_PROFILE.unitDays}`
 }
 
-/** One course status, as the chip the column renders. */
 function CycleStatusBadge({ status }: { readonly status: string }) {
   if (!isMember(CycleStatus, status)) return <span className="text-ink-3">—</span>
   return (
@@ -477,9 +450,6 @@ function CycleStatusBadge({ status }: { readonly status: string }) {
   )
 }
 
-/* ── The two histories ──────────────────────────────────────────────────────── */
-
-/** The appointment history, as the profile's own table renders it. */
 function AppointmentHistory({
   rows,
   page,
@@ -539,7 +509,6 @@ function AppointmentHistory({
   )
 }
 
-/** The payment history, as the profile's own table renders it. */
 function PaymentHistory({
   rows,
   page,
@@ -594,7 +563,6 @@ function PaymentHistory({
   )
 }
 
-/** One appointment status, as the badge the column renders. */
 function statusBadge(status: string): React.ReactNode {
   if (!isMember(AppointmentStatus, status)) return <span className="text-ink-3">{status}</span>
   const tone =
@@ -612,9 +580,6 @@ function statusBadge(status: string): React.ReactNode {
   )
 }
 
-/* ── The facts, the groups, and the messages ─────────────────────────────────── */
-
-/** The details card's own list, as the two-column `dl` the card renders. */
 function DetailsDl({
   profile,
   doctorName,
@@ -669,7 +634,6 @@ function DetailsDl({
   )
 }
 
-/** One labelled fact, or the dash a fact the row does not hold renders. */
 function Detail({
   label,
   value,
@@ -694,7 +658,6 @@ function Detail({
   )
 }
 
-/** The groups this customer is in, as the badges the campaign card shows. */
 function GroupBadges({ groups }: { readonly groups: readonly AudienceGroupKey[] }) {
   if (groups.length === 0) {
     return (
@@ -732,7 +695,6 @@ function GroupBadges({ groups }: { readonly groups: readonly AudienceGroupKey[] 
   )
 }
 
-/** The recent sends, as the messages card lists them. */
 function MessageList({
   rows,
 }: {
@@ -771,23 +733,18 @@ function MessageList({
   )
 }
 
-/** One birthday, as the profile writes it: the day and the month, and no year. */
 function formatBirthday(birthDate: string | null): string | null {
   if (birthDate === null) return null
   const { month, day } = jalaliParts(asLocalDate(birthDate))
   return `${toPersianDigits(day)} ${monthName(month)}`
 }
 
-/* ── The shared small pieces ─────────────────────────────────────────────────── */
-
-/** The empty state the three tables share. */
 function EmptyState({ sentence }: { readonly sentence: string }) {
   return (
     <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">{sentence}</p>
   )
 }
 
-/** One column header, aligned the same way as the cells beneath it. */
 function Th({
   children,
   align = 'start',
@@ -808,19 +765,16 @@ function Th({
   )
 }
 
-/** One acquisition source, or the raw value a row the form never named renders. */
 function sourceLabel(source: string | null): string | null {
   if (source === null) return null
   const key = source as keyof typeof ACQUISITION_SOURCE_LABELS
   return ACQUISITION_SOURCE_LABELS[key] ?? source
 }
 
-/** One payment method, from the app catalog's own three. */
 function methodLabel(method: string): string {
   return isMember(PaymentMethod, method) ? PAYMENT_METHOD_LABELS[method] : method
 }
 
-/** One payment kind, from the app catalog's own four. */
 function kindLabel(kind: string): string {
   return isMember(PaymentKind, kind) ? PAYMENT_KIND_LABELS[kind] : kind
 }

@@ -87,11 +87,15 @@ export async function createInjectionAction(
       })
     })
   } catch (error: unknown) {
+    // این لاگ را اضافه کردیم تا خطای دقیق را در ترمینال ببینیم
+    console.error('--- INJECTION ERROR ---', error)
     return { ok: false, message: injectionFailureMessage(error) }
   }
 
   revalidatePath(`/admin/customer/${input.customerId}`)
   revalidatePath(`/reception/customers/${input.customerId}`)
+  revalidatePath(`/doctor/customers/${input.customerId}`) 
+
   return { ok: true }
 }
 

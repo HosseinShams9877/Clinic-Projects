@@ -174,5 +174,7 @@ export const CUSTOMER_APPOINTMENTS_PAGE = Object.freeze({
     dateLabel: 'تاریخ جدید',
     timeLabel: 'ساعت جدید',
     submit: 'ثبت نوبت جدید',
+    loading: 'در حال بارگذاری ساعت‌ها...',
+    noSlots: 'ساعت خالی در این روز وجود ندارد.',
   },
 })

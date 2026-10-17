@@ -49,7 +49,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "sqlite"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -74,6 +74,7 @@ model Tenant {
   memberships    Membership[]
   sessions       Session[]
   customers      Customer[]
+  customerNotes     CustomerNote[]
   appointments   Appointment[]
   services       Service[]
   serviceDoctors ServiceDoctor[]
@@ -209,7 +210,7 @@ model User {
   id       String @id @default(cuid())
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
-
+ customerNotes     CustomerNote[] @relation("NoteAuthor")
   mobile       String
   firstName    String
   lastName     String
@@ -466,6 +467,7 @@ model Customer {
   birthDate  String?
   birthMonth Int?
   birthDay   Int?
+  notes             CustomerNote[]
 
   acquisitionSource String?
   residenceArea     String?
@@ -1129,4 +1131,20 @@ model NotificationRead {
   @@unique([tenantId, principalId, notificationKey], map: "notifread_principal_key_key")
   @@index([tenantId, principalId], map: "notifread_tenant_principal_idx")
   @@map("notification_reads")
+}
+
+model CustomerNote {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  authorId   String?
+  author     User?    @relation("NoteAuthor", fields: [authorId], references: [id])
+
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, customerId, createdAt(sort: Desc)], map: "note_tenant_customer_idx")
+  @@map("customer_notes")
 }

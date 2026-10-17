@@ -68,7 +68,7 @@ export function CyclesTable({
             <Th>{CYCLES_PAGE.columns.customer}</Th>
             <Th>{CYCLES_PAGE.columns.service}</Th>
             <Th>{CYCLES_PAGE.columns.doctor}</Th>
-            <Th className="text-end">{CYCLES_PAGE.columns.progress}</Th>
+            <Th>{CYCLES_PAGE.columns.progress}</Th>
             <Th>{CYCLES_PAGE.columns.nextDue}</Th>
             <Th>{CYCLES_PAGE.columns.status}</Th>
             {contactEntries !== undefined ? <Th>{CYCLES_PAGE.columns.mobile}</Th> : null}
@@ -115,15 +115,17 @@ function CycleRow({
       <td className="px-4 py-3 font-semibold text-ink">{row.customerName}</td>
       <td className="px-4 py-3 text-ink-2">{row.serviceName}</td>
       <td className="px-4 py-3 text-ink-2">{row.doctorName}</td>
-      <td className="px-4 py-3 text-end font-semibold text-ink tabular-nums">{progressOf(row)}</td>
+     <td className="px-4 py-3 font-semibold text-ink tabular-nums">{progressOf(row)}</td>
       <td className="px-4 py-3 text-ink-2 tabular-nums">{dueLabel(row, entry, utcOffsetMinutes)}</td>
       <td className="px-4 py-3">
         <StatusBadge status={row.status} />
       </td>
       {entry !== undefined ? (
-        <td className="px-4 py-3 text-ink-2 tabular-nums" dir="ltr">
-          {formatPhone(entry.mobile)}
-        </td>
+        <td className="px-4 py-3 text-ink-2 tabular-nums">
+  <span dir="ltr" className="inline-block">
+    {formatPhone(entry.mobile)}
+  </span>
+</td>
       ) : null}
       <td className="px-4 py-3 text-ink-2 tabular-nums">
         {row.lastContactAt === null ? '—' : formatDate(dateToLocalDate(row.lastContactAt), 'short')}
@@ -194,15 +196,18 @@ function StatusBadge({ status }: { readonly status: string }) {
 
 function Th({
   children,
-  className,
+  align = 'start',
 }: {
   readonly children: React.ReactNode
-  readonly className?: string
+  readonly align?: 'start' | 'center' | 'end'
 }) {
   return (
     <th
       scope="col"
-      className={cx('whitespace-nowrap px-4 py-3 text-start text-xs font-semibold', className)}
+      className={cx(
+        'whitespace-nowrap px-4 py-3 text-xs font-semibold',
+        align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : 'text-start',
+      )}
     >
       {children}
     </th>

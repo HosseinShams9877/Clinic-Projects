@@ -1,66 +1,37 @@
-/**
- * The two actions a customer's own appointment row offers — cancel and reschedule.
- *
- * The server component renders the rows from the session-scoped read; this island
- * carries the two writes, because a click is a state change and the sentence the
- * module raises comes back onto the same row. The split is `02-architecture.md` §6's:
- * a read and a write are two components and not one that does both.
- *
- * ## Why the row shows only what the state machine permits
- *
- * The state machine is the module's, and this component does not re-derive it. A
- * terminal row — cancelled, rescheduled, completed — offers nothing, so a person
- * cannot press a button the module is certain to refuse.
- *
- * ## Why the actions carry no customer id
- *
- * The row's own `appointmentId` is the only fact the island hands the action, and the
- * action resolves the customer from the session (`09-security.md` §7). A prop named
- * `customerId` on this component would be a prop a parent could pass another person's
- * id to, and the property the panel's isolation rests on is that no such prop exists.
- */
+// src/app/_account/appointment-actions.tsx
 
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 
 import { Button } from '@/core/components/button'
 import { JalaliDatePicker } from '@/core/components/date-picker'
 import { Field } from '@/core/components/form'
-import { TextInput } from '@/core/components/form'
 import { Icon } from '@/core/components/icons'
 import { AppointmentStatus } from '@/core/constants'
 import { canTransition, CUSTOMER_APPOINTMENTS_PAGE } from '@/modules/appointments'
+import { cx } from '@/core/lib'
 
 import {
   cancelOwnAppointmentAction,
   rescheduleOwnAppointmentAction,
+  getAvailableSlotsAction,
   type PanelActionResult,
 } from './actions'
 
-/**
- * The statuses that still belong to the person, and so still carry the two actions.
- *
- * Named as a cast rather than typed at the prop, because the row's status arrives as
- * a `string` from the module's read and the state machine is the module's: this
- * component asks it and never re-derives it.
- */
 const ACTIONABLE = [AppointmentStatus.Booked, AppointmentStatus.AwaitingArrival] as const
 
-/** A row's status, as the state machine's own type. */
 function asStatus(value: string): AppointmentStatus {
   return value as AppointmentStatus
 }
 
-/** The row's own props: the id, the status, and the two facts the reschedule starts from. */
 export interface OwnAppointmentActionsProps {
   readonly appointmentId: string
   readonly status: string
-  /** The day the session currently sits on, so the picker opens on a useful month. */
   readonly currentLocalDate: string
 }
 
-/** Cancel and reschedule, as the session's status permits them. */
 export function OwnAppointmentActions({
   appointmentId,
   status,
@@ -77,7 +48,6 @@ export function OwnAppointmentActions({
   )
 }
 
-/** «لغو نوبت» — one button, and the sentence its outcome renders. */
 function CancelAction({
   appointmentId,
   status,
@@ -85,6 +55,7 @@ function CancelAction({
   readonly appointmentId: string
   readonly status: string
 }) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [message, setMessage] = useState<string | null>(null)
 
@@ -94,6 +65,9 @@ function CancelAction({
     startTransition(async () => {
       const outcome = await cancelOwnAppointmentAction(appointmentId)
       setMessage(outcome.ok ? CUSTOMER_APPOINTMENTS_PAGE.cancelled : outcome.message)
+      if (outcome.ok) {
+        router.refresh()
+      }
     })
   }
 
@@ -119,7 +93,6 @@ function CancelAction({
   )
 }
 
-/** «جابه‌جایی نوبت» — a day and a time, submitted to the booking path's own guards. */
 function RescheduleAction({
   appointmentId,
   status,
@@ -129,13 +102,39 @@ function RescheduleAction({
   readonly status: string
   readonly currentDate: string
 }) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [localDate, setLocalDate] = useState<string>(currentDate)
   const [localTime, setLocalTime] = useState<string>('')
+  const [slots, setSlots] = useState<readonly string[]>([])
+  const [loadingSlots, setLoadingSlots] = useState(false)
+
   const [pending, startTransition] = useTransition()
   const [message, setMessage] = useState<string | null>(null)
 
-  if (!canTransition(asStatus(status), AppointmentStatus.Rescheduled)) return null
+  const canReschedule = canTransition(asStatus(status), AppointmentStatus.Rescheduled)
+
+  async function fetchSlots(date: string) {
+    setLoadingSlots(true)
+    setLocalTime('')
+    const outcome = await getAvailableSlotsAction({ appointmentId, localDate: date })
+    setLoadingSlots(false)
+    if (outcome.ok && 'slots' in outcome) {
+      setSlots(outcome.slots)
+    } else {
+      setSlots([])
+    }
+  }
+
+  function handleOpen() {
+    setOpen(true)
+    void fetchSlots(localDate)
+  }
+
+  function onDateChange(date: string) {
+    setLocalDate(date)
+    void fetchSlots(date)
+  }
 
   function submit() {
     startTransition(async () => {
@@ -145,9 +144,14 @@ function RescheduleAction({
         localTime,
       })
       setMessage(outcome.ok ? CUSTOMER_APPOINTMENTS_PAGE.rescheduled : outcome.message)
-      if (outcome.ok) setOpen(false)
+      if (outcome.ok) {
+        setOpen(false)
+        router.refresh()
+      }
     })
   }
+
+  if (!canReschedule) return null
 
   if (!open) {
     return (
@@ -156,7 +160,7 @@ function RescheduleAction({
         size="small"
         leadingIcon="calendar"
         disabled={pending}
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
       >
         {CUSTOMER_APPOINTMENTS_PAGE.actions.reschedule}
       </Button>
@@ -166,17 +170,38 @@ function RescheduleAction({
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-3">
       <Field label={CUSTOMER_APPOINTMENTS_PAGE.rescheduleForm.dateLabel} required>
-        <JalaliDatePicker value={localDate} onChange={setLocalDate} name="localDate" />
+        <JalaliDatePicker value={localDate} onChange={onDateChange} name="localDate" />
       </Field>
-      <Field label={CUSTOMER_APPOINTMENTS_PAGE.rescheduleForm.timeLabel} required>
-        <TextInput
-          name="localTime"
-          value={localTime}
-          onChange={(event) => setLocalTime(event.target.value)}
-          inputMode="numeric"
-          placeholder="HH:MM"
-        />
-      </Field>
+
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-semibold text-ink">
+          {CUSTOMER_APPOINTMENTS_PAGE.rescheduleForm.timeLabel}
+        </span>
+        {loadingSlots ? (
+          <p className="text-xs text-ink-3">{CUSTOMER_APPOINTMENTS_PAGE.rescheduleForm.loading}</p>
+        ) : slots.length === 0 ? (
+          <p className="text-xs text-ink-3">{CUSTOMER_APPOINTMENTS_PAGE.rescheduleForm.noSlots}</p>
+        ) : (
+          <div className="grid grid-cols-4 gap-2">
+            {slots.map((time) => (
+              <button
+                key={time}
+                type="button"
+                onClick={() => setLocalTime(time)}
+                className={cx(
+                  'rounded-md border p-2 text-center text-sm transition-colors',
+                  localTime === time
+                    ? 'border-brand bg-brand-50 font-bold text-brand-700'
+                    : 'border-line bg-surface text-ink hover:border-brand-300',
+                )}
+              >
+                {time}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"

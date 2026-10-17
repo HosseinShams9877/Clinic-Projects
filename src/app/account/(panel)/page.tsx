@@ -1,16 +1,4 @@
-/**
- * The customer panel's home — `02-architecture.md` §9's `account/dashboard.html`.
- *
- * The demo's own arrangement: a greeting with the person's name and a «رزرو نوبت جدید»
- * button, a prominent nearest-appointment banner, three KPI tiles (upcoming count,
- * sessions remaining in the open course, outstanding balance), and two cards — the
- * latest care instructions and the course's suggested next session.
- *
- * The panel has no permission primitive (`09-security.md` §7): the scope is the
- * `customerId` the session resolved, in every `where` clause, taken from the resolution
- * and nowhere else. The five reads are one `runInTenantScope` so the KPIs and the banner
- * are one person's record at one instant, not five that a booking could land between.
- */
+// src/app/account/(panel)/page.tsx
 
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -28,12 +16,13 @@ import {
   formatNumber,
   toPersianDigits,
 } from '@/core/localization'
-import { CUSTOMER_PANEL, ownCareInstructions, readOwnProfile } from '@/modules/customers'
+import { CUSTOMER_PANEL, ownCareInstructions, readOwnProfile, getOwnNotes } from '@/modules/customers'
 import { customerAppointments } from '@/modules/appointments'
 import { customerCycles } from '@/modules/cycles'
 import { customerDebts } from '@/modules/debts'
 
 import { ACCOUNT_DASHBOARD } from '@/app/account/catalog'
+import { CUSTOMER_PROFILE_PAGE } from '@/app/catalog'
 import { requireCustomerPanel } from '@/app/_shell/session'
 
 export const metadata: Metadata = { title: CUSTOMER_PANEL.dashboard.title }
@@ -44,12 +33,13 @@ export default async function AccountDashboardPage() {
 
   const data = await runInTenantScope(session.permissions, prisma(), async (tx) => {
     const scope = { tx, tenantId: session.tenantId, customerId: session.customerId }
-    const [profile, appointments, cycles, instructions, debts] = await Promise.all([
+    const [profile, appointments, cycles, instructions, debts, notes] = await Promise.all([
       readOwnProfile(scope),
       customerAppointments({ ...scope, now }),
       customerCycles(scope),
       ownCareInstructions(scope),
       customerDebts({ ...scope, now }),
+      getOwnNotes(scope),
     ])
     return {
       firstName: profile?.firstName ?? '',
@@ -57,6 +47,7 @@ export default async function AccountDashboardPage() {
       cycle: cycles.find((row) => row.status === CycleStatus.Active) ?? cycles[0] ?? null,
       care: instructions[0] ?? null,
       balance: debts.reduce((total, row) => total + (row.balance > 0n ? row.balance : 0n), 0n),
+      notes,
     }
   })
 
@@ -106,11 +97,58 @@ export default async function AccountDashboardPage() {
         <LatestCare care={data.care} />
         <SuggestedSession cycle={data.cycle} />
       </div>
+
+      <div>
+        <SectionCard title={ACCOUNT_DASHBOARD.notes.title} icon="treatment">
+          {data.notes.length === 0 ? (
+            <p className="text-sm text-ink-3">{ACCOUNT_DASHBOARD.notes.empty}</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {data.notes.map((note) => (
+                <li key={note.id} className="rounded-md bg-surface-2 p-3 text-sm text-ink">
+                  <p className="whitespace-pre-wrap">{note.text}</p>
+                  <span className="mt-1 block text-xs text-ink-3">
+                    {note.authorName ?? CUSTOMER_PROFILE_PAGE.note.authorUnknown} — {formatDate(dateToLocalDate(note.createdAt), 'short')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      </div>
+
     </div>
   )
 }
 
-/* ── The nearest-appointment banner ───────────────────────────────────────────── */
+function LatestCare({
+  care,
+}: {
+  readonly care: { readonly id: string; readonly serviceName: string; readonly afterCare: string | null } | null
+}) {
+  const copy = ACCOUNT_DASHBOARD.care
+  return (
+    <SectionCard
+      title={copy.title}
+      icon="treatment"
+      action={
+        <Link href="/account/care" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 no-underline hover:underline">
+          {copy.all}
+          <Icon name="chevronEnd" size="compact" />
+        </Link>
+      }
+    >
+      {care === null || care.afterCare === null ? (
+        <p className="text-sm text-ink-3">{copy.empty}</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-semibold text-ink">{care.serviceName}</span>
+          <p className="whitespace-pre-line text-sm leading-7 text-ink-2">{care.afterCare}</p>
+        </div>
+      )}
+    </SectionCard>
+  )
+}
 
 function NextBanner({
   next,
@@ -169,39 +207,6 @@ function NextBanner({
   )
 }
 
-/* ── The latest care ──────────────────────────────────────────────────────────── */
-
-function LatestCare({
-  care,
-}: {
-  readonly care: { readonly id: string; readonly serviceName: string; readonly afterCare: string | null } | null
-}) {
-  const copy = ACCOUNT_DASHBOARD.care
-  return (
-    <SectionCard
-      title={copy.title}
-      icon="treatment"
-      action={
-        <Link href="/account/care" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 no-underline hover:underline">
-          {copy.all}
-          <Icon name="chevronEnd" size="compact" />
-        </Link>
-      }
-    >
-      {care === null || care.afterCare === null ? (
-        <p className="text-sm text-ink-3">{copy.empty}</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-semibold text-ink">{care.serviceName}</span>
-          <p className="whitespace-pre-line text-sm leading-7 text-ink-2">{care.afterCare}</p>
-        </div>
-      )}
-    </SectionCard>
-  )
-}
-
-/* ── The suggested next session ─────────────────────────────────────────────────── */
-
 function SuggestedSession({
   cycle,
 }: {
@@ -240,8 +245,6 @@ function SuggestedSession({
     </SectionCard>
   )
 }
-
-/* ── The pieces the cards share ───────────────────────────────────────────────── */
 
 function KpiTile({
   label,

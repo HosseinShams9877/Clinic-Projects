@@ -1,37 +1,4 @@
-/**
- * The profile's three writers, as the three forms the manager fills render them.
- *
- * The profile is a read and three writes, and the three are three states of three
- * forms rather than one component holding all three: each has its own sentence for a
- * failure the module raised, its own pending state, and nothing else in common. A
- * single form holding all three would be a component whose submit button had to
- * decide which of three actions it was submitting.
- *
- * ## Why the three submit without a navigation
- *
- * Each action ends in `revalidatePath`, so the profile the manager sees after a save
- * is the profile the database holds. The sentence the module raises lands on the form
- * that raised it, because the form is what the manager was acting on — the same
- * answer the day grid's row actions give, and for the same reason.
- *
- * ## Why the doctor note refreshes the route
- *
- * `revalidatePath` alone re-renders the route's data, but a `TextArea` with a
- * `defaultValue` reads that value once, when it mounts, and keeps the typed text
- * afterwards. A note saved, then re-rendered with the same `defaultValue`, would
- * look like it had not saved at all — the textarea would still hold the pre-save
- * text and the form would still say «ذخیره». The form now calls `router.refresh()`
- * on success, and the `TextArea`'s `key` is the note itself: when the server's note
- * comes back different, the key changes and React mounts a fresh `TextArea` whose
- * `defaultValue` is the saved text.
- *
- * ## Why the mobile is not on the edit form
- *
- * The mobile is the person's identity — the key `customer_mobile_key` exists on it and
- * the dedupe reads it. Changing it is a different action than correcting a name, and
- * the module's own `updateCustomerProfile` does not accept one; a form that offered it
- * would offer a field the write path refuses.
- */
+// src/app/_customers/profile-forms.tsx
 
 'use client'
 
@@ -57,7 +24,6 @@ import type { ConsentFlags } from '@/modules/customers'
 
 /* ── The edit form ─────────────────────────────────────────────────────────── */
 
-/** The edit form's own props: the customer it edits, and the row's current facts. */
 export interface ProfileEditProps {
   readonly customerId: string
   readonly firstName: string
@@ -66,12 +32,6 @@ export interface ProfileEditProps {
   readonly residenceArea: string | null
 }
 
-/**
- * «ویرایش پرونده» — the profile's own facts, opened from the details section.
- *
- * A client component because the dialog is an open state and the failure the module
- * raises comes back onto the same form.
- */
 export function ProfileEdit(props: ProfileEditProps) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -160,25 +120,15 @@ export function ProfileEdit(props: ProfileEditProps) {
   )
 }
 
-/** The id the footer's submit button refers to, so the form and its button are one. */
 const PROFILE_EDIT_FORM_ID = 'customer-profile-edit'
 
 /* ── The consent form ──────────────────────────────────────────────────────── */
 
-/** The consent form's own props: the customer and the four flags as they stand. */
 export interface ConsentFormProps {
   readonly customerId: string
   readonly flags: ConsentFlags
 }
 
-/**
- * «تنظیمات ارسال» — the four flags, written with their evidence rows.
- *
- * Each flag is a real checkbox because the four are independent and a radio group
- * would make them a choice they are not. The four render in the catalog's own order,
- * which is the order the module's `ConsentFlags` names them, and the form renders its
- * own success sentence because the panel stays open after a save.
- */
 export function ConsentForm({ customerId, flags }: ConsentFormProps) {
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
@@ -228,7 +178,6 @@ export function ConsentForm({ customerId, flags }: ConsentFormProps) {
   )
 }
 
-/** One flag, as a checkbox the design system's control styles accept. */
 function ConsentCheckbox({
   name,
   label,
@@ -256,40 +205,33 @@ function ConsentCheckbox({
   )
 }
 
-/* ── The clinical note ─────────────────────────────────────────────────────── */
+/* ── The clinical note (JUST THE FORM) ─────────────────────────────────────── */
 
-/**
- * «یادداشت پزشک» — the note, kept beside the medical history.
- *
- * The note is the one field the form clears as well as fills, because a note that was
- * true and stopped being true is a note the file should not keep telling.
- *
- * The form refreshes the route after a successful save, and keys the `TextArea` on
- * the note, so the field the manager sees after the save is the field the database
- * holds — the reason is in the file header.
- */
 export function DoctorNoteForm({
   customerId,
-  note,
+  panel = 'admin',
 }: {
   readonly customerId: string
-  readonly note: string | null
+  readonly panel?: 'admin' | 'doctor'
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [answer, setAnswer] = useState<FormAnswer | null>(null)
+  const [text, setText] = useState('')
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const next = asFormString(event.currentTarget, 'note').trim()
+    if (text.trim() === '') return
+
     startTransition(async () => {
       const outcome: ActionResult = await updateCustomerNoteAction(
-        'admin',
+        panel,
         customerId,
-        next === '' ? null : next,
+        text.trim(),
       )
       if (outcome.ok) {
         setAnswer({ ok: true, message: CUSTOMER_PROFILE_PAGE.note.saved })
+        setText('')
         router.refresh()
         return
       }
@@ -301,15 +243,15 @@ export function DoctorNoteForm({
     <form className="flex flex-col gap-3" onSubmit={submit}>
       <Field label={CUSTOMER_PROFILE_PAGE.fields.doctorNote}>
         <TextArea
-          key={note ?? ''}
           name="note"
-          defaultValue={note ?? ''}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
           placeholder={CUSTOMER_PROFILE_PAGE.note.placeholder}
-          rows={4}
+          rows={3}
         />
       </Field>
       <div className="flex flex-col gap-2">
-        <Button type="submit" variant="neutral" size="small" loading={pending}>
+        <Button type="submit" variant="neutral" size="small" loading={pending} disabled={text.trim() === ''}>
           {CUSTOMER_PROFILE_PAGE.note.save}
         </Button>
         <FormAnswer answer={answer} />
@@ -320,16 +262,8 @@ export function DoctorNoteForm({
 
 /* ── The three pieces every form renders ───────────────────────────────────── */
 
-/** A form's own answer: its outcome and the sentence the outcome rendered. */
 type FormAnswer = { readonly ok: boolean; readonly message: string }
 
-/**
- * A form's answer: nothing while the form is clean, a sentence once the action returned.
- *
- * The tone is the outcome's own and not a guess from the text, because two forms each
- * have their own success sentence and a comparison against them would be a third
- * place those sentences are spelled.
- */
 function FormAnswer({ answer }: { readonly answer: FormAnswer | null }) {
   if (answer === null) return null
   return (
@@ -344,7 +278,6 @@ function FormAnswer({ answer }: { readonly answer: FormAnswer | null }) {
   )
 }
 
-/** The dimmed backdrop a click outside and an Escape both close. */
 function Overlay({
   children,
   onClose,
@@ -365,19 +298,16 @@ function Overlay({
   )
 }
 
-/** Whether a named checkbox in the form is checked. */
 function checked(form: HTMLFormElement, name: string): boolean {
   const element = form.elements.namedItem(name)
   return element instanceof HTMLInputElement ? element.checked : false
 }
 
-/** One field's value from a submitted form, or '' when the field was absent. */
 function asFormString(form: HTMLFormElement, name: string): string {
   const value = form.elements.namedItem(name)
   return value instanceof HTMLInputElement || value instanceof HTMLTextAreaElement ? value.value : ''
 }
 
-/** Swallows a click so the backdrop does not close on a click inside the panel. */
 function stopPropagation(event: MouseEvent): void {
   event.stopPropagation()
 }

@@ -124,7 +124,14 @@ export async function customerAppointments(args: {
 
   const mapped = rows.map((row) => asOwnRow(row))
   return {
-    upcoming: mapped.filter((row) => row.scheduledAt.getTime() >= args.now.getTime()).reverse(),
+    upcoming: mapped
+      .filter(
+        (row) =>
+          row.scheduledAt.getTime() >= args.now.getTime() &&
+          row.status !== AppointmentStatus.Cancelled &&
+          row.status !== AppointmentStatus.Rescheduled,
+      )
+      .reverse(),
     past: mapped.filter((row) => row.scheduledAt.getTime() < args.now.getTime()),
   }
 }
@@ -360,4 +367,3 @@ function panelBookingContext(tenantId: string, clinicId: string): PublicBookingC
     overrides: EMPTY_PERMISSION_OVERRIDES,
   })
 }
-

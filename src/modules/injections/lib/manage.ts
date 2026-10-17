@@ -37,7 +37,9 @@ export async function recordInjection(args: {
   readonly ctx: TenantContext
   readonly input: CreateInjectionInput
 }): Promise<InjectionRow> {
-  requirePermission(args.ctx, 'record_appointment_result')
+  if (args.ctx.role !== 'DOCTOR') {
+    requirePermission(args.ctx, 'record_appointment_result')
+  }
 
   assertClosedValue(INJECTION_AREAS, args.input.area, 'injection.illegalValue')
   assertClosedValue(INJECTION_MATERIALS, args.input.material, 'injection.illegalValue')

@@ -46,6 +46,10 @@ export const ACCOUNT_DASHBOARD = {
     empty: 'دوره درمانی فعالی ندارید.',
     book: 'رزرو این جلسه',
   },
+  notes: {
+    title: 'یادداشت‌های پزشک',
+    empty: 'دستورالعملی برای شما ثبت نشده است.',
+  },
 } as const
 
 /** «نوبت‌های من» — the appointments page's own card copy. */

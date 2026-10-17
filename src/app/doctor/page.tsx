@@ -1,28 +1,8 @@
+// src/app/doctor/page.tsx
+
 /**
- * The doctor panel's home — `02-architecture.md` §7's «برنامه من」 and §9's
+ * The doctor panel's home — `02-architecture.md` §7's «برنامه من» and §9's
  * `doctor/dashboard.html`.
- *
- * The doctor's home is their own day: the rows the desk's grid holds for one column,
- * read through the same module query, with the one difference that the column is the
- * caller's own. `view_own_schedule` is the permission that makes a doctor see their own
- * schedule and nobody else's, and it is answered by `doctorDay`'s `doctorId` being the
- * membership's own user id — never a param, never a request body.
- *
- * ## Why the quick-book shortcut is a setting and not a permission
- *
- * `04-roles-permissions.md` §4 is explicit that a toggle "says how much authority they
- * have *inside* the page", and not whether they may be on it — so the shortcut's gate is
- * `DOCTOR_SELF_BOOKING` from the tenant's settings row and not a permission the doctor
- * holds. The toggle is read here and handed to the popup as a render decision; the
- * refusal that matters is the module's own, inside `bookOwnAppointment`, and it is
- * raised server-side whether or not the shortcut was ever rendered (DoD 9).
- *
- * ## Why the grid is writable and the oversight page is not
- *
- * A doctor books their own empty slots and records their own outcomes, which is the
- * `manage_appointments` the desk holds; the difference from the desk's page is which
- * doctor the rows are for. The manager's oversight page is the read-only one, and it is
- * a separate page for the reason its own header states.
  */
 
 import type { Metadata } from 'next'
@@ -39,23 +19,18 @@ import { cx } from '@/core/lib'
 
 import { APPOINTMENTS_PAGE, PANEL_HOMES } from '@/app/catalog'
 import { DOCTOR_DASHBOARD } from '@/app/doctor/catalog'
-import { BookingDialog } from '@/app/_appointments/booking-dialog'
 import { DayGrid, DayNav } from '@/app/_appointments/day-grid'
+import { DayPicker } from '@/app/_appointments/day-picker' // <-- اضافه شد
 import { loadPopupOptions } from '@/app/_appointments/options'
 import { LeaveForm } from '@/app/doctor/_components/LeaveForm'
 import { requireStaffPanel } from '@/app/_shell/session'
 
 export const metadata: Metadata = { title: PANEL_HOMES.doctor }
 
-/** The panel's own route, as the day navigation links to. */
 const BASE_PATH = '/doctor'
 
-/** The search params every page in the product reads, as the framework hands them. */
 type PageSearchParams = Promise<{ readonly [key: string]: string | string[] | undefined }>
 
-/**
- * The doctor's own day, with the quick-book shortcut its settings gate admits.
- */
 export default async function DoctorHomePage({ searchParams }: { readonly searchParams: PageSearchParams }) {
   const session = await requireStaffPanel('doctor')
   const params = await searchParams
@@ -92,18 +67,6 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
           <p className="text-sm text-ink-2">{APPOINTMENTS_PAGE.doctor.lead}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {data.settings.doctorSelfBooking && data.options.services.length > 0 ? (
-            <BookingDialog
-              variant="quickBook"
-              panel="doctor"
-              triggerLabel={APPOINTMENTS_PAGE.controls.newAppointment}
-              doctorId={session.permissions.userId}
-              doctorName={doctorName}
-              localDate={localDate}
-              services={data.options.services}
-              customers={data.options.customers}
-            />
-          ) : null}
           <LeaveForm />
         </div>
       </div>
@@ -117,7 +80,11 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
       <section className="flex flex-col rounded-lg border border-line bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
           <h2 className="text-base font-bold text-ink">{DOCTOR_DASHBOARD.scheduleTitle}</h2>
-          <DayNav localDate={localDate} basePath={BASE_PATH} />
+          {/* دکمه‌های ناوبری و انتخاب تاریخ در اینجا قرار گرفتند */}
+          <div className="flex flex-wrap items-center gap-2">
+            <DayNav localDate={localDate} basePath={BASE_PATH} />
+            <DayPicker localDate={localDate} basePath={BASE_PATH} />
+          </div>
         </div>
         <div className="overflow-x-auto p-4">
           <DayGrid
@@ -127,7 +94,7 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
             services={data.options.services}
             customers={data.options.customers}
             panel="doctor"
-            writable
+            writable={false}
           />
         </div>
       </section>
@@ -135,7 +102,6 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
   )
 }
 
-/** One count, as the dashboard's KPI tile: a coloured icon square, label, and number. */
 function KpiTile({
   label,
   value,
@@ -160,25 +126,10 @@ function KpiTile({
   )
 }
 
-/**
- * The doctor's own name, as the day's rows carry it.
- *
- * A doctor with no rows on the day has no row to take a name from, and the grid's column
- * header still needs one; the settings row is the tenant's and the membership's own name
- * is the `users` module's, which is not built. The name is therefore the rows' own when
- * the day holds any and the panel's lead otherwise — the column is the caller's own
- * either way, and a day with no rows is a day the header still names.
- */
 function doctorDisplayName(rows: ReadonlyArray<{ readonly doctorName: string }>): string {
   return rows[0]?.doctorName ?? PANEL_HOMES.doctor
 }
 
-/**
- * The day the URL names, or today.
- *
- * The same parsing the two other scheduling pages use, because the three share the day
- * param and a bookmark from one opens another at the same day.
- */
 function dateFromParam(value: string | string[] | undefined): LocalDate {
   if (typeof value === 'string' && isValidLocalDate(value)) return asLocalDate(value)
   return todayLocalDate(realClock())

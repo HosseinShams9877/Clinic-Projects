@@ -1,23 +1,4 @@
-/**
- * The customer panel's Server Actions — the four writes `09-security.md` §7 permits a
- * customer, and only those four.
- *
- * Each action resolves the customer from the session and hands the session's own
- * `customerId` to the module. **No action accepts a customer id, and none reads one
- * from the request** — §7 names that absence as the property the panel's isolation
- * rests on, and a `customerId` in this file's argument list would be the horizontal
- * escalation the security document describes. The appointment id the cancellation and
- * the reschedule take is a row the module then scopes to the session's customer, so
- * a request naming another person's appointment reaches the module's 404.
- *
- * ## Why the actions answer with sentences
- *
- * The island renders a result, and a thrown error is the framework's English page. Each
- * call is wrapped and the failure's `messageKey` becomes the Persian sentence the
- * catalog holds, which is the same boundary `consultation-action.ts` keeps on the
- * public side for the same reason: the person who pressed the button reads the
- * sentence, not the stack.
- */
+// src/app/_account/actions.ts
 
 'use server'
 
@@ -25,13 +6,17 @@ import { revalidatePath } from 'next/cache'
 
 import { prisma, runInTenantScope } from '@/core/db'
 import { realClock } from '@/core/lib/clock'
-import { asLocalDate, asLocalTime } from '@/core/localization'
+import { asLocalDate, asLocalTime, minutesToTime, jalaliWeekday } from '@/core/localization'
 
 import { resolveCustomerPanel } from '@/app/_shell/session'
 import { MESSAGES as APPOINTMENT_MESSAGES } from '@/modules/appointments'
 import {
   cancelOwnAppointment,
   rescheduleOwnAppointment,
+  generateSlots,
+  readBookingSettings,
+  blockRanges,
+  doctorWindowsOnDay,
 } from '@/modules/appointments'
 import {
   readPaymentSettings,
@@ -44,18 +29,10 @@ import {
 } from '@/modules/customers'
 import { CUSTOMER_PANEL } from '@/modules/customers'
 
-/**
- * Every action's answer: either it worked, or it holds the Persian sentence to show.
- *
- * The success branch carries `T` only when the action has something to report —
- * `& void` collapses to `never` in TypeScript, which is why the success payload is
- * behind the conditional rather than intersected unconditionally.
- */
 export type PanelActionResult<T = void> =
   | ({ readonly ok: true } & (T extends void ? object : T))
   | { readonly ok: false; readonly message: string }
 
-/** A thrown error as the Persian sentence the island renders. */
 function failureMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && 'messageKey' in error) {
     const key = (error as { readonly messageKey: string }).messageKey
@@ -65,13 +42,6 @@ function failureMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-/**
- * «لغو نوبت» — closes the customer's own session inside the policy window.
- *
- * The module applies the deposit policy and returns what it entitles the customer to,
- * which the island names back: a cancellation that returns nothing is a cancellation
- * the customer cannot tell whether their deposit follows.
- */
 export async function cancelOwnAppointmentAction(appointmentId: string): Promise<
   PanelActionResult<{
     readonly refundAmount: string
@@ -90,9 +60,6 @@ export async function cancelOwnAppointmentAction(appointmentId: string): Promise
         now: realClock(),
       })
 
-      // The deposit policy is the `payments` module's reading of the deposit the
-      // cancellation reports, composed here rather than in the module because the
-      // money is that module's — the same rule the desk's own cancellation keeps.
       const settings = await readPaymentSettings(tx, session.tenantId)
       const refundAmount = refundAmountFor(settings.depositRefundPolicy, result.depositReceived)
 
@@ -110,12 +77,6 @@ export async function cancelOwnAppointmentAction(appointmentId: string): Promise
   }
 }
 
-/**
- * «جابه‌جایی نوبت» — moves the customer's own session to a new slot.
- *
- * The day and time arrive as the `LocalDate`/`LocalTime` strings the picker emits, and
- * the booking path's own guards decide whether the slot is the clinic's to give.
- */
 export async function rescheduleOwnAppointmentAction(args: {
   readonly appointmentId: string
   readonly localDate: string
@@ -144,11 +105,81 @@ export async function rescheduleOwnAppointmentAction(args: {
 }
 
 /**
- * «ویرایش پروفایل» — the facts the customer edits themselves.
- *
- * The mobile is not among them: the panel does not offer the field, and the module
- * would not take it.
+ * اکشن جدید برای گرفتن ساعت‌های خالی جهت فرم جابه‌جایی.
  */
+export async function getAvailableSlotsAction(args: {
+  readonly appointmentId: string
+  readonly localDate: string
+}): Promise<PanelActionResult<{ readonly slots: readonly string[] }>> {
+  const session = await resolveCustomerPanel()
+
+  try {
+    return await runInTenantScope(session.permissions, prisma(), async (tx) => {
+      // 1. خواندن نوبت فعلی برای گرفتن dr, clinic, service, duration
+      const current = await tx.appointment.findFirst({
+        where: { id: args.appointmentId, tenantId: session.tenantId, customerId: session.customerId },
+        select: {
+          doctorId: true,
+          clinicId: true,
+          serviceId: true,
+          durationMinutes: true,
+        },
+      })
+      if (!current) throw new Error('Appointment not found')
+
+      const targetDate = asLocalDate(args.localDate)
+      const weekday = jalaliWeekday(targetDate)
+      const settings = await readBookingSettings(tx, session.tenantId)
+
+      // 2. گرفتن پنجره‌های کاری دکتر در آن روز
+      const windows = await doctorWindowsOnDay({
+        tx,
+        tenantId: session.tenantId,
+        clinicId: current.clinicId,
+        weekday,
+      })
+      const window = windows.find((w) => w.id === current.doctorId)
+      if (!window) {
+        return { ok: true as const, slots: [] } // دکتر در این روز کار نمی‌کند
+      }
+
+      // 3. گرفتن نوبت‌های رزروشده برای آن دکتر در آن روز (به عنوان block)
+      const existingAppointments = await tx.appointment.findMany({
+        where: {
+          tenantId: session.tenantId,
+          doctorId: current.doctorId,
+          localDate: args.localDate,
+          isSlotBlock: false,
+          status: { notIn: ['CANCELLED', 'RESCHEDULED'] },
+        },
+        select: { localTime: true, durationMinutes: true },
+      })
+      
+      // 4. ساخت اسلات‌ها
+      const range = window.ranges[0] 
+      if (!range) return { ok: true as const, slots: [] }
+
+      const slotDay = {
+        doctorId: current.doctorId,
+        localDate: targetDate,
+        shift: { startTime: minutesToTime(range.startMinute), endTime: minutesToTime(range.endMinute) },
+        hours: { startTime: minutesToTime(range.startMinute), endTime: minutesToTime(range.endMinute) },
+        durationMinutes: current.durationMinutes,
+        slotMinutes: range.slotMinutes,
+        blocks: blockRanges(existingAppointments),
+        isHoliday: false, // برای سادگی در این اکشن چک نمی‌کنیم
+      }
+
+      const slots = generateSlots(slotDay, settings)
+      const availableTimes = slots.filter(s => s.available).map(s => s.time)
+
+      return { ok: true as const, slots: availableTimes }
+    })
+  } catch (error: unknown) {
+    return { ok: false, message: failureMessage(error, CUSTOMER_PANEL.failure) }
+  }
+}
+
 export async function updateOwnProfileAction(args: {
   readonly firstName: string
   readonly lastName: string
@@ -178,13 +209,6 @@ export async function updateOwnProfileAction(args: {
   }
 }
 
-/**
- * «تنظیمات ارسال» — the customer's own consent, granted or revoked.
- *
- * A revocation writes the evidence row and flips the flag the send path checks, so the
- * suppression is immediate on the next dispatch; the before/after flag is the one §9's
- * rule 6 gates the public gallery on, and revoking it removes the images at the source.
- */
 export async function recordOwnConsentAction(args: {
   readonly sms: boolean
   readonly whatsApp: boolean

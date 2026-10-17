@@ -288,6 +288,8 @@ export const CUSTOMERS_PAGE = {
   actions: {
     open: 'باز کردن پرونده',
     book: 'ثبت نوبت',
+     file: 'پرونده', // <-- اضافه شود
+    note: 'ثبت یادداشت', // <-- اضافه شود
   },
   empty: {
     /** A search that named nobody. */
@@ -352,6 +354,11 @@ export const CUSTOMER_PROFILE_PAGE = {
     placeholder: 'یادداشت بالینی این مشتری را اینجا بنویسید.',
     history: 'یادداشت‌های ثبت‌شده',
     historyEmpty: 'هنوز یادداشتی ثبت نشده است.',
+    authorUnknown: 'سیستم',
+    modalTitle: 'ثبت یادداشت جدید',
+    modalPlaceholder: 'متن یادداشت را اینجا بنویسید...',
+    close: 'بستن',
+    cancel: 'انصراف',
   },
   edit: {
     title: 'ویرایش پرونده',
