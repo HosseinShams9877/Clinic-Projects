@@ -1,3 +1,5 @@
+// src/app/reception/appointments/page.tsx
+
 /**
  * The reception desk's appointments page.
  */
@@ -20,15 +22,20 @@ import {
   type LocalDate,
 } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
-import { readBookingSettings, runLifecycleSweep, type AppointmentRow, type DoctorDayWindow } from '@/modules/appointments'
+import {
+  readBookingSettings,
+  runLifecycleSweep,
+  type AppointmentRow,
+  type DoctorDayWindow,
+} from '@/modules/appointments'
 
 import { Button } from '@/core/components/button'
 import { Icon } from '@/core/components/icons'
 import { APPOINTMENTS_PAGE, RECEPTION_APPOINTMENTS } from '@/app/catalog'
 import { BookingDialog } from '@/app/_appointments/booking-dialog'
-import { DayAlert } from '@/app/_appointments/day-alert'
 import { DayGrid, DayNav } from '@/app/_appointments/day-grid'
 import { DayPicker } from '@/app/_appointments/day-picker'
+import { FilterBar } from '@/app/_appointments/filter-bar'
 import {
   loadAppointmentsPage,
   type AppointmentsPageData,
@@ -74,7 +81,6 @@ export default async function ReceptionAppointmentsPage({
     })
   })
 
-  const hasUnrecorded = data.cartable.some((row) => row.status === 'RESULT_NOT_RECORDED')
   const liveRows = data.day.rows.filter(
     (row) => !row.isSlotBlock && row.status !== 'CANCELLED' && row.status !== 'RESCHEDULED',
   )
@@ -85,12 +91,30 @@ export default async function ReceptionAppointmentsPage({
   const subtitle = `${weekdayName(jalaliWeekday(localDate))} ${formatDate(asLocalDate(localDate), 'long')} — ${formatNumber(liveRows.length)} ${APPOINTMENTS_PAGE.countAppointments} ${APPOINTMENTS_PAGE.countConnector} ${formatNumber(doctorCount)} ${APPOINTMENTS_PAGE.countDoctors}`
   const firstFree = firstFreeSlot(data.day.windows, data.day.rows)
 
+  const doctorFilter = asString(params.doctor)
+  const statusFilter = asString(params.status)
+
+  const filteredRows = data.day.rows.filter(
+    (row) =>
+      (doctorFilter === '' || row.doctorId === doctorFilter) &&
+      (statusFilter === '' || row.status === statusFilter),
+  )
+
+  const filteredDoctors = doctorFilter
+    ? data.day.doctors.filter((doctor) => doctor.id === doctorFilter)
+    : data.day.doctors
+
+  const filteredWindows = doctorFilter
+    ? data.day.windows.filter((window) => window.id === doctorFilter)
+    : data.day.windows
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex h-full flex-col gap-3">
+      {/* هدر صفحه (عنوان و دکمه‌ها) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold text-ink">{APPOINTMENTS_PAGE.reception.title}</h1>
-          <p className="text-sm text-ink-2">{subtitle}</p>
+        <div className="flex flex-col gap-0.5">
+          <h1 className="text-xl font-bold text-ink">{APPOINTMENTS_PAGE.reception.title}</h1>
+          <p className="text-xs text-ink-2">{subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {firstFree === null ? (
@@ -131,43 +155,50 @@ export default async function ReceptionAppointmentsPage({
         </div>
       </div>
 
-      <DayAlert show={hasUnrecorded} />
-
-      <ViewTabs
-        view={view}
-        cartableCount={data.cartable.length}
-        basePath={BASE_PATH}
-        search={rest}
-      />
-
-      {view === 'cartable' ? (
-        <Cartable rows={data.cartable} />
-      ) : view === 'week' ? (
-        <div className="flex flex-col gap-4">
-          <DayNav localDate={localDate} basePath={BASE_PATH} />
-          <WeekGrid
-            days={data.week}
-            services={data.day.services}
-            customers={data.day.customers}
-            panel="reception"
-            writable
-          />
-        </div>
-      ) : (
-        <section className="flex min-w-0 flex-col rounded-md border border-line bg-surface">
-          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <DayNav localDate={localDate} basePath={BASE_PATH} />
-              <DayPicker localDate={localDate} basePath={BASE_PATH} />
-            </div>
-            <h2 className="font-bold text-ink">{APPOINTMENTS_PAGE.gridTitle}</h2>
-          </header>
-          <div className="overflow-x-auto p-4">
+      {/* کادر اصلی (جدول) */}
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
+        {/* هدر جدول: شامل تب‌ها، دکمه‌های تاریخ و فیلترها */}
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-1.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <ViewTabs
+              view={view}
+              cartableCount={data.cartable.length}
+              basePath={BASE_PATH}
+              search={rest}
+            />
+            
+            <div className="h-4 w-px bg-line-2" /> {/* جداکننده ظریف */}
+            
+            <DayNav localDate={localDate} basePath={BASE_PATH} />
+            <DayPicker localDate={localDate} basePath={BASE_PATH} />
+            <FilterBar
+              basePath={BASE_PATH}
+              doctors={data.day.doctors}
+              doctor={doctorFilter}
+              status={statusFilter}
+              day={typeof params.day === 'string' ? params.day : null}
+            />
+          </div>
+        </header>
+        
+        {/* بدنه جدول */}
+        <div className="flex-1 overflow-x-auto">
+          {view === 'cartable' ? (
+            <Cartable rows={data.cartable} />
+          ) : view === 'week' ? (
+            <WeekGrid
+              days={data.week}
+              services={data.day.services}
+              customers={data.day.customers}
+              panel="reception"
+              writable
+            />
+          ) : (
             <DayGrid
               localDate={localDate}
-              doctors={data.day.doctors}
-              windows={data.day.windows}
-              rows={data.day.rows}
+              doctors={filteredDoctors}
+              windows={filteredWindows}
+              rows={filteredRows}
               services={data.day.services}
               customers={data.day.customers}
               servicesByDoctorId={data.day.servicesByDoctorId}
@@ -175,8 +206,12 @@ export default async function ReceptionAppointmentsPage({
               panel="reception"
               writable
             />
-          </div>
-          <div className="flex flex-wrap items-center gap-5 border-t border-line px-4 py-3 text-xs text-ink-3">
+          )}
+        </div>
+        
+        {/* فوتر (فقط برای حالت روز) */}
+        {view === 'day' && (
+          <div className="flex flex-wrap items-center gap-5 border-t border-line px-4 py-2 text-xs text-ink-3">
             <span className="flex items-center gap-1">
               <Icon name="treatment" size="compact" />
               {RECEPTION_APPOINTMENTS.legend.platform}
@@ -186,8 +221,8 @@ export default async function ReceptionAppointmentsPage({
               {RECEPTION_APPOINTMENTS.legend.secretary}
             </span>
           </div>
-        </section>
-      )}
+        )}
+      </section>
     </div>
   )
 }
@@ -216,11 +251,11 @@ function firstFreeSlot(
 
 function Cartable({ rows }: { readonly rows: AppointmentsPageData['cartable'] }) {
   if (rows.length === 0) {
-    return <p className="text-sm text-ink-3">{APPOINTMENTS_PAGE.empty.cartable}</p>
+    return <p className="p-4 text-sm text-ink-3">{APPOINTMENTS_PAGE.empty.cartable}</p>
   }
 
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="flex flex-col gap-3 p-4">
       {rows.map((row) => (
         <li key={row.id} className="flex flex-col gap-2 rounded-md border border-line bg-surface p-4">
           <div className="flex items-baseline justify-between gap-2">
@@ -260,6 +295,10 @@ function viewFromParam(value: string | string[] | undefined): AppointmentsView {
 function dateFromParam(value: string | string[] | undefined): LocalDate {
   if (typeof value === 'string' && isValidLocalDate(value)) return asLocalDate(value)
   return todayLocalDate(realClock())
+}
+
+function asString(value: string | string[] | undefined): string {
+  return typeof value === 'string' ? value : ''
 }
 
 function carriedSearch(params: Awaited<PageSearchParams>): string {

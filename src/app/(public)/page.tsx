@@ -1,15 +1,13 @@
+// src/app/(public)/page.tsx
+
 /**
  * «خانه» — `02-architecture.md` §9's `index.html`.
- *
- * The page is four sections the design system pins: §30's hero, §31's trust bar, §32's
- * service cards and §33's doctor cards. Each is a read and a render — the catalogue and
- * the team come from the module, and the copy comes from the catalog, so the page holds
- * one layout decision (the order of the four) and no other fact of its own.
  */
 
 import Link from 'next/link'
+import Image from 'next/image' // <-- استفاده از Next Image
 
-import { prisma, runInTenantScope } from '@/core/db'
+import { prisma, runInTenantScope, unscopedPrisma } from '@/core/db'
 import { resolveTenantId } from '@/app/_shell/tenant'
 import { Icon } from '@/core/components/icons'
 import {
@@ -33,11 +31,11 @@ export const metadata = { title: PUBLIC_HOME.hero.title }
 
 export default async function HomePage() {
   const tenantId = await resolveTenantId()
-  const { services, doctors, gallery } = await readHome(tenantId)
+  const { services, doctors, gallery, clinic } = await readHome(tenantId)
 
   return (
     <>
-      <Hero />
+      <Hero heroImageUrl={clinic?.heroImageUrl} />
       <TrustBar />
       <ServicesSection services={services} />
       <DoctorsSection doctors={doctors} />
@@ -47,7 +45,7 @@ export default async function HomePage() {
 }
 
 /** §30 — the gradient banner, the two actions and the 16/11 media. */
-function Hero() {
+function Hero({ heroImageUrl }: { readonly heroImageUrl?: string | null }) {
   const hero = PUBLIC_HOME.hero
   return (
     <section
@@ -79,10 +77,22 @@ function Hero() {
             </Link>
           </div>
         </div>
-        <div className="aspect-[16/11] overflow-hidden rounded-[24px] bg-brand-100">
-          <div className="grid size-full place-items-center">
-            <Icon name="treatment" size="action" />
-          </div>
+        <div className="relative aspect-[16/11] overflow-hidden rounded-[24px] bg-brand-100">
+          {/* استفاده از Next Image */}
+          {heroImageUrl ? (
+            <Image
+              src={heroImageUrl}
+              alt="Hero"
+              fill
+              sizes="(max-width: 768px) 100vw, 50vw"
+              className="object-cover"
+              priority
+            />
+          ) : (
+            <div className="grid size-full place-items-center">
+              <Icon name="treatment" size="action" />
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -258,13 +268,16 @@ function BeforeAfterSection({
 function PairPane({ label, path }: { readonly label: string; readonly path: string }) {
   return (
     <div className="relative aspect-square bg-brand-100">
-      <div className="grid size-full place-items-center text-brand-300">
-        <Icon name="treatment" size="action" />
-      </div>
+      <Image
+        src={path}
+        alt={label}
+        fill
+        sizes="(max-width: 768px) 50vw, 33vw"
+        className="object-cover"
+      />
       <span className="absolute inset-x-0 bottom-0 bg-[rgba(46,37,36,.72)] py-1.5 text-center text-[11.5px] font-medium text-white">
         {label}
       </span>
-      <span className="sr-only">{path}</span>
     </div>
   )
 }
@@ -298,17 +311,23 @@ function SectionHeader({
 }
 
 /**
- * The page's four reads in one scoped transaction, so the four sections are one fact
- * about the clinic and not four reads that could disagree mid-render.
+ * The page's reads in one scoped transaction.
  */
 async function readHome(tenantId: Awaited<ReturnType<typeof resolveTenantId>>) {
-  if (tenantId === null) return { services: [], doctors: [], gallery: [] }
+  if (tenantId === null) return { services: [], doctors: [], gallery: [], clinic: null }
+
+  // خواندن اطلاعات کلینیک (شامل عکس هیرو)
+  const clinicRow = await unscopedPrisma().clinic.findFirst({
+    where: { tenantId, isActive: true },
+    select: { heroImageUrl: true, aboutImageUrl: true, name: true },
+  })
+
   return runInTenantScope({ tenantId, clinicId: null, role: 'public', userId: 'public' }, prisma(), async (tx) => {
     const [services, doctors, gallery] = await Promise.all([
       publicServices(tx, tenantId),
       publicDoctors(tx, tenantId),
       publicBeforeAfter(tx, tenantId),
     ])
-    return { services, doctors, gallery }
+    return { services, doctors, gallery, clinic: clinicRow }
   })
 }
