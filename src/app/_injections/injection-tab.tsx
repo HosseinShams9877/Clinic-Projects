@@ -1,25 +1,17 @@
+// src/app/_injections/injection-tab.tsx
+
+'use client'
+
 /**
  * The «نقشه تزریق» tab — the two views, the add button, and the info bar.
- *
- * The tab is two surfaces over one set of rows: the **نقشه** (the face and its
- * side column) and the **جدول** (the full record, filterable by session). The
- * two are a `?injectionView=` param on the profile URL, so a bookmark lands on
- * the view it names and the tab is one Server Component either way.
- *
- * ## Why the view tab appends with the right separator
- *
- * The `basePath` the profile hands this tab already carries a query string
- * (`?tab=injections`), so a second `?` would make the browser read the whole
- * tail as the *value* of `tab` — which is how the view tab ended up navigating
- * to the summary tab instead of the table. The separator is therefore chosen by
- * whether the base path already names a query, and the view param lands beside
- * `tab` rather than on top of it.
  */
 
+import { useState } from 'react'
 import Link from 'next/link'
 
 import { Icon } from '@/core/components/icons'
 import { cx } from '@/core/lib'
+import type { InjectionArea } from '@/core/constants'
 
 import type { InjectionCounts, InjectionRow } from '@/modules/injections'
 
@@ -54,6 +46,9 @@ export function InjectionTab({
   /** The profile's own route, so the view switch writes to it. */
   readonly basePath?: string
 }) {
+  const [selectedArea, setSelectedArea] = useState<InjectionArea | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false) // <-- استیت جدید
+
   return (
     <section className="flex flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -66,7 +61,13 @@ export function InjectionTab({
             {rows.length} {INJECTION_TAB.countSuffix}
           </span>
         </div>
-        <InjectionDialog panel={panel} customerId={customerId} />
+        <InjectionDialog 
+          panel={panel} 
+          customerId={customerId} 
+          defaultArea={selectedArea} 
+          open={dialogOpen} 
+          onOpenChange={setDialogOpen} 
+        />
       </header>
 
       <InjectionKpi counts={counts} />
@@ -89,7 +90,13 @@ export function InjectionTab({
       )}
 
       {view === 'map' ? (
-        <InjectionMap rows={rows} />
+        <InjectionMap 
+          rows={rows} 
+          onAreaClick={(area) => {
+            setSelectedArea(area)
+            setDialogOpen(true)
+          }} 
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sh-1">
           <div className="flex items-center gap-2 border-b border-line bg-surface-2 px-4 py-2.5 text-xs text-ink-3">

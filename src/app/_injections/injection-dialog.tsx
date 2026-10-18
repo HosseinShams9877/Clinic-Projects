@@ -1,30 +1,4 @@
-/**
- * The «افزودن تزریق» popup.
- *
- * The form collects one injection: where, what, how much in what unit, at what
- * depth and technique, the batch number, the session's date, and an optional note.
- * Every closed set is a `<select>` over the constants and not a free-text field,
- * because the record's whole value is that it is queryable later — an area typed
- * as «گونه» is an area nobody can count.
- *
- * ## The session date is the shell's own JalaliDatePicker
- *
- * The date field is the same control the appointment's day picker uses — a
- * `JalaliDatePicker` wrapped in a `Field` — so the injection form's date and the
- * rest of the product's date fields read the same way. A free-text field would be
- * a second date format the record could carry, and the record's whole value is
- * that it is queryable later.
- *
- * ## The visual language
- *
- * The dialog opens under the same one-pixel brand bar the booking and block
- * popups use, with the title's icon in a `bg-brand-50` disc beside it. The form's
- * two-column rows (amount + unit, depth + technique) are pairs the doctor reads
- * together, and each pair sits in its own row so the eye groups them. The
- * submit is the primary variant with the `add` icon, because adding a row is the
- * dialog's one positive action; the cancel is a ghost, so the eye finds the
- * submit first.
- */
+// src/app/_injections/injection-dialog.tsx
 
 'use client'
 
@@ -42,6 +16,7 @@ import {
   INJECTION_MATERIALS,
   INJECTION_TECHNIQUES,
   INJECTION_UNITS,
+  type InjectionArea,
 } from '@/core/constants'
 import { asLocalDate, todayLocalDate, type LocalDate } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
@@ -59,9 +34,11 @@ import { createInjectionAction, type InjectionActionResult, type InjectionInput 
 export interface InjectionDialogProps {
   readonly panel: 'reception' | 'doctor' | 'admin'
   readonly customerId: string
+  readonly defaultArea?: InjectionArea | null
+  readonly open?: boolean
+  readonly onOpenChange?: (open: boolean) => void
 }
 
-/** The form's opening values. */
 interface InjectionValues {
   readonly area: string
   readonly material: string
@@ -76,21 +53,27 @@ interface InjectionValues {
 }
 
 export function InjectionDialog(props: InjectionDialogProps) {
-  const [open, setOpen] = useState(false)
-  const [values, setValues] = useState<InjectionValues>(() => emptyValues())
-  const [result, setResult] = useState<InjectionActionResult | null>(null)
-  const [pending, setPending] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isOpen = props.open ?? internalOpen
+  const setOpen = props.onOpenChange ?? setInternalOpen
+
+  // کلید برای ریست کردن فرم وقتی ناحیه تغییر می‌کند
+  const [formKey, setFormKey] = useState(0)
   const titleId = useId()
 
-  if (!open) {
+  function handleClose() {
+    setOpen(false)
+  }
+
+  // اگر دیالوگ بسته است، دکمه را نشان بده
+  if (!isOpen) {
     return (
       <Button
         size="small"
         variant="primary"
         leadingIcon="add"
         onClick={() => {
-          setValues(emptyValues())
-          setResult(null)
+          setFormKey((k) => k + 1)
           setOpen(true)
         }}
       >
@@ -99,10 +82,40 @@ export function InjectionDialog(props: InjectionDialogProps) {
     )
   }
 
+  // محتوای فرم
+  return (
+    <InjectionForm
+      key={formKey}
+      panel={props.panel}
+      customerId={props.customerId}
+      defaultArea={props.defaultArea}
+      onClose={handleClose}
+      titleId={titleId}
+    />
+  )
+}
+
+function InjectionForm({
+  panel,
+  customerId,
+  defaultArea,
+  onClose,
+  titleId,
+}: {
+  readonly panel: 'reception' | 'doctor' | 'admin'
+  readonly customerId: string
+  readonly defaultArea?: InjectionArea | null
+  readonly onClose: () => void
+  readonly titleId: string
+}) {
+  const [values, setValues] = useState<InjectionValues>(() => emptyValues(defaultArea))
+  const [result, setResult] = useState<InjectionActionResult | null>(null)
+  const [pending, setPending] = useState(false)
+
   async function submit() {
     setPending(true)
     const input: InjectionInput = {
-      customerId: props.customerId,
+      customerId,
       area: values.area,
       material: values.material,
       brand: values.brand,
@@ -114,10 +127,10 @@ export function InjectionDialog(props: InjectionDialogProps) {
       note: values.note,
       localDate: values.localDate,
     }
-    const outcome = await createInjectionAction(props.panel, input)
+    const outcome = await createInjectionAction(panel, input)
     setPending(false)
     if (outcome.ok) {
-      setOpen(false)
+      onClose()
       return
     }
     setResult(outcome)
@@ -126,7 +139,7 @@ export function InjectionDialog(props: InjectionDialogProps) {
   const canSubmit = values.area !== '' && values.material !== ''
 
   return (
-    <Overlay onClose={() => setOpen(false)}>
+    <Overlay onClose={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -147,7 +160,7 @@ export function InjectionDialog(props: InjectionDialogProps) {
             variant="ghost"
             icon="close"
             aria-label={INJECTION_TAB.dialog.close}
-            onClick={() => setOpen(false)}
+            onClick={onClose}
           />
         </header>
 
@@ -284,7 +297,7 @@ export function InjectionDialog(props: InjectionDialogProps) {
         </div>
 
         <footer className="flex items-center justify-between gap-2 border-t border-line px-5 py-4">
-          <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+          <Button variant="ghost" onClick={onClose} disabled={pending}>
             {INJECTION_TAB.dialog.cancel}
           </Button>
           <Button
@@ -302,10 +315,9 @@ export function InjectionDialog(props: InjectionDialogProps) {
   )
 }
 
-/** The form's opening values — today's Jalali day, and every closed set unset. */
-function emptyValues(): InjectionValues {
+function emptyValues(defaultArea?: InjectionArea | null): InjectionValues {
   return {
-    area: '',
+    area: defaultArea ?? '',
     material: '',
     brand: '',
     amount: '',
@@ -318,7 +330,6 @@ function emptyValues(): InjectionValues {
   }
 }
 
-/** The dimmed backdrop a click outside and an Escape both close. */
 function Overlay({ children, onClose }: { readonly children: ReactNode; readonly onClose: () => void }) {
   return (
     <div
@@ -336,7 +347,6 @@ function Overlay({ children, onClose }: { readonly children: ReactNode; readonly
   )
 }
 
-/** Swallows a click so the backdrop does not close on a click inside the panel. */
 function stopPropagation(event: MouseEvent): void {
   event.stopPropagation()
 }

@@ -47,3 +47,5 @@ export const INJECTION_MATERIAL_COLORS: Readonly<Record<InjectionMaterial, strin
 
 /** The colour a material the map does not know is painted with. */
 export const MATERIAL_FALLBACK = '#6e5f5b'
+
+export const CLICK_RADIUS = 40

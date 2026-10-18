@@ -1,3 +1,5 @@
+// src/app/_injections/injection-map.tsx
+
 /**
  * The customer's injection map — a face, a point per session area, and the side
  * column that reads the volumes.
@@ -16,15 +18,30 @@ import {
   INJECTION_AREA_POINTS,
   INJECTION_MATERIAL_COLORS,
   MATERIAL_FALLBACK,
+  CLICK_RADIUS,
 } from './injection-map-catalog'
 import { INJECTION_MAP } from './catalog'
 
-export function InjectionMap({ rows }: { readonly rows: readonly InjectionRow[] }) {
+export function InjectionMap({ 
+  rows,
+  onAreaClick,
+}: { 
+  readonly rows: readonly InjectionRow[]
+  readonly onAreaClick: (area: InjectionArea) => void
+}) {
+  // اگر خالی بود، همچنان نقاط کلیک‌پذیر را نشان بده تا بشود تزریق اضافه کرد
   if (rows.length === 0) {
     return (
-      <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">
-        {INJECTION_MAP.empty}
-      </p>
+      <section className="grid grid-cols-1 gap-4 panel:grid-cols-[1fr_320px]">
+        <div className="relative rounded-lg border border-line bg-surface p-4">
+          <FaceSvg rows={[]} sessionByRowId={new Map()} onAreaClick={onAreaClick} />
+        </div>
+        <div className="flex flex-col gap-4">
+          <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">
+            {INJECTION_MAP.empty}
+          </p>
+        </div>
+      </section>
     )
   }
 
@@ -39,7 +56,11 @@ export function InjectionMap({ rows }: { readonly rows: readonly InjectionRow[] 
   return (
     <section className="grid grid-cols-1 gap-4 panel:grid-cols-[1fr_320px]">
       <div className="relative rounded-lg border border-line bg-surface p-4">
-        <FaceSvg rows={rows} sessionByRowId={sessionByRowId} />
+        <FaceSvg 
+          rows={rows} 
+          sessionByRowId={sessionByRowId} 
+          onAreaClick={onAreaClick} 
+        />
       </div>
 
       <div className="flex flex-col gap-4">
@@ -56,9 +77,11 @@ export function InjectionMap({ rows }: { readonly rows: readonly InjectionRow[] 
 function FaceSvg({
   rows,
   sessionByRowId,
+  onAreaClick,
 }: {
   readonly rows: readonly InjectionRow[]
   readonly sessionByRowId: ReadonlyMap<string, number>
+  readonly onAreaClick: (area: InjectionArea) => void
 }) {
   const offsetByArea = new Map<string, number>()
 
@@ -78,6 +101,22 @@ function FaceSvg({
         preserveAspectRatio="xMidYMid meet"
       />
 
+      {/* لایه کلیک‌پذیر برای تمام ۱۸ ناحیه */}
+      {Object.entries(INJECTION_AREA_POINTS).map(([area, point]) => (
+        <circle
+          key={`click-${area}`}
+          cx={point.x}
+          cy={point.y}
+          r={CLICK_RADIUS}
+          fill="transparent"
+          className="cursor-pointer transition-colors hover:fill-brand-50/50"
+          onClick={() => onAreaClick(area as InjectionArea)}
+        >
+          <title>{INJECTION_AREA_LABELS[area as InjectionArea]}</title>
+        </circle>
+      ))}
+
+      {/* لایه نمایش تزریقات ثبت‌شده */}
       {rows.map((row) => {
         const point = isMember(InjectionArea, row.area)
           ? INJECTION_AREA_POINTS[row.area]
