@@ -9,14 +9,11 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { prisma, runInTenantScope } from '@/core/db'
-import type { TransactionClient } from '@/core/db/scope'
 import { realClock } from '@/core/lib/clock'
 import { APPOINTMENT_STATUS_LABELS } from '@/modules/appointments'
 import { ACQUISITION_SOURCE_LABELS, getCustomerNotes } from '@/modules/customers'
 import {
   AppointmentStatus,
-  AudienceGroupKey,
-  BUILT_IN_AUDIENCE_GROUPS,
   CycleStatus,
   PaymentKind,
   PaymentMethod,
@@ -52,8 +49,7 @@ import { PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS } from '@/modules/payments'
 import { CYCLE_STATUS_LABELS, customerCycles } from '@/modules/cycles'
 import type { CycleRow } from '@/modules/cycles'
 import { customerMessageHistory } from '@/modules/messages'
-import { AUDIENCE_GROUP_LABELS, evaluateGroup } from '@/modules/audience-groups'
-import { ConsentForm, DoctorNoteForm } from '@/app/_customers/profile-forms'
+import { DoctorNoteForm } from '@/app/_customers/profile-forms'
 import { ProgressBar } from '@/app/_components/ProgressBar'
 import { requireStaffPanel } from '@/app/_shell/session'
 
@@ -80,7 +76,7 @@ export default async function DoctorCustomerDetailPage({
 
   const data = await loadProfile(session.permissions, id)
 
-  const { profile, cycles, messages, groups, injections, injectionCounts, notes } = data
+  const { profile, cycles, messages, injections, injectionCounts, notes } = data
   const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
   const balance = profile.chargedTotal - profile.paidTotal
   const activeCycles = cycles.filter(
@@ -202,19 +198,6 @@ export default async function DoctorCustomerDetailPage({
                 <DetailsDl profile={profile} doctorName={data.primaryDoctorName} />
               </Card>
 
-              <Card title={ADMIN_CUSTOMER_PROFILE.cards.campaign}>
-                <GroupBadges groups={groups} />
-                <ConsentForm
-                  customerId={profile.id}
-                  flags={{
-                    sms: profile.consentSms,
-                    whatsApp: profile.consentWhatsApp,
-                    phone: profile.consentPhone,
-                    beforeAfter: profile.consentBeforeAfter,
-                  }}
-                />
-              </Card>
-
               <Card title={ADMIN_CUSTOMER_PROFILE.cards.messages}>
                 <MessageList rows={messages} />
               </Card>
@@ -241,39 +224,18 @@ async function loadProfile(
 ) {
   try {
     return await runInTenantScope(ctx, prisma(), async (tx) => {
-      const [base, cycles, messages, groups, notes] = await Promise.all([
+      const [base, cycles, messages, notes] = await Promise.all([
         loadCustomerProfile({ tx, ctx, customerId }),
         customerCycles({ tx, tenantId: ctx.tenantId, customerId }),
         customerMessageHistory({ tx, tenantId: ctx.tenantId, customerId }),
-        groupMemberships(tx, ctx.tenantId, customerId),
         getCustomerNotes({ tx, tenantId: ctx.tenantId, customerId }),
       ])
-      return { ...base, cycles, messages, groups, notes } as const
+      return { ...base, cycles, messages, notes } as const
     })
   } catch (error: unknown) {
     if (isAppError(error) && error instanceof NotFoundError) notFound()
     throw error
   }
-}
-
-async function groupMemberships(
-  tx: TransactionClient,
-  tenantId: string,
-  customerId: string,
-): Promise<readonly AudienceGroupKey[]> {
-  const now = realClock()
-  const memberships = await Promise.all(
-    BUILT_IN_AUDIENCE_GROUPS.map(async (key) => {
-      const ids = await evaluateGroup({
-        tx,
-        tenantId,
-        predicate: { kind: 'BUILT_IN', key },
-        now,
-      })
-      return [key, ids.includes(customerId)] as const
-    }),
-  )
-  return memberships.filter(([, isMember]) => isMember).map(([key]) => key)
 }
 
 function Card({
@@ -634,43 +596,6 @@ function Detail({
       >
         {value ?? '—'}
       </dd>
-    </div>
-  )
-}
-
-function GroupBadges({ groups }: { readonly groups: readonly AudienceGroupKey[] }) {
-  if (groups.length === 0) {
-    return (
-      <p className="mb-3 rounded-sm bg-surface-2 px-3 py-2 text-xs text-ink-3">
-        {ADMIN_CUSTOMER_PROFILE.campaignEmpty}
-      </p>
-    )
-  }
-
-  const badges = groups.map((key) => (
-    <span
-      key={key}
-      className={cx(
-        'inline-flex rounded-pill px-2 py-1 text-xs font-semibold',
-        key === AudienceGroupKey.Debtors
-          ? 'bg-warn-bg text-warn'
-          : key === AudienceGroupKey.CycleDue
-            ? 'bg-danger-bg text-danger'
-            : key === AudienceGroupKey.Loyal || key === AudienceGroupKey.New
-              ? 'bg-brand-50 text-brand-700'
-              : key === AudienceGroupKey.Birthday
-                ? 'bg-ok-bg text-ok'
-                : 'bg-neutral-bg text-ink-2',
-      )}
-    >
-      {AUDIENCE_GROUP_LABELS[key]}
-    </span>
-  ))
-
-  return (
-    <div className="mb-3 flex flex-col gap-2">
-      <div className="flex flex-wrap gap-2">{badges}</div>
-      <p className="text-xs text-ink-3">{ADMIN_CUSTOMER_PROFILE.campaignHint}</p>
     </div>
   )
 }
