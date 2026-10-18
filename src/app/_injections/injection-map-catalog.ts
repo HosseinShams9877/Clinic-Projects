@@ -25,7 +25,7 @@ export const INJECTION_AREA_POINTS: Readonly<Record<InjectionArea, FacePoint>> =
   LEFT_CROW_FEET:  { x: 530, y: 470 },
   NOSE_TIP: { x: 725, y: 600 },
   RIGHT_CHEEK: { x: 850, y: 590 },
-  LEFT_CHEEK:  { x: 640, y: 590 },
+  LEFT_CHEEK:  { x: 600, y: 590 },
   NASOLABIAL_RIGHT: { x: 820, y: 680 },
   NASOLABIAL_LEFT:  { x: 630, y: 680 },
   UPPER_LIP: { x: 725, y: 680 },
