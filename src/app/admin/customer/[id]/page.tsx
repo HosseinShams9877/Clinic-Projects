@@ -1,7 +1,3 @@
-/**
- * The customer profile — `02-architecture.md` §9's `admin/customer.html`.
- */
-
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -50,6 +46,8 @@ import { customerMessageHistory } from '@/modules/messages'
 import { DoctorNoteForm, ProfileEdit } from '@/app/_customers/profile-forms'
 import { ProgressBar } from '@/app/_components/ProgressBar'
 import { requireStaffPanel } from '@/app/_shell/session'
+import { customerDebtFollowUps } from '@/modules/debts'
+import { CollapsibleCard } from '@/app/_customers/CollapsibleCard' // 👈 ایمپورت کامپوننت جدید
 
 export const metadata: Metadata = { title: CUSTOMER_PROFILE_PAGE.title }
 
@@ -74,7 +72,7 @@ export default async function CustomerProfilePage({
 
   const data = await loadProfile(session.permissions, id)
 
-  const { profile, cycles, messages, injections, injectionCounts, notes } = data
+  const { profile, cycles, messages, injections, injectionCounts, notes, followUps } = data
   const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
   const balance = profile.chargedTotal - profile.paidTotal
   const activeCycles = cycles.filter(
@@ -168,11 +166,11 @@ export default async function CustomerProfilePage({
 
           <div className="grid grid-cols-1 gap-6 panel:grid-cols-[1fr_320px] panel:items-start">
             <div className="flex flex-col gap-6">
-              <Card title={ADMIN_CUSTOMER_PROFILE.cards.cycles}>
+              <CollapsibleCard title={ADMIN_CUSTOMER_PROFILE.cards.cycles}>
                 <CyclesTable rows={cycles} />
-              </Card>
+              </CollapsibleCard>
 
-              <Card
+              <CollapsibleCard
                 title={ADMIN_CUSTOMER_PROFILE.cards.visits}
                 note={`${toPersianDigits(profile.appointments.length)} ${ADMIN_CUSTOMER_PROFILE.recentSuffix}`}
               >
@@ -182,24 +180,28 @@ export default async function CustomerProfilePage({
                   totalPages={appts.totalPages}
                   hrefFor={(next) => historyHref({ appts: next, pays: paysPage })}
                 />
-              </Card>
+              </CollapsibleCard>
 
-              <Card title={ADMIN_CUSTOMER_PROFILE.cards.payments}>
+              <CollapsibleCard title={ADMIN_CUSTOMER_PROFILE.cards.payments}>
                 <PaymentHistory
                   rows={pays.slice}
                   page={paysPage}
                   totalPages={pays.totalPages}
                   hrefFor={(next) => historyHref({ appts: apptsPage, pays: next })}
                 />
-              </Card>
+              </CollapsibleCard>
 
-              <Card title={CUSTOMER_PROFILE_PAGE.note.history}>
+              <CollapsibleCard title="پیگیری‌های انجام شده" note={`${toPersianDigits(followUps.length)} مورد`}>
+                <FollowUpsList rows={followUps} />
+              </CollapsibleCard>
+
+              <CollapsibleCard title={CUSTOMER_PROFILE_PAGE.note.history}>
                 <NotesList notes={notes} />
-              </Card>
+              </CollapsibleCard>
             </div>
 
             <div className="flex flex-col gap-6">
-              <Card
+              <CollapsibleCard
                 title={ADMIN_CUSTOMER_PROFILE.cards.details}
                 action={
                   <ProfileEdit
@@ -212,19 +214,91 @@ export default async function CustomerProfilePage({
                 }
               >
                 <DetailsDl profile={profile} doctorName={data.primaryDoctorName} />
-              </Card>
+              </CollapsibleCard>
 
-              <Card title={ADMIN_CUSTOMER_PROFILE.cards.messages}>
+              <CollapsibleCard title={ADMIN_CUSTOMER_PROFILE.cards.messages}>
                 <MessageList rows={messages} />
-              </Card>
+              </CollapsibleCard>
 
-              <Card title={CUSTOMER_PROFILE_PAGE.sections.medical}>
+              <CollapsibleCard title={CUSTOMER_PROFILE_PAGE.sections.medical}>
                 <DoctorNoteForm customerId={profile.id} />
-              </Card>
+              </CollapsibleCard>
             </div>
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function FollowUpsList({ rows }: { readonly rows: any[] }) {
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">
+        هیچ پیگیری‌ای برای این مشتری ثبت نشده است.
+      </p>
+    )
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm text-right">
+        <thead>
+          <tr className="border-b border-line-2 text-ink-3">
+            <Th>تاریخ ثبت</Th>
+            <Th>مسئول پیگیری</Th>
+            <Th>نتیجه / توضیحات</Th>
+            <Th>تاریخ وعده پرداخت</Th>
+            <Th>تاریخ پیگیری بعدی</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            // 👈 پیدا کردن و جایگزینی کدهای انگلیسی با متن فارسی
+            let finalText = row.note || ''
+            
+            const replacements: Record<string, string> = {
+              'PROMISE_TO_PAY': 'وعده پرداخت',
+              'NO_ANSWER': 'تماس شد؛ پاسخ نداد',
+              'SMS_SENT': 'پیامک ارسال شد',
+              'DISCOUNT_REQUEST': 'درخواست تخفیف',
+              'PROMISE_TOMORROW': 'قول پرداخت تا فردا',
+              'AWAITING_REVIEW': 'در انتظار بررسی',
+              'INSTALLMENT_REQUEST': 'درخواست تقسیط',
+            }
+
+            Object.entries(replacements).forEach(([eng, fa]) => {
+              finalText = finalText.replace(new RegExp(eng, 'g'), fa)
+            })
+
+            // جدا کردن نتیجه از توضیحات (اگر با " - " از هم جدا شده باشند)
+            const parts = finalText.split(' - ')
+            const resultPart = parts[0] || ''
+            const notePart = parts.slice(1).join(' - ')
+
+            return (
+              <tr key={row.id} className="border-b border-line last:border-b-0">
+                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">
+                  {formatDate(dateToLocalDate(row.createdAt), 'short')}
+                </td>
+                <td className="px-3 py-3 text-ink-2">
+                  {row.createdBy ? `${row.createdBy.firstName} ${row.createdBy.lastName ?? ''}` : 'سیستم'}
+                </td>
+                <td className="px-3 py-3 text-ink whitespace-pre-wrap">
+                  <span className="font-semibold">{resultPart}</span>
+                  {notePart && <span className="block text-xs text-ink-3 mt-1">{notePart}</span>}
+                </td>
+                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">
+                  —
+                </td>
+                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">
+                  {row.nextContactAt ? formatDate(dateToLocalDate(row.nextContactAt), 'short') : '—'}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -240,43 +314,19 @@ async function loadProfile(
 ) {
   try {
     return await runInTenantScope(ctx, prisma(), async (tx) => {
-      const [base, cycles, messages, notes] = await Promise.all([
+      const [base, cycles, messages, notes, followUps] = await Promise.all([
         loadCustomerProfile({ tx, ctx, customerId }),
         customerCycles({ tx, tenantId: ctx.tenantId, customerId }),
         customerMessageHistory({ tx, tenantId: ctx.tenantId, customerId }),
         getCustomerNotes({ tx, tenantId: ctx.tenantId, customerId }),
+        customerDebtFollowUps({ tx, tenantId: ctx.tenantId, customerId }),
       ])
-      return { ...base, cycles, messages, notes } as const
+      return { ...base, cycles, messages, notes, followUps } as const
     })
   } catch (error: unknown) {
     if (isAppError(error) && error instanceof NotFoundError) notFound()
     throw error
   }
-}
-
-function Card({
-  title,
-  note,
-  action,
-  children,
-}: {
-  readonly title: string
-  readonly note?: string
-  readonly action?: React.ReactNode
-  readonly children: React.ReactNode
-}) {
-  return (
-    <section className="flex flex-col rounded-lg border border-line bg-surface">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-        <div className="flex items-baseline gap-2">
-          <h2 className="font-bold text-ink">{title}</h2>
-          {note === undefined ? null : <span className="text-xs text-ink-3">{note}</span>}
-        </div>
-        {action}
-      </header>
-      <div className="p-4">{children}</div>
-    </section>
-  )
 }
 
 function KpiTile({

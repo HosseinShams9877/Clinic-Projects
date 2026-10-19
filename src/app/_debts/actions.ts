@@ -1,40 +1,6 @@
-/**
- * The debts Server Actions — the write half of the three debt surfaces.
- *
- * `02-architecture.md` §6 puts composition in `src/app/`, and an action composes the
- * session, the tenant scope, the module's barrel and the sentence the failure becomes.
- * It runs no business rule of its own: not one bucket decision, not one permission
- * check, because the module is where those live and an action that re-implemented one
- * would be the second implementation that drifts.
- *
- * ## The three writes a debt carries
- *
- * The desk's row holds three: «ثبت پرداخت» writes a receipt, «ثبت پیگیری» records the
- * call the desk just made and the day it promised to try again, and «تغییر سررسید»
- * records the date a customer promised instead of the date the clinic computed. The
- * three are three modules' work in one transaction — `payments` writes the financial
- * fact, `debts` writes the follow-up — and an action is the one scope that holds both.
- *
- * ## Why failures are sentences and never exceptions
- *
- * An action's contract is a result a component renders. A thrown error surfaces as the
- * framework's own error page, which is English and loses the sentence the module raised
- * on purpose — so every call is wrapped and the key becomes Persian through
- * `moduleFailureMessage`.
- *
- * ## Why the follow-up note is validated and not trimmed here
- *
- * The note is the desk's own sentence about the call, and the next call reads it back.
- * It is bounded here, at the boundary, and not in the module: a note a person typed is
- * a value the boundary parses, and a module that re-validated would be a second place
- * the ceiling lives. A note longer than the ceiling is refused with the sentence the
- * form renders; a blank note is `null` and the module stores `null`.
- */
-
 'use server'
 
 import { revalidatePath } from 'next/cache'
-
 import { prisma, runInTenantScope } from '@/core/db'
 import { asLocalDate, fromClockParts, toUtcInstant } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
@@ -45,16 +11,12 @@ import { recordPayment } from '@/modules/payments'
 import { recordFollowUp, rescheduleDueDate, readDebtSettings } from '@/modules/debts'
 import type { Panel } from '@/app/_shell/navigation'
 import { resolveStaffPanel } from '@/app/_shell/session'
-
 import { moduleFailureMessage } from '../_shared/module-failure'
 
-/** The answer every action gives: nothing to render on success, or the sentence. */
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly message: string }
 
-/** The maximum the note field carries, in characters. */
 const NOTE_MAX_LENGTH = 500
 
-/** The fields the payment form collects. */
 export interface RecordPaymentInput {
   readonly amount: string
   readonly method: string
@@ -64,26 +26,15 @@ export interface RecordPaymentInput {
   readonly note: string | null
 }
 
-/** The fields the follow-up form collects. */
 export interface FollowUpInput {
-  /** A `LocalDate` string the action converts to the instant the column stores. */
   readonly nextContactAt: string
-  /**
-   * What the desk wrote down on the call, if anything. Optional, and bounded at
-   * `NOTE_MAX_LENGTH`; a blank string is stored as `null`.
-   */
   readonly note?: string | null
 }
 
-/** The fields the reschedule form collects. */
 export interface RescheduleInput {
   readonly dueDate: string
 }
 
-/**
- * The arguments a block runs with: the scoped transaction, the permission context the
- * module functions take, and the session's own facts.
- */
 interface ScopeArgs {
   readonly tx: Parameters<Parameters<typeof runInTenantScope<unknown>>[2]>[0]
   readonly ctx: TenantContext
@@ -91,11 +42,6 @@ interface ScopeArgs {
   readonly userId: string
 }
 
-/**
- * Runs a block in the caller's tenant scope and answers with a sentence on failure.
- *
- * One helper because the shape is every action's: resolve, scope, call, revalidate.
- */
 async function inTenantScope<T>(
   panel: Panel,
   block: (args: ScopeArgs) => Promise<T>,
@@ -108,38 +54,26 @@ async function inTenantScope<T>(
       tenantId: session.tenantId,
       userId: session.permissions.userId,
     }),
-  ).catch((error: unknown) => ({ ok: false, message: moduleFailureMessage(error) }) as const)
+  ).catch((error: unknown) => {
+    console.error('\n\n🚨 [Error in inTenantScope] 🚨\n', error, '\n\n')
+    return { ok: false, message: moduleFailureMessage(error) } as const
+  })
 }
 
-/** The sentinel a block returns when it has nothing but a success to report. */
 const SUCCESS = { succeeded: true } as const
 
-/**
- * Re-renders the three debt pages an action moved, so the row the desk just settled is
- * off the list when the form closes.
- */
 function revalidateDebts(): void {
   revalidatePath('/reception/debts')
   revalidatePath('/admin/debts')
   revalidatePath('/doctor/debts')
+  revalidatePath('/admin/installments')
 }
 
-/**
- * «ثبت پرداخت» — the receipt the desk recorded against this debt.
- *
- * The amount arrives as the string the Rial input collected, and the two closed sets are
- * narrowed here so the module receives values it never has to re-parse. A discount
- * above the secretary's ceiling is refused by the module and comes back as the sentence
- * the form renders — the ceiling is a server-side rule, and a page that hid the field
- * would be a second, weaker, enforcement of it.
- */
 export async function recordPaymentAction(
   panel: Panel,
   appointmentId: string,
   input: RecordPaymentInput,
 ): Promise<ActionResult> {
-  // Narrowed to locals first because the narrowing does not survive the closure below,
-  // and the module's input is typed by the closed sets' own keys.
   const method = input.method
   const kind = input.kind
   if (!isMember(PaymentMethod, method) || !isMember(PaymentKind, kind)) {
@@ -169,19 +103,151 @@ export async function recordPaymentAction(
   return { ok: true }
 }
 
-/**
- * «ثبت پیگیری» — the desk called, and recorded when to try again.
- *
- * The day the picker hands the action is a `LocalDate` and the column stores an instant;
- * the conversion is the library's own and reads the tenant's offset, so a day the desk
- * reads as «۱۴۰۵/۰۳/۰۴» lands on that day in the clinic's clock.
- *
- * The note is bounded here and not in the module: a note a person typed is a value the
- * boundary parses, and a note longer than the ceiling is the boundary's refusal with
- * the sentence the form renders.
- *
- * @throws never — a failure is returned as a sentence, never thrown.
- */
+export async function recordPaymentWithInstallmentsAction(
+  panel: Panel,
+  appointmentId: string,
+  customerId: string,
+  input: {
+    amount: string
+    method: string
+    installmentCount: number
+    firstDueDate: string
+    installmentInterval?: string
+  }
+): Promise<ActionResult> {
+  let dbMethod = input.method
+  if (input.method === 'POS' || input.method === 'CARD_TO_CARD') {
+    dbMethod = 'CARD'
+  }
+
+  const amountBigInt = asAmount(input.amount)
+
+  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId }) => {
+    const now = realClock()
+    const settings = await readDebtSettings(tx, tenantId)
+
+    if ((input.method === 'INSTALLMENT' || input.method === 'CHEQUE') && input.installmentCount > 0) {
+      const installmentAmount = amountBigInt / BigInt(input.installmentCount)
+      const baseDate = toUtcInstant(asLocalDate(input.firstDueDate || '1405-01-01'), MIDNIGHT, settings.utcOffsetMinutes)
+
+      for (let i = 0; i < input.installmentCount; i++) {
+        const dueDate = new Date(baseDate)
+        
+        if (input.installmentInterval === '2_MONTH') {
+          dueDate.setMonth(baseDate.getMonth() + ((i + 1) * 2) - 1)
+        } else if (input.installmentInterval === '1_WEEK') {
+          dueDate.setDate(baseDate.getDate() + (i * 7))
+        } else {
+          dueDate.setMonth(baseDate.getMonth() + i)
+        }
+
+        await tx.installment.create({
+          data: {
+            tenantId,
+            appointmentId,
+            sequence: i + 1,
+            amount: installmentAmount,
+            dueAt: dueDate,
+          }
+        })
+      }
+    } else {
+      if (!isMember(PaymentMethod, dbMethod)) {
+        return { ok: false, message: moduleFailureMessage(new Error('invalid method')) }
+      }
+
+      await recordPayment({
+        tx,
+        ctx,
+        input: {
+          appointmentId,
+          amount: amountBigInt,
+          method: dbMethod,
+          kind: PaymentKind.Partial,
+          discountAmount: 0n,
+          discountReason: null,
+          note: null,
+        },
+        now,
+      })
+    }
+    return SUCCESS
+  })
+
+  if (!('succeeded' in result)) return result
+  revalidateDebts()
+  return { ok: true }
+}
+
+/** 👈 اکشن اصلاح‌شده برای ثبت پیگیری */
+export async function recordFollowUpWithDetailsAction(
+  panel: Panel,
+  appointmentId: string,
+  input: {
+    contactMethod: 'PHONE' | 'SMS'
+    result: string
+    note: string
+    promiseDate?: string
+    promiseTime?: string
+    nextFollowUpDate: string
+    nextFollowUpTime: string
+    createReminder: boolean
+  }
+): Promise<ActionResult> {
+  console.log('\n\n🟢 [Action] Started recordFollowUpWithDetailsAction')
+  
+  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId }) => {
+    const now = realClock()
+
+    // 👈 تبدیل کد انگلیسی به متن فارسی
+    const resultLabels: Record<string, string> = {
+      PROMISE_TO_PAY: 'وعده پرداخت',
+      NO_ANSWER: 'تماس شد؛ پاسخ نداد',
+      SMS_SENT: 'پیامک ارسال شد',
+      DISCOUNT_REQUEST: 'درخواست تخفیف',
+      PROMISE_TOMORROW: 'قول پرداخت تا فردا',
+      AWAITING_REVIEW: 'در انتظار بررسی',
+    }
+    const resultText = resultLabels[input.result] || input.result
+
+    // ترکیب متن نتیجه و توضیحات
+    const finalNote = input.note ? `${resultText} - ${input.note}` : resultText
+    const nextContactDate = await asInstant(tx, tenantId, input.nextFollowUpDate)
+
+    // ۱. ثبت در جدول تاریخچه پیگیری‌ها
+    await recordFollowUp({
+      tx,
+      ctx,
+      appointmentId,
+      nextContactAt: nextContactDate,
+      note: finalNote,
+      now,
+    })
+
+    // ۲. به‌روزرسانی فیلدهای آخرین پیگیری روی خود نوبت
+    await tx.appointment.update({
+      where: { id: appointmentId, tenantId },
+      data: {
+        debtFollowUpAt: now,
+        debtFollowUpNote: finalNote,
+        debtNextContactAt: nextContactDate,
+      }
+    })
+
+    console.log('✅ DB Save successful. Note:', finalNote)
+    return SUCCESS
+  })
+
+  if (!('succeeded' in result)) {
+    console.log('🔴 Action Failed:', result)
+    return result
+  }
+  
+  console.log('🟢 Action Success. Revalidating...\n\n')
+  revalidateDebts()
+  return { ok: true }
+}
+
 export async function recordFollowUpAction(
   panel: Panel,
   appointmentId: string,
@@ -217,12 +283,6 @@ export async function recordFollowUpAction(
   return { ok: true }
 }
 
-/**
- * «تغییر سررسید» — the date the customer promised, overriding the computed one.
- *
- * The override is the module's own write and the toggle gates it server-side, so a
- * clinic that turned toggle 4 off refuses the write even if the form is on the page.
- */
 export async function rescheduleDueDateAction(
   panel: Panel,
   appointmentId: string,
@@ -244,25 +304,80 @@ export async function rescheduleDueDateAction(
   return { ok: true }
 }
 
-/* ── The conversions the forms and the table share ──────────────────────────── */
+/** 👈 اکشن جدید برای ثبت پرداخت روی یک قسط/چک مشخص */
+export async function recordInstallmentPaymentAction(
+  panel: Panel,
+  installmentId: string,
+  input: {
+    amount: string
+    method: string
+    receiveDate: string
+    receiveTime: string
+  }
+): Promise<ActionResult> {
+  let dbMethod = input.method
+  if (input.method === 'POS' || input.method === 'CARD_TO_CARD') {
+    dbMethod = 'CARD'
+  }
 
-/** The day's own start, which is the time a due date and a contact date carry. */
+  const amountBigInt = asAmount(input.amount)
+
+  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
+    const now = realClock()
+    
+    // پیدا کردن قسط و نوبت مربوطه برای گرفتن customerId
+    const installment = await tx.installment.findUnique({
+      where: { id: installmentId, tenantId },
+      include: { appointment: { select: { customerId: true } } }
+    })
+    
+    if (!installment || !installment.appointment.customerId) {
+      throw new Error('Installment or customer not found')
+    }
+
+    if (!isMember(PaymentMethod, dbMethod)) {
+      return { ok: false, message: moduleFailureMessage(new Error('invalid method')) }
+    }
+
+    // ثبت پرداخت (به installmentId وصل میشه)
+    await tx.payment.create({
+      data: {
+        tenantId,
+        appointmentId: installment.appointmentId,
+        customerId: installment.appointment.customerId,
+        installmentId: installment.id, // 👈 اتصال به قسط
+        recordedByUserId: userId,
+        amount: amountBigInt,
+        method: dbMethod,
+        kind: PaymentKind.Partial,
+        discountAmount: 0n,
+        discountReason: null,
+        note: null,
+        paidAt: now,
+      }
+    })
+
+    return SUCCESS
+  })
+
+  if (!('succeeded' in result)) return result
+  revalidateDebts()
+  return { ok: true }
+}
+
 const MIDNIGHT = fromClockParts({ hour: 0, minute: 0 })
 
-/** A Rial amount the form collected, as the `BigInt` the module takes. */
 function asAmount(text: string | null): bigint {
   const digits = (text ?? '').replace(/[^\d]/g, '')
   if (digits === '') return 0n
   return BigInt(digits)
 }
 
-/** A `LocalDate` the picker collected, as the instant the column stores. */
 async function asInstant(tx: ScopeArgs['tx'], tenantId: string, localDate: string): Promise<Date> {
   const settings = await readDebtSettings(tx, tenantId)
   return toUtcInstant(asLocalDate(localDate), MIDNIGHT, settings.utcOffsetMinutes)
 }
 
-/** The note as the module reads it: trimmed, and `null` when it was blank. */
 function normaliseNote(note: string | null | undefined): string | null {
   if (note === null || note === undefined) return null
   const trimmed = note.trim()

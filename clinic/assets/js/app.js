@@ -40,7 +40,8 @@
       var names = Array.prototype.map.call(
         group.querySelectorAll('[data-tab]'),
         function (b) { return b.getAttribute('data-tab'); });
-      document.querySelectorAll('[data-pane]').forEach(function (p) {
+      var scope = group.closest('.modal') || group.closest('main') || document;
+      scope.querySelectorAll('[data-pane]').forEach(function (p) {
         var v = p.getAttribute('data-pane');
         if (names.indexOf(v) > -1) p.classList.toggle('hide', v !== target);
       });
@@ -51,6 +52,8 @@
   document.addEventListener('click', function (e) {
     var open = e.target.closest('[data-modal]');
     if (open) {
+      var cur = open.closest('.modal-back');          // مودال → مودال
+      if (cur) cur.classList.add('hide');
       var m = document.getElementById(open.getAttribute('data-modal'));
       if (m) m.classList.remove('hide');
       return;
@@ -122,6 +125,11 @@
 
     var shown = 0;
     rows.forEach(function (r) {
+      if (r.classList.contains('acc-row')) {        // ردیف جزئیات، شمرده نمی‌شود
+        var prev = r.previousElementSibling;
+        r.style.display = (prev && prev.style.display === 'none') ? 'none' : '';
+        return;
+      }
       var ok = true;
       Object.keys(cond).forEach(function (k) {
         var have = (r.getAttribute('data-' + k) || '').split(' ');
@@ -193,3 +201,9 @@
     b.textContent = el.classList.contains('blocked') ? 'بازکردن' : 'بستن';
   });
 })();
+
+/* گروه‌های منو */
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-navgroup]'); if (!b) return;
+  b.parentElement.classList.toggle('open');
+});

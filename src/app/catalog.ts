@@ -1,19 +1,10 @@
 import { toPersianDigits, ZWNJ } from '@/core/localization'
 
 export { RECEPTION_APPOINTMENTS, RECEPTION_CUSTOMERS, RECEPTION_CYCLES, RECEPTION_DEBTS, RECEPTION_DESK, RECEPTION_LEADS, DEBTS_PAGE } from './reception/catalog'
-
-/** The product's name. It is the tab title, the bookmark, and the install name. */
 export const APP_NAME = 'سامانه مدیریت کلینیک'
-
-
 export const APP_TITLE_TEMPLATE = `%s | ${APP_NAME}`
-
-
 export const APP_DESCRIPTION = `سامانه مدیریت نوبت، پرونده مشتریان و پیگیری درمان کلینیک${ZWNJ}های زیبایی`
-
-/** The two ways in, as `panels.html` presents them (`02-architecture.md` §9). */
 export const PANELS_PAGE = {
-  /** The entry page's own title. */
   title: 'ورود به سامانه',
   /** The line under it. */
   lead: 'یکی از دو مسیر ورود را انتخاب کنید.',
@@ -25,7 +16,6 @@ export const PANELS_PAGE = {
     description: `ورود با شماره موبایل و کد یک${ZWNJ}بار`,
   },
 } as const
-
 export const PANEL_NAMES = {
   admin: 'پنل مدیریت',
   doctor: 'پنل پزشک',
@@ -47,15 +37,13 @@ export const PANEL_SCOPE = {
   account: 'نوبت‌های خود، دوره‌های درمان، پرداخت‌ها و پرونده خودتان.',
 } as const satisfies Record<string, string>
 
-
 export const NAV_LABELS = {
-  
   desk: 'میز کار امروز',
-
   appointments: `نوبت${ZWNJ}ها`,
   customers: 'مشتریان',
-
   debts: `مانده${ZWNJ}حساب`,
+  installments: 'اقساط',
+  financialReports: 'گزارش مالی',
   cycles: `چرخه${ZWNJ}های درمان`,
   campaigns: `کمپین${ZWNJ}ها`,
   services: 'خدمات',
@@ -85,28 +73,17 @@ export const STAFF_LOGIN_PAGE = {
   /** The line above the two forms. */
   lead: 'کارکنان با گذرواژه و مشتریان با کد یک‌بار مصرف وارد می‌شوند.',
 } as const
-
-/** The customer login page's own copy, beyond `LOGIN_LABELS`. */
 export const CUSTOMER_LOGIN_PAGE = {
   title: 'ورود مشتریان',
-  /** The line above the form, naming the credential this door asks for. */
   lead: `کد یک${ZWNJ}بار مصرف به شماره موبایل شما پیامک می‌شود.`,
-  /** The link back to the entry page, which is where the other door is. */
+
   backToEntry: 'بازگشت',
 } as const
 export const CODE_SENT_TO = 'کد ارسال شده به شماره {mobile} را وارد کنید'
-
-/** The countdown's label. The digits beside it are the minutes and seconds left. */
 export const CODE_COUNTDOWN_LABEL = 'اعتبار کد'
-
-/** What the countdown shows when the code's time is up. */
 export const CODE_COUNTDOWN_DONE = 'اعتبار کد به پایان رسید'
 export const DEV_CODE_LABEL = 'کد توسعه:'
-
-/** The resend button, which asks for a new code on the same mobile. */
 export const REQUEST_NEW_CODE = 'دریافت کد جدید'
-
-/** The field-level sentences the forms raise before they call the module. */
 export const FIELD_REQUIRED = {
   mobile: 'شماره موبایل را وارد کنید',
   password: 'گذرواژه را وارد کنید',
@@ -605,19 +582,6 @@ export const SERVICES_PAGE = {
     serviceNotFound: 'این خدمت پیدا نشد.',
   },
 } as const satisfies Record<string, unknown>
-
-/**
- * The staff page — its permission matrix, its leave table, and the avatar dialog.
- *
- * The matrix's own column header and row labels come from `@/core/localization`'s
- * `PERMISSION_LABELS` and `ROLE_LABELS`, because those are the closed sets and this
- * page renders them; nothing here restates a permission's name. The page's own copy
- * is the chrome around them.
- *
- * The `avatar` block is the picture dialog's own copy, and its `trigger` is the
- * button the row renders to open it — the same shape `SERVICES_PAGE.picture`
- * takes for a service's own image.
- */
 export const STAFF_PAGE = {
   title: 'کارکنان و دسترسی',
   lead: 'نقش و دسترسی‌های هر کاربر، و درخواست‌های مرخصی پزشکان.',
@@ -634,7 +598,6 @@ export const STAFF_PAGE = {
     cancel: 'انصراف',
   },
   edit: {
-    /** The button that opens the modal, in the row's actions. */
     trigger: 'ویرایش',
     title: 'ویرایش کارمند',
     lead: 'نام و نام خانوادگی این کاربر را ویرایش کنید. شماره موبایل قابل تغییر نیست.',
@@ -645,7 +608,6 @@ export const STAFF_PAGE = {
     cancel: 'انصراف',
   },
   password: {
-    /** The button that opens the modal, in the row's actions. */
     trigger: 'تغییر رمز',
     title: 'تغییر رمز عبور',
     lead: 'رمز عبور جدید این کاربر را وارد کنید. رمز فعلی نمایش داده نمی‌شود.',
@@ -658,7 +620,6 @@ export const STAFF_PAGE = {
     tooShort: 'رمز عبور باید حداقل ۸ کاراکتر باشد.',
   },
   avatar: {
-    /** The button that opens the modal, in the row's actions. */
     trigger: 'عکس کارمند',
     title: 'عکس کارمند',
     lead: 'یک تصویر برای این کارمند انتخاب کنید.',
@@ -671,12 +632,9 @@ export const STAFF_PAGE = {
   matrix: {
     title: 'ماتریس دسترسی‌ها',
     lead: 'هر ستون یک نقش و هر ردیف یک دسترسی است. تغییرات بلافاصله اعمال می‌شوند.',
-    /** The manager column's badge, rendered in place of the checkboxes it does not have. */
     managerLocked: 'همیشه',
     hint: 'ستون مدیر قفل است و کسی نمی‌تواند دسترسی خودش را تغییر دهد.',
-    /** The modal's own note, which says the change is for this one person (`04-roles-permissions.md` §2.2). */
     note: 'تغییرات فقط برای همین کاربر اعمال می‌شوند.',
-    /** The count's two halves, as the modal's header renders them: «۵ از ۱۶». */
     countOf: 'از',
     countTotal: 16,
     save: 'ذخیره دسترسی‌ها',
@@ -692,7 +650,6 @@ export const STAFF_PAGE = {
     leaveEmpty: 'هیچ درخواست مرخصی‌ای وجود ندارد.',
     approve: 'تأیید',
     reject: 'رد',
-    /** The leave table's own three headers, which the page's `columns` do not name. */
     leaveFrom: 'از تاریخ',
     leaveTo: 'تا تاریخ',
     leaveStatus: 'وضعیت',
@@ -720,13 +677,6 @@ export const STAFF_PAGE = {
     staffNotFound: 'این کارمند پیدا نشد.',
   },
 } as const satisfies Record<string, unknown>
-
-/**
- * The customer's own money — `account/payments.html`, «پرداخت‌های من».
- *
- * The panel has no permission primitive; the session's own `customerId` is the scope,
- * and the copy names what the customer sees rather than what the clinic owes.
- */
 export const PAYMENTS_PAGE = {
   title: 'پرداخت‌های من',
   lead: 'پرداخت‌های شما و بدهی باز شما. هر پرداخت به یک نوبت ثبت شده است.',
@@ -907,3 +857,136 @@ export const CAMPAIGNS_PAGE = {
     empty: 'هنوز کمپینی ساخته نشده است.',
   },
 } as const satisfies Record<string, unknown>
+export const ADMIN_INSTALLMENTS = {
+  filterInstallment: 'قسط',
+  filterCheque: 'چک',
+  clearFilters: 'پاک کردن فیلترها',
+  applyFilters: 'اعمال فیلترها',
+  title: 'اقساط و چک‌ها',
+  heading: 'اقساط و چک‌ها',
+  subtitle: 'مدیریت سررسید پرداخت‌های آینده',
+  alert: 'اقساط و چک‌هایی که تا یک روز پس از سررسید دریافت نشوند، به صورت خودکار به بخش بدهکاری‌ها منتقل می‌شوند.',
+  kpi: {
+    dueToday: 'سررسید امروز',
+    dueTomorrow: 'سررسید فردا',
+    next7Days: '۷ روز آینده',
+    totalUpcoming: 'مجموع سررسیدهای پیش‌رو',
+  },
+  searchLabel: 'جستجو',
+  searchPlaceholder: 'نام مشتری، شماره تماس...',
+  allDoctors: 'همه پزشکان',
+  filterAll: 'همه',
+  filterToday: 'امروز',
+  filterTomorrow: 'فردا',
+  filterThisWeek: 'این هفته',
+  filterThisMonth: 'این ماه',
+  filterNextMonths: 'ماه‌های آتی',
+  filterCustom: 'بازه دلخواه',
+  filters: {
+    today: 'امروز',
+    tomorrow: 'فردا',
+    past: 'گذشته',
+  },
+  daysRemainingSuffix: 'روز آینده',
+  table: {
+    empty: 'هیچ قسطی در این بازه یافت نشد.',
+    title: 'لیست سررسیدها',
+    countSuffix: 'مورد',
+    columns: {
+      customer: 'مشتری',
+      doctor: 'پزشک',
+      service: 'خدمت',
+      dueDate: 'سررسید',
+      daysRemaining: 'مانده تا سررسید',
+      amount: 'مبلغ',
+      stage: 'مرحله پرداخت',
+      progress: 'پیشرفت کل پرداخت',
+      action: 'عملیات',
+    },
+    payButton: 'ثبت پرداخت',
+    collectButton: 'ثبت وصول',
+    moreOptions: 'گزینه‌های بیشتر',
+    progressOf: 'از این پرداخت:',
+    paidPercent: 'پس از این پرداخت:',
+    installmentPrefix: 'قسط',
+    chequePrefix: 'چک',
+    of: 'از',
+    million: 'میلیون', // 👈 این دقیقاً باید داخل table باشه
+  },
+  form: {
+    title: 'برنامه‌ریزی قسط جدید',
+    appointmentId: 'شناسه نوبت',
+    totalAmount: 'مبلغ کل (ریال)',
+    count: 'تعداد اقساط',
+    firstDueAt: 'تاریخ اولین سررسید',
+    note: 'یادداشت (اختیاری)',
+    submit: 'ثبت برنامه اقساط',
+    error: 'خطایی رخ داد. دوباره تلاش کنید.',
+    invalidData: 'اطلاعات وارد شده معتبر نیست.',
+  },
+  payment: {
+    title: 'ثبت پرداخت قسط',
+    amount: 'مبلغ پرداختی *',
+    method: 'روش پرداخت *',
+    cash: 'نقدی',
+    pos: 'کارت‌خوان',
+    cardToCard: 'کارت به کارت',
+    online: 'درگاه آنلاین',
+    trackingNumber: 'شماره پیگیری / شماره چک',
+    trackingPlaceholder: 'مثلاً ۱۲۳۴۵۶',
+    receiveDate: 'تاریخ دریافت',
+    receiveTime: 'ساعت',
+    note: 'توضیحات (اختیاری)',
+    notePlaceholder: 'توضیحات پرداخت...',
+    submit: 'ثبت پرداخت',
+    amountDue: 'مبلغ قسط:',
+    toman: 'تومان',
+    cancel: 'انصراف',
+    saving: 'در حال ثبت...',
+  },
+} as const
+export const ADMIN_FINANCIAL_REPORTS = {
+  title: 'گزارش مالی',
+  heading: 'گزارش‌های مالی کلینیک',
+  subtitle: 'خلاصه‌ای از درآمد و تخفیف‌های ثبت شده.',
+  alert: 'پیگیری و ثبت پرداخت توسط منشی انجام می‌شود؛ این صفحه فقط جهت مشاهده گزارش است.',
+  kpi: {
+    weekDue: 'سررسیدهای این هفته',
+    activeDebtors: 'بدهکاران فعال',
+    followedToday: 'پیگیری‌شده امروز',
+    awaitingResult: 'در انتظار نتیجه',
+  },
+  units: { person: 'نفر' },
+  searchLabel: 'جستجو',
+  searchPlaceholder: 'نام بیمار یا خدمت...',
+  doctorLabel: 'پزشک',
+  allDoctors: 'همه پزشکان',
+  statusLabel: 'وضعیت',
+  filters: {
+    all: 'همه موارد',
+    past: 'گذشته',
+    awaiting: 'در انتظار نتیجه',
+    due: 'در انتظار سررسید',
+  },
+  clearFilters: 'پاک کردن فیلترها',
+  applyFilters: 'اعمال فیلترها',
+  table: {
+    title: 'فهرست پیگیری‌ها',
+    countSuffix: 'مورد',
+    empty: 'هیچ موردی با این فیلترها یافت نشد.',
+    details: 'جزئیات',
+    columns: {
+      customer: 'بیمار',
+      service: 'خدمت',
+      doctor: 'پزشک',
+      dueDate: 'سررسید',
+      amount: 'مبلغ',
+      status: 'وضعیت',
+      follower: 'مسئول پیگیری',
+      lastAction: 'آخرین اقدام',
+      result: 'نتیجه',
+      nextFollowUp: 'پیگیری بعدی',
+      action: 'جزئیات',
+    },
+  },
+} as const

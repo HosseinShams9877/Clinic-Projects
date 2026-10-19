@@ -25,7 +25,14 @@ export { cachedCustomerBalance, recomputeCustomerTotals } from './lib/cache'
 
 export { assertDiscountAllowed } from './lib/discount'
 
-export { customerCharges, customerLedger, customerPayments } from './lib/queries'
+// 👇 این خط تغییر کرده است
+export { customerCharges, customerLedger, customerPayments, listInstallments } from './lib/queries'
+
+// 👇 این خط تغییر کرده است (listInstallments از اینجا حذف شده)
+export { createInstallmentPlan, type InstallmentInput } from './lib/installments'
+
+export { financialSummary } from './lib/financial-reports'
+export { installmentPlanSchema, type InstallmentPlanForm } from './validation/installments'
 
 export { recordPayment, recordRefund, refundAmountFor } from './lib/record'
 

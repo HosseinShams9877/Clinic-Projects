@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>برنامه من — کلینیک زیبایی</title>
   <meta name="description" content="کلینیک زیبایی و پوست — زیبایی، سلامت، اعتماد">
-  <link rel="stylesheet" href="../assets/css/theme.css">
-  <link rel="stylesheet" href="../assets/css/brand.css">
-  <link rel="stylesheet" href="../assets/css/panel.css">
+  <link rel="stylesheet" href="../assets/css/theme.css?v=12">
+  <link rel="stylesheet" href="../assets/css/brand.css?v=12">
+  <link rel="stylesheet" href="../assets/css/panel.css?v=12">
   
 </head>
 <body>
@@ -22,7 +22,7 @@
     </div>
   </div>
   <nav class="nav">
-    <a href="dashboard.html" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>برنامه من</span></a><a href="customers.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.4 2.9-5.5 6.5-5.5s6.5 2.1 6.5 5.5"/><path d="M17 8.4a3 3 0 0 0 0-1M17.5 14.8c2.4.5 4 2.3 4 5.2"/></svg><span>مراجعین من</span></a><a href="cycles.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9a5 5 0 0 1 5-5h9l-3-3M20 15a5 5 0 0 1-5 5H6l3 3"/></svg><span>چرخه درمان</span></a><a href="debts.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M16.5 14.5h2"/></svg><span>مانده‌حساب</span></a>
+    <a href="dashboard.html" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>برنامه من</span></a><a href="customers.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.4 2.9-5.5 6.5-5.5s6.5 2.1 6.5 5.5"/><path d="M17 8.4a3 3 0 0 0 0-1M17.5 14.8c2.4.5 4 2.3 4 5.2"/></svg><span>مراجعین من</span></a><a href="cycles.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9a5 5 0 0 1 5-5h9l-3-3M20 15a5 5 0 0 1-5 5H6l3 3"/></svg><span>چرخه درمان</span></a><a href="followups.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>پیگیری‌های مالی</span></a>
   </nav>
   <div class="sidebar-foot">
     <div class="sidebar-slogan"><b>زیبایی</b>اعتماد می‌آفریند</div>
@@ -58,13 +58,92 @@
         <button class="btn" data-modal="m-off"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg> اعلام مرخصی</button>
       </div>
 
-      <div class="grid g-3 mb-5">
+      <div class="grid g-4 mb-5">
         <div class="kpi rose"><span class="kpi-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/></svg></span><div>
           <div class="kpi-label">نوبت امروز من</div><div class="kpi-value">۵</div></div></div>
         <div class="kpi green"><span class="kpi-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12.2 2.8 2.8L16 9.4"/></svg></span><div>
           <div class="kpi-label">انجام‌شده تا این لحظه</div><div class="kpi-value">۲</div></div></div>
+        <a class="kpi red" href="customer.html#cf5"><span class="kpi-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v5a4 4 0 0 0 8 0V3"/><path d="M10 15a5 5 0 0 0 9 3.2"/><circle cx="19" cy="15.5" r="2.2"/></svg></span><div>
+          <div class="kpi-label">منتظر ثبت سابقه</div><div class="kpi-value">۵</div></div></a>
         <div class="kpi blue"><span class="kpi-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9a5 5 0 0 1 5-5h9l-3-3M20 15a5 5 0 0 1-5 5H6l3 3"/></svg></span><div>
           <div class="kpi-label">دوره درمان فعال من</div><div class="kpi-value">۱۴</div></div></div>
+      </div>
+
+
+      <div class="card mb-5">
+        <div class="card-head">
+          <h4><span class="card-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v5a4 4 0 0 0 8 0V3"/><path d="M10 15a5 5 0 0 0 9 3.2"/><circle cx="19" cy="15.5" r="2.2"/></svg></span> جلسات منتظر ثبت سابقه</h4>
+          <div class="row" style="gap:6px">
+            <span class="badge danger no-dot">۵ مورد</span>
+            <span class="badge danger no-dot">۲ عقب‌افتاده</span>
+          </div>
+        </div>
+        <div class="alert info" style="margin:var(--s-4) var(--s-4) 0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8v.1"/></svg>
+          <div>این فهرست خودش ساخته می‌شود: هر نوبتی که «حاضر شد» خورده و هنوز سابقه‌اش ثبت نشده، اینجا می‌آید. نوبتی که سابقه نداشته باشد، در چرخه درمان «انجام شد» نمی‌خورد.</div></div>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th>مراجع</th><th>نوبت</th><th>پزشک</th><th>مرحله</th>
+            <th>گذشت</th><th style="text-align:end">اقدام</th></tr></thead>
+          <tbody>
+          <tr>
+            <td><div class="person"><span class="avatar sm">ن</span>
+              <span><span class="t-title">نازنین عباسی</span>
+                <div class="xs mute-2">تزریق ژل‏ · ‏جلسه ۴ از ۶</div></span></div></td>
+            <td class="num small">۲۹ شهریور ۱۴۰۵<div class="xs mute-2">۱۱:۰۰</div></td>
+            <td class="small mute">دکتر نادری</td>
+            <td><span class="badge ">در مهلت</span>
+              <div class="xs mute-2 mt-2">امروز ثبت شود</div></td>
+            <td class="small mute">۲ ساعت پیش</td>
+            <td style="text-align:end">
+              <a class="btn btn-sm btn-primary" href="customer.html#cf5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v5a4 4 0 0 0 8 0V3"/><path d="M10 15a5 5 0 0 0 9 3.2"/><circle cx="19" cy="15.5" r="2.2"/></svg> ثبت جلسه</a></td>
+          </tr>
+          <tr>
+            <td><div class="person"><span class="avatar sm">س</span>
+              <span><span class="t-title">سارا محمدی</span>
+                <div class="xs mute-2">لیزر موهای زائد‏ · ‏جلسه ۳ از ۳</div></span></div></td>
+            <td class="num small">۲۹ شهریور ۱۴۰۵<div class="xs mute-2">۰۹:۳۰</div></td>
+            <td class="small mute">دکتر نادری</td>
+            <td><span class="badge warn">پایان شیفت</span>
+              <div class="xs mute-2 mt-2">تا پایان شیفت ثبت نشد</div></td>
+            <td class="small mute">۴ ساعت پیش</td>
+            <td style="text-align:end">
+              <a class="btn btn-sm btn-primary" href="customer.html#cf5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v5a4 4 0 0 0 8 0V3"/><path d="M10 15a5 5 0 0 0 9 3.2"/><circle cx="19" cy="15.5" r="2.2"/></svg> ثبت جلسه</a></td>
+          </tr>
+          <tr>
+            <td><div class="person"><span class="avatar sm">ا</span>
+              <span><span class="t-title">الهام کاظمی</span>
+                <div class="xs mute-2">تزریق بوتاکس‏ · ‏جلسه ۳ از ۴</div></span></div></td>
+            <td class="num small">۲۸ شهریور ۱۴۰۵<div class="xs mute-2">۱۱:۳۰</div></td>
+            <td class="small mute">دکتر نادری</td>
+            <td><span class="badge warn">۲۴ ساعت</span>
+              <div class="xs mute-2 mt-2">منشی هم این مورد را می‌بیند</div></td>
+            <td class="small mute">دیروز</td>
+            <td style="text-align:end">
+              <a class="btn btn-sm btn-primary" href="customer.html#cf5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v5a4 4 0 0 0 8 0V3"/><path d="M10 15a5 5 0 0 0 9 3.2"/><circle cx="19" cy="15.5" r="2.2"/></svg> ثبت جلسه</a></td>
+          </tr>
+          <tr>
+            <td><div class="person"><span class="avatar sm">م</span>
+              <span><span class="t-title">مونا حسینی</span>
+                <div class="xs mute-2">مزوتراپی مو‏ · ‏جلسه ۲ از ۶</div></span></div></td>
+            <td class="num small">۲۷ شهریور ۱۴۰۵<div class="xs mute-2">۱۶:۰۰</div></td>
+            <td class="small mute">دکتر نادری</td>
+            <td><span class="badge danger">۴۸ ساعت</span>
+              <div class="xs mute-2 mt-2">در گزارش مدیر «پرونده ناقص» شد</div></td>
+            <td class="small mute">۲ روز پیش</td>
+            <td style="text-align:end">
+              <a class="btn btn-sm btn-primary" href="customer.html#cf5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v5a4 4 0 0 0 8 0V3"/><path d="M10 15a5 5 0 0 0 9 3.2"/><circle cx="19" cy="15.5" r="2.2"/></svg> ثبت جلسه</a></td>
+          </tr>
+          <tr>
+            <td><div class="person"><span class="avatar sm">س</span>
+              <span><span class="t-title">ستاره حیدری</span>
+                <div class="xs mute-2">ویزیت کنترل</div></span></div></td>
+            <td class="num small">۲۹ شهریور ۱۴۰۵<div class="xs mute-2">۱۳:۰۰</div></td>
+            <td class="small mute">دکتر نادری</td>
+            <td><span class="badge info">سپرده به منشی</span>
+              <div class="xs mute-2 mt-2">پزشک ثبت را به منشی سپرده است</div></td>
+            <td class="small mute">۱ ساعت پیش</td>
+            <td style="text-align:end">
+              <a class="btn btn-sm btn-primary" href="customer.html#cf5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v5a4 4 0 0 0 8 0V3"/><path d="M10 15a5 5 0 0 0 9 3.2"/><circle cx="19" cy="15.5" r="2.2"/></svg> ثبت جلسه</a></td>
+          </tr></tbody></table></div>
       </div>
 
       <div class="card">
@@ -80,7 +159,7 @@
         <div class="sched-wrap tall">
           <table class="sched">
             <thead><tr><th class="t">ساعت</th><th>نوبت</th><th>وضعیت / اقدام</th></tr></thead>
-            <tbody><tr><td class="t">۱۰:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۰:۳۰</td><td><div class="cel ok"><b>نازنین عباسی</b><span class="s-meta">لیزر موهای زائد‏ · ‏جلسه ۵ از ۶</span></div></td><td style="width:130px;text-align:center"><span class="badge ok">انجام شد</span></td></tr><tr><td class="t">۱۱:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۱:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۲:۰۰</td><td><div class="cel warn"><b>مینا رضایی</b><span class="s-meta">فیشیال تخصصی‏ · ‏جلسه اول</span></div></td><td style="width:130px;text-align:center"><span class="badge warn">حاضر شد</span></td></tr><tr><td class="t">۱۲:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۳:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۳:۳۰</td><td><div class="cel busy"><b>الهام کاظمی</b><span class="s-meta">پی‌آر‌پی مو‏ · ‏جلسه ۳ از ۴</span></div></td><td style="width:130px;text-align:center"><span class="badge info">امروز</span></td></tr><tr><td class="t">۱۴:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۴:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۵:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۵:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۶:۰۰</td><td><div class="cel busy"><b>ستاره حیدری</b><span class="s-meta">مزوتراپی پوست‏ · ‏جلسه اول</span></div></td><td style="width:130px;text-align:center"><span class="badge info">امروز</span></td></tr><tr><td class="t">۱۶:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۷:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۷:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr></tbody>
+            <tbody><tr><td class="t">۱۰:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۰:۳۰</td><td><div class="cel ok"><b>نازنین عباسی</b><span class="s-meta">لیزر موهای زائد‏ · ‏جلسه ۵ از ۶</span></div></td><td style="width:130px;text-align:center"><span class="badge ok">انجام شد</span></td></tr><tr><td class="t">۱۱:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۱:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۲:۰۰</td><td><div class="cel warn"><b>مینا رضایی</b><span class="s-meta">فیشیال تخصصی‏ · ‏جلسه اول</span><span class="s-meta warn-t">سابقه این جلسه هنوز ثبت نشده</span></div></td><td style="width:130px;text-align:center"><span class="badge warn">حاضر شد</span><a class="btn btn-sm btn-primary mt-2" href="customer.html#cf5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v5a4 4 0 0 0 8 0V3"/><path d="M10 15a5 5 0 0 0 9 3.2"/><circle cx="19" cy="15.5" r="2.2"/></svg> ثبت جلسه</a></td></tr><tr><td class="t">۱۲:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۳:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۳:۳۰</td><td><div class="cel busy"><b>الهام کاظمی</b><span class="s-meta">پی‌آر‌پی مو‏ · ‏جلسه ۳ از ۴</span></div></td><td style="width:130px;text-align:center"><span class="badge info">امروز</span></td></tr><tr><td class="t">۱۴:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۴:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۵:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۵:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۶:۰۰</td><td><div class="cel busy"><b>ستاره حیدری</b><span class="s-meta">مزوتراپی پوست‏ · ‏جلسه اول</span></div></td><td style="width:130px;text-align:center"><span class="badge info">امروز</span></td></tr><tr><td class="t">۱۶:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۷:۰۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr><tr><td class="t">۱۷:۳۰</td><td><span class="cel free" style="cursor:default">آزاد</span></td><td style="width:130px;text-align:center"><button class="btn btn-sm btn-soft" data-block-slot>بستن</button></td></tr></tbody>
           </table>
         </div>
         <div class="card-foot hint">ثبت نوبت و ثبت نتیجه کار منشی است. اگر مدیر گزینه
@@ -109,6 +188,6 @@
     </main>
   </div>
 </div>
-<script src="../assets/js/app.js"></script>
+<script src="../assets/js/app.js?v=12"></script>
 </body>
 </html>

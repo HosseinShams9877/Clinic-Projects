@@ -512,6 +512,14 @@ const CONFIG_OBJECTS = [
     files: ['src/core/lib/clock.ts'],
     rules: { 'no-restricted-syntax': 'off' },
   },
+  {
+    name: 'clinic/core-primitives',
+    files: [
+      'src/core/components/date-picker/**/*.tsx',
+      'src/core/components/date-picker/**/*.ts',
+    ],
+    rules: { 'no-restricted-syntax': 'off' },
+  },
 
   {
     /**

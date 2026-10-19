@@ -12,10 +12,8 @@ import type { DebtBuckets, DebtRow, LastFollowUp } from '../types'
 import { bucketOf, daysOverdueOf, effectiveDueInstant } from './buckets'
 import { readDebtSettings } from './settings'
 
-/** The most a bucket reads in one go; a list is scrolled, not paged. */
 const LIST_LIMIT = 200
 
-/** The statuses a live booking can hold, with a charge on it. */
 const LIVE_STATUSES: string[] = [
   AppointmentStatus.Booked,
   AppointmentStatus.AwaitingArrival,
@@ -24,7 +22,6 @@ const LIVE_STATUSES: string[] = [
   AppointmentStatus.ResultNotRecorded,
 ]
 
-/** The columns a debt row reads off the appointment, and nothing more. */
 const APPOINTMENT_SELECT = {
   id: true,
   customerId: true,
@@ -40,6 +37,11 @@ const APPOINTMENT_SELECT = {
   debtDueDateOverride: true,
   customer: { select: { firstName: true, lastName: true, mobile: true } },
   doctor: { select: { firstName: true, lastName: true } },
+  installments: {
+    include: {
+      payments: { select: { amount: true } }
+    }
+  },
 } as const
 
 type AppointmentRow = {
@@ -64,6 +66,9 @@ type AppointmentRow = {
     readonly firstName: string
     readonly lastName: string
   }
+  readonly installments: readonly {
+    readonly payments: readonly { readonly amount: bigint }[]
+  }[]
 }
 
 type PaymentSums = {
@@ -71,16 +76,7 @@ type PaymentSums = {
   readonly _sum: { readonly amount: bigint | null; readonly discountAmount: bigint | null }
 }
 
-function asBalance(
-  charged: bigint,
-  discount: bigint,
-  paid: bigint,
-): {
-  readonly charged: bigint
-  readonly discount: bigint
-  readonly paid: bigint
-  readonly balance: bigint
-} {
+function asBalance(charged: bigint, discount: bigint, paid: bigint) {
   return Object.freeze({ charged, discount, paid, balance: charged - discount - paid })
 }
 
@@ -111,23 +107,34 @@ async function tenantDebts(
     : []
 
   const byAppointment = new Map(sums.map((sum) => [sum.appointmentId, sum]))
-
-  const buckets: MutableBuckets = {
-    overdue30: [],
-    overdue7: [],
-    overdue: [],
-    dueSoon: [],
-  }
+  const buckets: MutableBuckets = { overdue30: [], overdue7: [], overdue: [], dueSoon: [] }
 
   for (const row of appointments) {
     if (row.customerId === null) continue
 
     const sumsForRow = byAppointment.get(row.id)
-    const balance = asBalance(
-      row.priceAtBooking,
-      sumsForRow?._sum.discountAmount ?? 0n,
-      sumsForRow?._sum.amount ?? 0n,
-    )
+    
+    let charged = row.priceAtBooking
+    let paid = sumsForRow?._sum.amount ?? 0n
+    const discount = sumsForRow?._sum.discountAmount ?? 0n
+    let totalInstallments = 0
+    let paidInstallments = 0
+
+    if (row.installments && row.installments.length > 0) {
+      charged = 0n
+      paid = 0n
+      totalInstallments = row.installments.length
+      
+      for (const inst of row.installments) {
+        const instPaid = inst.payments.reduce((s, p) => s + p.amount, 0n)
+        const instAmount = (row.priceAtBooking / BigInt(totalInstallments))
+        charged += instAmount
+        paid += instPaid
+        if (instPaid >= instAmount) paidInstallments++
+      }
+    }
+
+    const balance = asBalance(charged, discount, paid)
     if (balance.balance <= 0n) continue
 
     const dueAt = effectiveDueInstant({
@@ -158,6 +165,8 @@ async function tenantDebts(
       dueDateOverride: row.debtDueDateOverride,
       bucket: bucketOf(now, dueAt),
       daysOverdue: daysOverdueOf(now, dueAt),
+      totalInstallments: Math.max(1, totalInstallments),
+      paidInstallments,
     })
   }
 
@@ -176,10 +185,7 @@ function bucketKey(bucket: DebtBucket): MutableBucketKey {
 }
 
 type MutableBucketKey = keyof DebtBuckets
-
-type MutableBuckets = {
-  readonly [key in MutableBucketKey]: DebtRow[]
-}
+type MutableBuckets = { readonly [key in MutableBucketKey]: DebtRow[] }
 
 function dueLocalDate(dueAt: Date, utcOffsetMinutes: number): LocalDate {
   return fromUtcInstant(dueAt, utcOffsetMinutes).localDate
@@ -189,45 +195,34 @@ function doctorName(firstName: string, lastName: string | null): string {
   return lastName === null || lastName === '' ? firstName : `${firstName} ${lastName}`
 }
 
-export async function contactList(args: {
-  readonly tx: TransactionClient
-  readonly ctx: TenantContext
-  readonly now: Date
-}): Promise<DebtBuckets> {
+export async function contactList(args: { tx: TransactionClient; ctx: TenantContext; now: Date }): Promise<DebtBuckets> {
   requirePermission(args.ctx, Permission.ViewDebts)
   return tenantDebts(args.tx, args.ctx.tenantId, args.now)
 }
 
-export async function clinicDebts(args: {
-  readonly tx: TransactionClient
-  readonly ctx: TenantContext
-  readonly now: Date
-}): Promise<DebtBuckets> {
+export async function clinicDebts(args: { tx: TransactionClient; ctx: TenantContext; now: Date }): Promise<DebtBuckets> {
   requirePermission(args.ctx, Permission.ViewDebts)
   return tenantDebts(args.tx, args.ctx.tenantId, args.now)
 }
 
-export async function doctorDebts(args: {
-  readonly tx: TransactionClient
-  readonly ctx: TenantContext
-  readonly now: Date
-}): Promise<DebtBuckets> {
+export async function doctorDebts(args: { tx: TransactionClient; ctx: TenantContext; now: Date }): Promise<DebtBuckets> {
   requirePermission(args.ctx, Permission.ViewDebts)
   return tenantDebts(args.tx, args.ctx.tenantId, args.now, { doctorId: args.ctx.userId })
 }
 
-export async function customerDebts(args: {
-  readonly tx: TransactionClient
-  readonly tenantId: string
-  readonly customerId: string
-  readonly now: Date
-}): Promise<readonly DebtRow[]> {
+export async function customerDebts(args: { readonly tx: TransactionClient; readonly tenantId: string; readonly customerId: string; readonly now: Date }): Promise<readonly DebtRow[]> {
   const buckets = await tenantDebts(args.tx, args.tenantId, args.now)
-  const all = [
-    ...buckets.overdue30,
-    ...buckets.overdue7,
-    ...buckets.overdue,
-    ...buckets.dueSoon,
-  ]
+  const all = [...buckets.overdue30, ...buckets.overdue7, ...buckets.overdue, ...buckets.dueSoon]
   return all.filter((row) => row.customerId === args.customerId)
+}
+
+export async function customerDebtFollowUps(args: { readonly tx: TransactionClient; readonly tenantId: string; readonly customerId: string }) {
+  return args.tx.debtFollowUp.findMany({
+    where: { tenantId: args.tenantId, appointment: { customerId: args.customerId } },
+    include: {
+      appointment: { select: { localDate: true, service: { select: { name: true } }, doctor: { select: { firstName: true, lastName: true } } } },
+      createdBy: { select: { firstName: true, lastName: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
 }

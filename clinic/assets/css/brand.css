@@ -4,26 +4,34 @@
    برای ری‌برند، همین فایل را عوض کنید — هیچ فایل دیگری دست نمی‌خورد.
    ========================================================================== */
 :root {
-  --brand:           #b56b6b;
-  --brand-btn:       #af5d5d;
-  --brand-600:       #a35c5c;
-  --brand-700:       #8e4c4c;
-  --brand-300:       #d9a7a7;
-  --brand-100:       #f4e3e0;
-  --brand-50:        #fbf1ee;
-  --bg:              #f7f2f0;
-  --bg-alt:          #fbf7f5;
-  --surface-sunken:  #f6efec;
-  --line:            #ede2de;
-  --line-2:          #e3d5d0;
-  --ink:             #2e2524;
-  --ink-2:           #6e5f5b;
-  --ink-3:           #817169;
-  --sidebar-dark:    #241c1b;
-  --sidebar-dark-2:  #171111;
-  --grad-a:          #f3ebe6;
-  --grad-b:          #eee3dc;
-  --veil-1:          rgba(251,241,238,.08);
-  --veil-2:          rgba(249,234,230,.72);
-  --sh-brand:        0 8px 20px rgba(181,107,107,0.22);
+  --brand:           #3D84B7;
+  --brand-btn:       #35759F;
+  --brand-600:       #35759F;
+  --brand-700:       #2A5E80;
+  --brand-300:       #9CC4DF;
+  --brand-100:       #DCEBF7;
+  --brand-50:        #EEF6FC;
+  --bg:              #F0F8FE;
+  --bg-alt:          #F8FBFE;
+  --surface-sunken:  #F2F8FD;
+  --line:            #E4EFF8;
+  --line-2:          #D4E4F1;
+  --ink:             #1C2B3A;
+  --ink-2:           #5B6B7C;
+  --ink-3:           #61788f;
+  --sidebar-dark:    #F4FAFE;
+  --sidebar-dark-2:  #EEF6FC;
+  --ok:              #2E9E6B;
+  --ok-bg:           #E9F8F0;
+  --warn:            #C08A1E;
+  --warn-bg:         #FEF8E9;
+  --danger:          #D4565C;
+  --danger-bg:       #FEF1F1;
+  --info:            #3D84B7;
+  --info-bg:         #E6F4FF;
+  --grad-a:          #E8F3FC;
+  --grad-b:          #DCEBF7;
+  --veil-1:          rgba(238,246,252,.08);
+  --veil-2:          rgba(229,241,250,.72);
+  --sh-brand:        0 8px 20px rgba(61,132,183,0.22);
 }

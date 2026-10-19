@@ -121,6 +121,7 @@ export async function recordPayment(args: {
     data: {
       tenantId: args.ctx.tenantId,
       appointmentId: appointment.id,
+      installmentId: args.input.installmentId ?? null,
       customerId: appointment.customerId as string,
       recordedByUserId: args.ctx.userId,
       discountByUserId: args.input.discountAmount > 0n ? args.ctx.userId : null,

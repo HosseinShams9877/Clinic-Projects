@@ -99,3 +99,42 @@ export async function customerLedger(args: {
   ])
   return { balance, paid }
 }
+export async function listInstallments(tx: TransactionClient, tenantId: string) {
+  const rows = await tx.installment.findMany({
+    where: { tenantId },
+    include: {
+      payments: true,
+      appointment: {
+        select: {
+          localDate: true,
+          doctorId: true,
+          customer: {
+            select: {
+              firstName: true,
+              lastName: true,
+              mobile: true,
+            },
+          },
+          doctor: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+          service: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { dueAt: 'asc' },
+  })
+
+  // 👈 فیلتر کردن اقساطی که مانده‌شون صفر شده
+  return rows.filter((row) => {
+    const paid = row.payments.reduce((sum, p) => sum + p.amount, 0n)
+    return paid < row.amount // فقط اقساطی که هنوز کامل پرداخت نشدن
+  })
+}

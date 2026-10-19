@@ -35,6 +35,8 @@ import {
 } from '@/modules/customers'
 import { APPOINTMENT_STATUS_LABELS } from '@/modules/appointments'
 import { requireStaffPanel } from '@/app/_shell/session'
+import { customerDebtFollowUps } from '@/modules/debts'
+import { CollapsibleCard } from '@/app/_customers/CollapsibleCard'
 
 export const metadata: Metadata = { title: CUSTOMERS_PAGE.reception.title }
 
@@ -57,14 +59,16 @@ export default async function ReceptionCustomerDetailPage({
 
   const data = await runInTenantScope(session.permissions, prisma(), async (tx) => {
     try {
-      return await loadCustomerProfile({ tx, ctx: session.permissions, customerId: id })
+      const base = await loadCustomerProfile({ tx, ctx: session.permissions, customerId: id })
+      const followUps = await customerDebtFollowUps({ tx, tenantId: session.tenantId, customerId: id })
+      return { ...base, followUps }
     } catch {
       return null
     }
   })
   if (data === null) notFound()
 
-  const { profile, primaryDoctorName, primaryClinicName, injections, injectionCounts } = data
+  const { profile, primaryDoctorName, primaryClinicName, injections, injectionCounts, followUps } = data
   const name =
     profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
   const appts = paginate(profile.appointments, page)
@@ -101,17 +105,16 @@ export default async function ReceptionCustomerDetailPage({
 
       {tab === 'injections' ? (
         <InjectionTab
-  rows={injections}
-  counts={injectionCounts}
-  panel="reception"
-  customerId={profile.id}
-  view={injectionView}
-  basePath={`${basePath}?tab=injections`}
-/>
+          rows={injections}
+          counts={injectionCounts}
+          panel="reception"
+          customerId={profile.id}
+          view={injectionView}
+          basePath={`${basePath}?tab=injections`}
+        />
       ) : (
         <>
-          <section className="rounded-md border border-line bg-surface p-4">
-            <h2 className="mb-3 font-bold text-ink">{CUSTOMER_PROFILE_PAGE.sections.details}</h2>
+          <CollapsibleCard title={CUSTOMER_PROFILE_PAGE.sections.details}>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-3 panel:grid-cols-2">
               <Detail
                 label={CUSTOMER_PROFILE_PAGE.fields.mobile}
@@ -157,12 +160,12 @@ export default async function ReceptionCustomerDetailPage({
                 value={toPersianDigits(profile.completedSessions)}
               />
             </dl>
-          </section>
+          </CollapsibleCard>
 
-          <section className="rounded-md border border-line bg-surface">
-            <h2 className="border-b border-line px-4 py-3 font-bold text-ink">
-              {CUSTOMER_PROFILE_PAGE.sections.appointments}
-            </h2>
+          <CollapsibleCard 
+            title={CUSTOMER_PROFILE_PAGE.sections.appointments}
+            note={`${toPersianDigits(profile.appointments.length)} مورد`}
+          >
             {profile.appointments.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-ink-3">
                 {CUSTOMER_PROFILE_PAGE.empty.appointments}
@@ -205,20 +208,87 @@ export default async function ReceptionCustomerDetailPage({
                 </div>
               </div>
             )}
-          </section>
+          </CollapsibleCard>
+
+          <CollapsibleCard title="پیگیری‌های انجام شده" note={`${toPersianDigits(followUps.length)} مورد`}>
+            <FollowUpsList rows={followUps} />
+          </CollapsibleCard>
         </>
       )}
     </div>
   )
 }
 
-/** The injection view the URL names, or the default (the map). */
+function FollowUpsList({ rows }: { readonly rows: any[] }) {
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">
+        هیچ پیگیری‌ای برای این مشتری ثبت نشده است.
+      </p>
+    )
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm text-right">
+        <thead>
+          <tr className="border-b border-line-2 text-ink-3">
+            <Th>تاریخ ثبت</Th>
+            <Th>مسئول پیگیری</Th>
+            <Th>نتیجه / توضیحات</Th>
+            <Th>تاریخ وعده پرداخت</Th>
+            <Th>تاریخ پیگیری بعدی</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            let finalText = row.note || ''
+            const replacements: Record<string, string> = {
+              'PROMISE_TO_PAY': 'وعده پرداخت',
+              'NO_ANSWER': 'تماس شد؛ پاسخ نداد',
+              'SMS_SENT': 'پیامک ارسال شد',
+              'DISCOUNT_REQUEST': 'درخواست تخفیف',
+              'PROMISE_TOMORROW': 'قول پرداخت تا فردا',
+              'AWAITING_REVIEW': 'در انتظار بررسی',
+              'INSTALLMENT_REQUEST': 'درخواست تقسیط',
+            }
+            Object.entries(replacements).forEach(([eng, fa]) => {
+              finalText = finalText.replace(new RegExp(eng, 'g'), fa)
+            })
+            const parts = finalText.split(' - ')
+            const resultPart = parts[0] || ''
+            const notePart = parts.slice(1).join(' - ')
+
+            return (
+              <tr key={row.id} className="border-b border-line last:border-b-0">
+                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">
+                  {formatDate(dateToLocalDate(row.createdAt), 'short')}
+                </td>
+                <td className="px-3 py-3 text-ink-2">
+                  {row.createdBy ? `${row.createdBy.firstName} ${row.createdBy.lastName ?? ''}` : 'سیستم'}
+                </td>
+                <td className="px-3 py-3 text-ink whitespace-pre-wrap">
+                  <span className="font-semibold">{resultPart}</span>
+                  {notePart && <span className="block text-xs text-ink-3 mt-1">{notePart}</span>}
+                </td>
+                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">—</td>
+                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">
+                  {row.nextContactAt ? formatDate(dateToLocalDate(row.nextContactAt), 'short') : '—'}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function injectionViewFromParam(value: string | string[] | undefined): InjectionView {
   if (value === 'table') return 'table'
   return DEFAULT_INJECTION_VIEW
 }
 
-/** One labelled fact, or a dash when the record does not hold it. */
 function Detail({
   label,
   value,
@@ -238,7 +308,6 @@ function Detail({
   )
 }
 
-/** A column header, matching the design system's tables. */
 function Th({
   children,
   className,
@@ -256,14 +325,12 @@ function Th({
   )
 }
 
-/** The acquisition source's label, or a dash / the raw code the catalog does not hold. */
 function sourceLabel(source: string | null): string | null {
   if (source === null) return null
   if (!isMember(AcquisitionSource, source)) return source
   return ACQUISITION_SOURCE_LABELS[source]
 }
 
-/** The lifecycle's label. */
 function lifecycleLabel(lifecycle: string): string {
   return (
     CUSTOMER_LIFECYCLE_LABELS[lifecycle as keyof typeof CUSTOMER_LIFECYCLE_LABELS] ?? lifecycle

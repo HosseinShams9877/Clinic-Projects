@@ -233,3 +233,8 @@ export const DEBTS_PAGE = {
   dash: '—',
   days: 'روز',
 } as const satisfies Record<string, unknown>
+export const RECEPTION_INSTALLMENTS = {
+  title: 'اقساط',
+  heading: 'مدیریت اقساط',
+  subtitle: 'برنامه اقساط و سررسید پرداخت‌های مراجعین.',
+}

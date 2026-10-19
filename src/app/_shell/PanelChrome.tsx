@@ -21,27 +21,99 @@ import { panelPath } from './navigation'
 export interface PanelChromeProps {
   readonly panel: Panel
   readonly panelName: string
-  /** The clinic's own stored name, shown as the shell's brand. */
   readonly clinicName: string
   readonly nav: readonly NavItem[]
   readonly roleLabel: string | null
-  /** The long Jalali date the topbar chip shows, computed by the shell. */
   readonly dateLabel: string
-  /** The notifications the bell lists, read once by the shell. */
   readonly notifications: readonly NotificationEntry[]
-  /** How many of them are unread — the bell's badge. */
   readonly unreadCount: number
-  /** Where «همه اعلان‌ها» leads. */
   readonly notificationsHref: string
   readonly children: React.ReactNode
+}
+
+// 👈 کامپوننت جدید برای رندر هر آیتم سایدبار
+function SidebarItem({ item, pathname, home }: { item: NavItem; pathname: string; home: string }) {
+  const [isOpen, setIsOpen] = useState(false)
+  
+  const isItemActive = isActive(pathname, item, home)
+  const isChildActive = item.children?.some((child) => child.href && isActive(pathname, child, home))
+  const shouldBeOpen = isOpen || !!isChildActive
+
+  // اگر آیتم زیرمنو داشت
+  if (item.children && item.children.length > 0) {
+    return (
+      <div className="flex flex-col">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className={cx(
+            'flex w-full items-center gap-3 rounded-sm px-3 py-[10px] text-sm font-semibold no-underline',
+            '[color:color-mix(in_srgb,var(--ink-inverse),transparent_28%)]',
+            '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
+            'hover:bg-sidebar-dark-2 hover:text-ink-inverse',
+            (isItemActive || isChildActive) && 'bg-brand text-ink-inverse!',
+          )}
+        >
+          <Icon name={item.icon} size="nav" />
+          <span className="flex-1 text-start">{item.label}</span>
+          <Icon
+            name="chevronDown"
+            size="compact"
+            className={cx('transition-transform', shouldBeOpen && 'rotate-180')}
+          />
+        </button>
+        
+        {shouldBeOpen && (
+          <div className="flex flex-col gap-1 py-1 ps-4">
+            {item.children.map((child) => (
+              <Link
+                key={child.href ?? child.label}
+                href={child.href ?? '#'}
+                className={cx(
+                  'flex items-center gap-3 rounded-sm px-3 py-[8px] text-sm font-semibold no-underline',
+                  '[color:color-mix(in_srgb,var(--ink-inverse),transparent_28%)]',
+                  '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
+                  'hover:bg-sidebar-dark-2 hover:text-ink-inverse',
+                  isActive(pathname, child, home) && 'bg-brand text-ink-inverse!',
+                )}
+              >
+                <Icon name={child.icon} size="compact" />
+                <span className="flex-1">{child.label}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // اگر آیتم معمولی بود
+  return (
+    <Link
+      href={item.href ?? '#'}
+      className={cx(
+        'flex items-center gap-3 rounded-sm px-3 py-[10px] text-sm font-semibold no-underline',
+        '[color:color-mix(in_srgb,var(--ink-inverse),transparent_28%)]',
+        '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
+        'hover:bg-sidebar-dark-2 hover:text-ink-inverse',
+        isItemActive && 'bg-brand text-ink-inverse!',
+      )}
+      aria-current={isItemActive ? 'page' : undefined}
+    >
+      <Icon name={item.icon} size="nav" />
+      <span className="flex-1">{item.label}</span>
+      {item.badge === undefined ? null : (
+        <span className="grid min-w-5 place-items-center rounded-pill bg-danger px-[6px] py-[1px] text-xs font-bold text-ink-inverse tabular-nums">
+          {item.badge}
+        </span>
+      )}
+    </Link>
+  )
 }
 
 export function PanelChrome({ panel, panelName, clinicName, nav, roleLabel, dateLabel, notifications, unreadCount, notificationsHref, children }: PanelChromeProps) {
   const pathname = usePathname()
 
-  // The drawer belongs to the route it was opened on, so a navigation closes it by
-  // derivation rather than by an effect: any change to `pathname` — a nav tap, the
-  // back button, a redirect — makes the comparison below false on the next render.
   const [openOnPath, setOpenOnPath] = useState<string | null>(null)
   const drawerOpen = openOnPath === pathname
 
@@ -79,33 +151,16 @@ export function PanelChrome({ panel, panelName, clinicName, nav, roleLabel, date
             <span className="truncate text-xs [color:color-mix(in_srgb,var(--ink-inverse),transparent_32%)]">{panelName}</span>
           </span>
         </div>
+        
         <nav
           className="flex flex-1 flex-col gap-1 px-3 pt-2 pb-5"
           aria-label={SHELL_ARIA.navigation}
         >
           {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cx(
-                'flex items-center gap-3 rounded-sm px-3 py-[10px] text-sm font-semibold no-underline',
-                '[color:color-mix(in_srgb,var(--ink-inverse),transparent_28%)]',
-                '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
-                'hover:bg-sidebar-dark-2 hover:text-ink-inverse',
-                isActive(pathname, item, home) && 'bg-brand text-ink-inverse!',
-              )}
-              aria-current={isActive(pathname, item, home) ? 'page' : undefined}
-            >
-              <Icon name={item.icon} size="nav" />
-              <span className="flex-1">{item.label}</span>
-              {item.badge === undefined ? null : (
-                <span className="grid min-w-5 place-items-center rounded-pill bg-danger px-[6px] py-[1px] text-xs font-bold text-ink-inverse tabular-nums">
-                  {item.badge}
-                </span>
-              )}
-            </Link>
+            <SidebarItem key={item.href ?? item.label} item={item} pathname={pathname} home={home} />
           ))}
         </nav>
+
         <form action={signOut} className="mt-auto px-3 pb-5">
           <button
             type="submit"
@@ -240,6 +295,7 @@ export function PanelChrome({ panel, panelName, clinicName, nav, roleLabel, date
 }
 
 function isActive(pathname: string, item: NavItem, home: string): boolean {
+  if (item.href === undefined) return false
   if (item.href === home) return pathname === home
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
 }

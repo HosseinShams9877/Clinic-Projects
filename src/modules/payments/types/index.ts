@@ -15,11 +15,14 @@ export type PaymentsMessageKey =
   | 'payment.nothingToRefund'
   | 'payment.discountNeedsReason'
   | 'payment.driftDetected'
+  | 'payment.installmentNotFound'
+  | 'payment.installmentCountInvalid'
 
 /** One ledger row, as the customer's history renders it. */
 export interface PaymentRow {
   readonly id: string
   readonly appointmentId: string
+  readonly installmentId?: string | null
   readonly amount: bigint
   readonly discountAmount: bigint
   readonly discountReason: string | null
@@ -50,6 +53,8 @@ export interface BalanceSummary {
 /** The facts a receipt records, as the desk's form collects them. */
 export interface RecordPaymentInput {
   readonly appointmentId: string
+  /** Optional installment this receipt is allocated to. */
+  readonly installmentId?: string | null
   /** Positive. A `REFUND` is written through `recordRefund`, which negates it. */
   readonly amount: bigint
   readonly method: PaymentMethod

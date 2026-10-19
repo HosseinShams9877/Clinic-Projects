@@ -33,6 +33,10 @@ export const MESSAGES: Readonly<Record<PaymentsMessageKey, string>> = {
 
   // The nightly job found a cache that is not the ledger; an operator must look.
   'payment.driftDetected': 'مجموع‌های ثبت‌شده با دفتر مالی هم‌خوانی ندارد. این مورد بررسی شود.',
+
+  'payment.installmentNotFound': 'قسط موردنظر پیدا نشد.',
+
+  'payment.installmentCountInvalid': 'تعداد اقساط باید بین ۱ تا ۳۶ باشد.',
 } satisfies Record<PaymentsMessageKey, string>
 
 /* ── §2.5 The two closed sets a receipt carries ─────────────────────────────── */

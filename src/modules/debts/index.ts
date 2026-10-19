@@ -8,7 +8,13 @@ export type { DebtBuckets, DebtRow, DebtsMessageKey, DebtsModule, LastFollowUp }
 
 export { DEBT_BUCKET_LABELS, DEBT_BUCKET_ORDER, MESSAGES } from './catalog'
 
-export { clinicDebts, contactList, customerDebts, doctorDebts } from './lib/queries'
+export { 
+  clinicDebts, 
+  contactList, 
+  customerDebts, 
+  doctorDebts,
+  customerDebtFollowUps, // 👈 اضافه شد
+} from './lib/queries'
 
 export { recordFollowUp, rescheduleDueDate, getFollowUpsForAppointment } from './lib/follow-up'
 
