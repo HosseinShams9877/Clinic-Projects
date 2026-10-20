@@ -12,7 +12,7 @@ import { isMember } from '@/core/constants'
 import { DEBTS_PAGE } from '@/app/catalog'
 import { DebtsTable } from '@/app/_debts/debts-table'
 import {
-  contactList,
+  clinicDebts, 
   readDebtSettings,
   type DebtRow,
 } from '@/modules/debts'
@@ -20,8 +20,10 @@ import { PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS, paymentsThisMonth } from '@
 import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import { requireStaffPanel } from '@/app/_shell/session'
 
-import { DebtsKpi } from './_components/debts-kpi'
+// 👈 تغییر ۱: استفاده از کامپوننت‌های ادمین
+import { DebtsKpi } from '@/app/admin/debts/_components/DebtsKpi'
 import { DebtsFollowUpDateField } from './_components/debts-follow-up-date-field'
+
 
 export const metadata: Metadata = { title: DEBTS_PAGE.reception.title }
 
@@ -64,7 +66,7 @@ export default async function ReceptionDebtsPage({
     async (tx) => {
       const settings = await readDebtSettings(tx, session.tenantId)
       const [buckets, collectedRial, doctors] = await Promise.all([
-        contactList({ tx, ctx: session.permissions, now }),
+        clinicDebts({ tx, ctx: session.permissions, now }), // 👈 تغییر ۲: دیدن همه بدهی‌ها مثل ادمین
         paymentsThisMonth(tx, session.tenantId, now, settings.utcOffsetMinutes),
         tx.user.findMany({
           where: { tenantId: session.tenantId, isActive: true },
@@ -77,34 +79,24 @@ export default async function ReceptionDebtsPage({
         .concat(buckets.overdue7, buckets.overdue, buckets.dueSoon)
         .map((row) => row.appointmentId)
 
-      // خواندن پیگیری‌ها
       const allFollowUps = await tx.debtFollowUp.findMany({
         where: { tenantId: session.tenantId, appointmentId: { in: appointmentIds } },
         orderBy: { createdAt: 'desc' },
         include: { createdBy: { select: { firstName: true, lastName: true } } },
       })
 
-      // گروه‌بندی امن
       const followUpsMap: Record<string, typeof allFollowUps> = {}
       for (const f of allFollowUps) {
         const existing = followUpsMap[f.appointmentId]
-        if (existing) {
-          existing.push(f)
-        } else {
-          followUpsMap[f.appointmentId] = [f]
-        }
+        if (existing) existing.push(f)
+        else followUpsMap[f.appointmentId] = [f]
       }
 
       return { buckets, collectedRial, offset: settings.utcOffsetMinutes, doctors, followUpsMap }
     },
   )
 
-  const allRows = [
-    ...buckets.overdue30,
-    ...buckets.overdue7,
-    ...buckets.overdue,
-    ...buckets.dueSoon,
-  ]
+  const allRows = [...buckets.overdue30, ...buckets.overdue7, ...buckets.overdue, ...buckets.dueSoon]
   const pastDue = [...buckets.overdue30, ...buckets.overdue7, ...buckets.overdue]
   const totalRial = allRows.reduce((total, row) => total + row.balance, 0n)
 
@@ -147,10 +139,11 @@ export default async function ReceptionDebtsPage({
         <p className="text-sm text-ink-2">{DEBTS_PAGE.reception.lead}</p>
       </div>
 
-      <DebtsKpi
-        collectedRial={collectedRial}
-        overdueCount={pastDue.length}
-        totalRial={totalRial}
+           <DebtsKpi
+        totalRial={allRows.reduce((total, row) => total + row.balance, 0n)}
+        totalDebtors={new Set(allRows.map((row) => row.customerId)).size}
+        over30Count={buckets.overdue30?.length ?? 0}
+        between1and7Count={buckets.overdue7?.length ?? 0}
       />
 
       <DebtsTabs
@@ -170,11 +163,12 @@ export default async function ReceptionDebtsPage({
         basePath={BASE_PATH}
       />
 
-      <DebtsTable
+            <DebtsTable
         rows={slice}
         showActions
         paymentOptions={PAYMENT_OPTIONS}
-        followUpsMap={followUpsMap} // <-- پاس دادن لیست پیگیری‌ها به جدول
+        followUpsMap={followUpsMap}
+        panel="reception" // 👈 این خط رو حتماً اضافه کن
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
@@ -189,7 +183,7 @@ export default async function ReceptionDebtsPage({
   )
 }
 
-/* ── بقیه کدها (DebtsTabs, DebtsFilters, rowsForTab, ...) بدون تغییر ─────────── */
+/* ── بقیه کدها دقیقاً مثل قبل ─────────── */
 
 function DebtsTabs({ active, basePath, search, doctor, followUpDate }: {
   readonly active: DebtsTab

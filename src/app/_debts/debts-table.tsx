@@ -1,182 +1,183 @@
-// src/app/_debts/debts-table.tsx
+'use client'
 
-/**
- * The debt surfaces' shared table — the one row the three staff pages render.
- */
-
-import { DEBTS_PAGE } from '@/app/catalog'
-import {
-  dateToLocalDate,
-  asLocalDate,
-  formatDate,
-  formatMoney,
-  formatNumber,
-  formatPhone,
-} from '@/core/localization'
+import { useState } from 'react'
+import { formatMoney, toPersianDigits } from '@/core/localization'
 import type { DebtRow } from '@/modules/debts'
-import { cx } from '@/core/lib'
 
-import { DebtRowActions, type PaymentOptions } from './debts-forms'
+// 👈 ایمپورت کردن دیالوگ‌های ادمین
+import { PaymentDialog as AdminPaymentDialog } from '@/app/admin/debts/_components/PaymentDialog'
+import { FollowUpDialog as AdminFollowUpDialog } from '@/app/admin/debts/_components/FollowUpDialog'
 
-type FollowUpRecord = {
-  readonly id: string
-  readonly note: string | null
-  readonly createdAt: Date
-  readonly createdBy: { readonly firstName: string; readonly lastName: string | null } | null
+// 👈 ایمپورت کردن دیالوگ‌های منشی
+import { PaymentDialog as ReceptionPaymentDialog } from '@/app/reception/debts/_components/PaymentDialog'
+import { FollowUpDialog as ReceptionFollowUpDialog } from '@/app/reception/debts/_components/FollowUpDialog'
+
+type PaymentOptions = {
+  method: { value: string; label: string }[]
+  kind: { value: string; label: string }[]
 }
 
-export interface DebtsTableProps {
-  readonly rows: readonly DebtRow[]
-  readonly showActions?: boolean
-  readonly paymentOptions?: PaymentOptions
-  readonly followUpsMap?: Readonly<Record<string, readonly FollowUpRecord[]>>
+const FOLLOW_UP_RESULTS: Record<string, string> = {
+  PROMISE_TO_PAY: 'وعده پرداخت',
+  NO_ANSWER: 'تماس شد؛ پاسخ نداد',
+  SMS_SENT: 'پیامک ارسال شد',
+  DISCOUNT_REQUEST: 'درخواست تخفیف',
+  PROMISE_TOMORROW: 'قول پرداخت تا فردا',
+  AWAITING_REVIEW: 'در انتظار بررسی',
+}
+
+// 👈 تابع جدید برای ترجمه دقیق کدها به فارسی
+function translateFollowUpNote(note: string | null | undefined) {
+  if (!note) return '—'
+  
+  let translated = note
+  // جایگزینی کدهای انگلیسی با متن فارسی
+  Object.entries(FOLLOW_UP_RESULTS).forEach(([code, label]) => {
+    translated = translated.replace(new RegExp(code, 'g'), label)
+  })
+  
+  // حذف خط تیره‌های اضافه در ابتدا یا انتها
+  return translated.replace(/^ - /, '').replace(/ - $/, '')
 }
 
 export function DebtsTable({
   rows,
   showActions,
   paymentOptions,
-  followUpsMap = {},
-}: DebtsTableProps) {
-  return (
-    <BucketTable
-      rows={rows}
-      showActions={showActions}
-      paymentOptions={paymentOptions}
-      followUpsMap={followUpsMap}
-    />
-  )
-}
-
-function BucketTable({
-  rows,
-  showActions,
-  paymentOptions,
   followUpsMap,
+  panel, // 👈 پراپ جدید
 }: {
-  readonly rows: readonly DebtRow[]
-  readonly showActions?: boolean
-  readonly paymentOptions?: PaymentOptions
-  readonly followUpsMap: Readonly<Record<string, readonly FollowUpRecord[]>>
+  rows: readonly DebtRow[]
+  showActions: boolean
+  paymentOptions?: PaymentOptions
+  followUpsMap?: Record<string, any>
+  panel: 'admin' | 'reception' | 'doctor' // 👈 پراپ جدید
 }) {
+  const [selectedPaymentRow, setSelectedPaymentRow] = useState<DebtRow | null>(null)
+  const [selectedFollowUpRow, setSelectedFollowUpRow] = useState<DebtRow | null>(null)
+
   if (rows.length === 0) {
     return (
-      <p className="rounded-lg border border-line bg-surface px-4 py-6 text-center text-sm text-ink-3">
-        {DEBTS_PAGE.buckets.empty}
+      <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">
+        هیچ بدهی‌ای یافت نشد.
       </p>
     )
   }
 
-  return (
-    <div className="overflow-x-auto rounded-lg border border-line bg-surface">
-      <table className="w-full border-collapse text-sm">
-        <caption className="sr-only">{DEBTS_PAGE.reception.title}</caption>
-        <thead>
-          <tr className="border-b border-line-2 bg-surface-2 text-ink-3">
-            <Th>{DEBTS_PAGE.columns.customer}</Th>
-            <Th>{DEBTS_PAGE.columns.mobile}</Th>
-            <Th>{DEBTS_PAGE.filter.doctor}</Th>
-            <Th className="text-end">{DEBTS_PAGE.columns.charged}</Th>
-            <Th className="text-end">{DEBTS_PAGE.columns.discount}</Th>
-            <Th className="text-end">{DEBTS_PAGE.columns.paid}</Th>
-            <Th className="text-end">{DEBTS_PAGE.columns.balance}</Th>
-            <Th>{DEBTS_PAGE.columns.dueDate}</Th>
-            <Th className="text-end">{DEBTS_PAGE.columns.daysOverdue}</Th>
-            <Th>{DEBTS_PAGE.columns.lastFollowUp}</Th>
-            <Th>{DEBTS_PAGE.columns.nextContact}</Th>
-            {showActions ? <Th>{DEBTS_PAGE.columns.actions}</Th> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <DebtRowMarkup
-              key={row.appointmentId}
-              row={row}
-              showActions={showActions}
-              paymentOptions={paymentOptions}
-              followUps={followUpsMap[row.appointmentId] ?? []}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
+  // 👈 انتخاب کامپوننت بر اساس پنل
+  const PaymentDialog = panel === 'reception' ? ReceptionPaymentDialog : AdminPaymentDialog
+  const FollowUpDialog = panel === 'reception' ? ReceptionFollowUpDialog : AdminFollowUpDialog
 
-function DebtRowMarkup({
-  row,
-  showActions,
-  paymentOptions,
-  followUps,
-}: {
-  readonly row: DebtRow
-  readonly showActions?: boolean
-  readonly paymentOptions?: PaymentOptions
-  readonly followUps: readonly FollowUpRecord[]
-}) {
   return (
-    <tr className="border-b border-line last:border-b-0 hover:bg-surface-2">
-      <td className="px-4 py-3 font-semibold text-ink">{customerName(row)}</td>
-      <td className="px-4 py-3 text-ink-2 tabular-nums" dir="ltr">
-        {formatPhone(row.customerMobile)}
-      </td>
-      <td className="px-4 py-3 text-ink-2">{row.doctorName}</td>
-      <td className="px-4 py-3 text-end tabular-nums">{formatMoney(row.charged)}</td>
-      <td className="px-4 py-3 text-end tabular-nums text-ink-2">{formatMoney(row.discount)}</td>
-      <td className="px-4 py-3 text-end tabular-nums">{formatMoney(row.paid)}</td>
-      <td className="px-4 py-3 text-end font-semibold tabular-nums text-danger">
-        {formatMoney(row.balance)}
-      </td>
-      <td className="px-4 py-3 tabular-nums text-ink-2">
-        {formatDate(asLocalDate(row.dueLocalDate), 'short')}
-      </td>
-      <td className="px-4 py-3 text-end tabular-nums text-ink-2">
-        {row.daysOverdue > 0
-          ? `${formatNumber(row.daysOverdue)} ${DEBTS_PAGE.days}`
-          : DEBTS_PAGE.dash}
-      </td>
-      <td className="px-4 py-3 tabular-nums text-ink-2">
-        {row.lastFollowUp === null
-          ? DEBTS_PAGE.dash
-          : formatDate(dateToLocalDate(row.lastFollowUp.at), 'short')}
-      </td>
-      <td className="px-4 py-3 tabular-nums text-ink-2">
-        {row.nextContactAt === null
-          ? DEBTS_PAGE.dash
-          : formatDate(dateToLocalDate(row.nextContactAt), 'short')}
-      </td>
-      {showActions && paymentOptions !== undefined ? (
-        <td className="px-4 py-3">
-          <DebtRowActions
-            row={row}
-            options={paymentOptions}
-            followUps={followUps}
-          />
-        </td>
-      ) : null}
-    </tr>
-  )
-}
+    <>
+      <section className="flex flex-col rounded-xl border border-line bg-surface">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1100px] table-fixed border-collapse text-sm text-right">
+            <thead>
+              <tr className="border-b border-line-2 bg-surface-2/50 text-ink-3">
+                <th className="px-4 py-3 font-semibold text-start">مشتری</th>
+                <th className="px-4 py-3 font-semibold text-start">پزشک</th>
+                <th className="px-4 py-3 font-semibold text-start">خدمت</th>
+                <th className="px-4 py-3 font-semibold text-start">سررسید</th>
+                <th className="px-4 py-3 font-semibold text-start">وضعیت</th>
+                <th className="px-4 py-3 font-semibold text-start">مبلغ</th>
+                <th className="px-4 py-3 font-semibold text-start">آخرین پیگیری</th>
+                <th className="px-4 py-3 font-semibold text-start">عملیات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const followUps = followUpsMap?.[row.appointmentId] || []
+                const lastFollowUp = followUps[0]
 
-function customerName(row: DebtRow): string {
-  return row.customerLastName === null
-    ? row.customerFirstName
-    : `${row.customerFirstName} ${row.customerLastName}`
-}
+                return (
+                  <tr key={row.appointmentId} className="border-b border-line last:border-0 hover:bg-surface-2">
+                    <td className="px-4 py-4">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-ink">
+                          {row.customerFirstName} {row.customerLastName ?? ''}
+                        </span>
+                        <span className="text-xs text-ink-3 tabular-nums" dir="ltr">{row.customerMobile}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 text-ink-2">{row.doctorName}</td>
+                    <td className="px-4 py-4 text-ink-2">{row.serviceName ?? '—'}</td>
+                    <td className="px-4 py-4 text-ink-3">{row.dueLocalDate}</td>
+                    <td className="px-4 py-4">
+                      {row.daysOverdue > 0 ? (
+                        <span className="inline-flex rounded-pill bg-danger-bg px-2 py-1 text-xs font-semibold text-danger items-center gap-1">
+                          <span className="size-1.5 rounded-full bg-danger"></span> {toPersianDigits(row.daysOverdue)} روز گذشته
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-pill bg-warn-bg px-2 py-1 text-xs font-semibold text-warn items-center gap-1">
+                          <span className="size-1.5 rounded-full bg-warn"></span> در انتظار
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 font-bold text-ink tabular-nums">{formatMoney(row.balance)}</td>
+                    <td className="px-4 py-4 text-ink-3 text-xs">
+                       {lastFollowUp ? (
+                         <div className="flex flex-col gap-1">
+                           <span className="font-medium text-ink-2">
+                             {/* 👈 استفاده از تابع ترجمه */}
+                             {translateFollowUpNote(lastFollowUp.note)}
+                           </span>
+                           <span className="text-[10px] opacity-70">
+                             {new Date(lastFollowUp.createdAt).toLocaleDateString('fa-IR')}
+                           </span>
+                         </div>
+                       ) : '—'}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        {showActions && (
+                          <>
+                            <button
+                              onClick={() => setSelectedPaymentRow(row)}
+                              className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-ink-inverse hover:bg-brand-600 transition-colors shadow-sm"
+                            >
+                              ثبت پرداخت
+                            </button>
+                            <button
+                              onClick={() => setSelectedFollowUpRow(row)}
+                              className="rounded-lg border border-line-2 bg-surface px-3 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2 transition-colors"
+                            >
+                              پیگیری
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-function Th({
-  children,
-  className,
-}: {
-  readonly children: React.ReactNode
-  readonly className?: string
-}) {
-  return (
-    <th
-      scope="col"
-      className={cx('whitespace-nowrap px-4 py-3 text-start text-xs font-semibold', className)}
-    >
-      {children}
-    </th>
+      {selectedPaymentRow && (
+        <PaymentDialog
+          isOpen={!!selectedPaymentRow}
+          onClose={() => setSelectedPaymentRow(null)}
+          customerId={selectedPaymentRow.customerId}
+          appointmentId={selectedPaymentRow.appointmentId}
+          customerName={`${selectedPaymentRow.customerFirstName} ${selectedPaymentRow.customerLastName ?? ''}`.trim()}
+          amountDue={selectedPaymentRow.balance}
+          onSuccess={() => setSelectedPaymentRow(null)}
+        />
+      )}
+
+      {selectedFollowUpRow && (
+        <FollowUpDialog
+          isOpen={!!selectedFollowUpRow}
+          onClose={() => setSelectedFollowUpRow(null)}
+          appointmentId={selectedFollowUpRow.appointmentId}
+          customerName={`${selectedFollowUpRow.customerFirstName} ${selectedFollowUpRow.customerLastName ?? ''}`.trim()}
+          amountDue={selectedFollowUpRow.balance}
+          onSuccess={() => setSelectedFollowUpRow(null)}
+        />
+      )}
+    </>
   )
 }
