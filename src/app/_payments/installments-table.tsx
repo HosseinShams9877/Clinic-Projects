@@ -12,6 +12,7 @@ interface InstallmentRow {
   readonly sequence: number
   readonly amount: bigint
   readonly dueAt: Date
+  readonly note: string | null
   readonly appointmentId: string
   readonly payments: readonly { readonly amount: bigint }[]
   readonly appointment: {
@@ -81,10 +82,17 @@ export function InstallmentsTable({ rows }: InstallmentsTableProps) {
                 const today = realClock()
                 const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24))
                 
-                const paidForInstallment = row.payments?.reduce((sum: bigint, p: { readonly amount: bigint }) => sum + p.amount, 0n) ?? 0n
-                const progressPercent = row.amount > 0n ? Number((paidForInstallment * 100n) / BigInt(row.amount)) : 0
+                const parts = row.note?.split(':') || []
+                const totalInstallments = Number(parts[1] || 1)
+                const totalAmount = BigInt(parts[3] || row.amount)
+
+                const perInstallmentAmount = row.amount
                 
-                const totalInstallments = rows.filter(r => r.appointmentId === row.appointmentId).length
+                // 👈 محاسبه مبلغ پرداخت شده: تعداد مراحل گذشته ضربدر مبلغ هر قسط
+                const paidSoFar = BigInt(row.sequence - 1) * perInstallmentAmount
+                
+                // 👈 محاسبه درصد پیشرفت بر اساس مبلغ کل
+                const progressPercent = totalAmount > 0n ? Math.min(100, Number((paidSoFar * 100n) / totalAmount)) : 0
 
                 return (
                   <tr key={row.id} className="border-b border-line last:border-0 hover:bg-surface-2">
@@ -124,7 +132,7 @@ export function InstallmentsTable({ rows }: InstallmentsTableProps) {
                       )}
                     </td>
                     
-                    <td className="px-4 py-4 font-bold text-ink tabular-nums">{formatMoney(row.amount)}</td>
+                    <td className="px-4 py-4 font-bold text-ink tabular-nums">{formatMoney(perInstallmentAmount)}</td>
                     
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1">
@@ -138,7 +146,7 @@ export function InstallmentsTable({ rows }: InstallmentsTableProps) {
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1.5 w-32">
                         <span className="text-[10px] text-ink-3">
-                           {formatMoney(paidForInstallment)} {ADMIN_INSTALLMENTS.table.of} {formatMoney(row.amount)} {ADMIN_INSTALLMENTS.table.million}
+                           {formatMoney(paidSoFar)} {ADMIN_INSTALLMENTS.table.of} {formatMoney(totalAmount)} {ADMIN_INSTALLMENTS.table.million}
                         </span>
                         <div className="h-1.5 w-full overflow-hidden rounded-pill bg-surface-sunken">
                            <div className="h-full bg-brand" style={{ width: `${progressPercent}%` }} />
@@ -176,13 +184,7 @@ export function InstallmentsTable({ rows }: InstallmentsTableProps) {
           onClose={() => setSelectedInstallment(null)}
           installmentId={selectedInstallment.id}
           customerName={`${selectedInstallment.appointment.customer?.firstName || ''} ${selectedInstallment.appointment.customer?.lastName || ''}`.trim()}
-          amountDue={
-            selectedInstallment.amount -
-            (selectedInstallment.payments?.reduce(
-              (sum: bigint, p: { readonly amount: bigint }) => sum + p.amount,
-              0n
-            ) ?? 0n)
-          }
+          amountDue={selectedInstallment.amount}
           onSuccess={() => setSelectedInstallment(null)}
         />
       )}

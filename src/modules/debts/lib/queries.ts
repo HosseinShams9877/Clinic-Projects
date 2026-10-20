@@ -37,9 +37,13 @@ const APPOINTMENT_SELECT = {
   debtDueDateOverride: true,
   customer: { select: { firstName: true, lastName: true, mobile: true } },
   doctor: { select: { firstName: true, lastName: true } },
+  service: { select: { name: true } }, // 👈 اسم خدمت
   installments: {
-    include: {
-      payments: { select: { amount: true } }
+    select: {
+      sequence: true,
+      amount: true,
+      note: true,
+      dueAt: true, // 👈 تاریخ سررسید قسط
     }
   },
 } as const
@@ -66,8 +70,12 @@ type AppointmentRow = {
     readonly firstName: string
     readonly lastName: string
   }
+  readonly service: { readonly name: string } | null
   readonly installments: readonly {
-    readonly payments: readonly { readonly amount: bigint }[]
+    readonly sequence: number
+    readonly amount: bigint
+    readonly note: string | null
+    readonly dueAt: Date
   }[]
 }
 
@@ -119,26 +127,31 @@ async function tenantDebts(
     const discount = sumsForRow?._sum.discountAmount ?? 0n
     let totalInstallments = 0
     let paidInstallments = 0
+    let currentDueAt = row.scheduledAt
+    let installmentSequence = 0
+    let installmentAmount = 0n
 
     if (row.installments && row.installments.length > 0) {
-      charged = 0n
-      paid = 0n
-      totalInstallments = row.installments.length
+      const inst = row.installments[0]
       
-      for (const inst of row.installments) {
-        const instPaid = inst.payments.reduce((s, p) => s + p.amount, 0n)
-        const instAmount = (row.priceAtBooking / BigInt(totalInstallments))
-        charged += instAmount
-        paid += instPaid
-        if (instPaid >= instAmount) paidInstallments++
-      }
+      const parts = inst.note?.split(':') || []
+      totalInstallments = Number(parts[1] || 1)
+      const totalAmount = BigInt(parts[3] || row.priceAtBooking)
+      
+      charged = totalAmount
+      paid = sumsForRow?._sum.amount ?? 0n
+      paidInstallments = inst.sequence - 1
+      
+      currentDueAt = inst.dueAt
+      installmentSequence = inst.sequence
+      installmentAmount = inst.amount
     }
 
     const balance = asBalance(charged, discount, paid)
     if (balance.balance <= 0n) continue
 
     const dueAt = effectiveDueInstant({
-      scheduledAt: row.scheduledAt,
+      scheduledAt: currentDueAt, // 👈 تاریخ سررسید از روی قسط فعلی
       override: row.debtDueDateOverride,
       graceDays: settings.debtGraceDays,
     })
@@ -155,6 +168,7 @@ async function tenantDebts(
       doctorId: row.doctorId,
       doctorName: doctorName(row.doctor.firstName, row.doctor.lastName),
       serviceId: row.serviceId,
+      serviceName: row.service?.name ?? null,
       charged: balance.charged,
       discount: balance.discount,
       paid: balance.paid,
@@ -167,6 +181,8 @@ async function tenantDebts(
       daysOverdue: daysOverdueOf(now, dueAt),
       totalInstallments: Math.max(1, totalInstallments),
       paidInstallments,
+      installmentSequence,
+      installmentAmount,
     })
   }
 
