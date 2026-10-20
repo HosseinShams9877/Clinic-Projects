@@ -124,7 +124,7 @@ async function tenantDebts(
     
     let charged = row.priceAtBooking
     let paid = sumsForRow?._sum.amount ?? 0n
-    const discount = sumsForRow?._sum.discountAmount ?? 0n
+    let discount = sumsForRow?._sum.discountAmount ?? 0n
     let totalInstallments = 0
     let paidInstallments = 0
     let currentDueAt = row.scheduledAt
@@ -134,7 +134,6 @@ async function tenantDebts(
     if (row.installments && row.installments.length > 0) {
       const inst = row.installments[0]
       
-      // 👈 این شرط اضافه شد تا ارور undefined برطرف بشه
       if (inst) {
         const parts = inst.note?.split(':') || []
         totalInstallments = Number(parts[1] || 1)

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma, runInTenantScope } from '@/core/db'
-import { asLocalDate, fromClockParts, toUtcInstant } from '@/core/localization'
+import { asLocalDate, fromClockParts, toUtcInstant, fromUtcInstant } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import type { TenantContext } from '@/core/tenant'
 import { PaymentMethod, PaymentKind, isMember } from '@/core/constants'
@@ -81,21 +81,48 @@ export async function recordPaymentAction(
     return { ok: false, message: moduleFailureMessage(new Error('invalid payment input')) }
   }
 
-  const result = await inTenantScope(panel, async ({ tx, ctx }) => {
-    await recordPayment({
-      tx,
-      ctx,
-      input: {
-        appointmentId,
-        amount: asAmount(input.amount),
-        method,
-        kind,
-        discountAmount: asAmount(input.discountAmount),
-        discountReason: input.discountReason,
-        note: input.note,
-      },
-      now: realClock(),
+  const amountBigInt = asAmount(input.amount)
+  const discountBigInt = asAmount(input.discountAmount)
+
+  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId }) => {
+    const now = realClock()
+    
+    const appointment = await tx.appointment.findUnique({
+      where: { id: appointmentId, tenantId },
+      select: { customerId: true }
     })
+
+    if (!appointment || !appointment.customerId) {
+      throw new Error('Appointment or customer not found')
+    }
+
+    if (amountBigInt > 0n || discountBigInt > 0n) {
+      await tx.payment.create({
+        data: {
+          tenantId,
+          appointmentId,
+          customerId: appointment.customerId,
+          recordedByUserId: ctx.userId,
+          amount: amountBigInt,
+          method,
+          kind,
+          discountAmount: discountBigInt,
+          discountReason: input.discountReason,
+          note: input.note,
+          paidAt: now,
+        }
+      })
+    }
+
+    await tx.appointment.update({
+      where: { id: appointmentId, tenantId },
+      data: {
+        resultNote: input.note || null,
+        resultRecordedAt: now,
+        status: 'COMPLETED',
+      }
+    })
+
     return SUCCESS
   })
 
@@ -114,6 +141,10 @@ export async function recordPaymentWithInstallmentsAction(
     installmentCount: number
     firstDueDate: string
     installmentInterval?: string
+    discountAmount?: string 
+    discountReason?: string | null 
+    forceInstallment?: boolean 
+    note?: string | null
   }
 ): Promise<ActionResult> {
   let dbMethod = input.method
@@ -122,21 +153,35 @@ export async function recordPaymentWithInstallmentsAction(
   }
 
   const amountBigInt = asAmount(input.amount)
+  const discountBigInt = asAmount(input.discountAmount || '0')
 
   const result = await inTenantScope(panel, async ({ tx, ctx, tenantId }) => {
     const now = realClock()
     const settings = await readDebtSettings(tx, tenantId)
 
-    if ((input.method === 'INSTALLMENT' || input.method === 'CHEQUE') && input.installmentCount > 0) {
+    const appointment = await tx.appointment.findUnique({
+      where: { id: appointmentId, tenantId },
+      select: { customerId: true, priceAtBooking: true }
+    })
+
+    if (!appointment || !appointment.customerId) {
+      throw new Error('Appointment or customer not found')
+    }
+
+    const realCustomerId = appointment.customerId
+    const effectiveAmount = amountBigInt > 0n ? amountBigInt : appointment.priceAtBooking
+    const payableAmount = effectiveAmount - discountBigInt
+
+    const intervalMonths = input.installmentInterval 
+      ? Number(input.installmentInterval.replace('_MONTH', '')) 
+      : 1
+
+    if ((input.method === 'INSTALLMENT' || input.method === 'CHEQUE' || input.forceInstallment) && input.installmentCount > 0) {
       const baseDate = toUtcInstant(asLocalDate(input.firstDueDate || '1405-01-01'), MIDNIGHT, settings.utcOffsetMinutes)
-      const perInstallmentAmount = amountBigInt / BigInt(input.installmentCount)
+      const perInstallmentAmount = payableAmount / BigInt(input.installmentCount)
 
-      // پاک کردن اقساط قبلی
-      await tx.installment.deleteMany({
-        where: { appointmentId, tenantId }
-      })
+      await tx.installment.deleteMany({ where: { appointmentId, tenantId } })
 
-      // ساخت فقط یک رکورد
       await tx.installment.create({
         data: {
           tenantId,
@@ -144,29 +189,58 @@ export async function recordPaymentWithInstallmentsAction(
           sequence: 1, 
           amount: perInstallmentAmount, 
           dueAt: baseDate,
-          note: `TOTAL:${input.installmentCount}:AMOUNT:${amountBigInt}`, 
+          note: `TOTAL:${input.installmentCount}:AMOUNT:${payableAmount}:INTERVAL:${intervalMonths}`,
         }
       })
-    } else {
+
+      if (discountBigInt > 0n) {
+        await tx.payment.create({
+          data: {
+            tenantId,
+            appointmentId,
+            customerId: realCustomerId, 
+            recordedByUserId: ctx.userId,
+            amount: 0n,
+            discountAmount: discountBigInt,
+            discountReason: input.discountReason || null,
+            method: dbMethod,
+            kind: PaymentKind.Final,
+            note: 'تخفیف هنگام قسطی کردن',
+            paidAt: now,
+          }
+        })
+      }
+    } else if (amountBigInt > 0n || discountBigInt > 0n) {
       if (!isMember(PaymentMethod, dbMethod)) {
         return { ok: false, message: moduleFailureMessage(new Error('invalid method')) }
       }
 
-      await recordPayment({
-        tx,
-        ctx,
-        input: {
+      await tx.payment.create({
+        data: {
+          tenantId,
           appointmentId,
+          customerId: realCustomerId,
+          recordedByUserId: ctx.userId,
           amount: amountBigInt,
           method: dbMethod,
           kind: PaymentKind.Partial,
-          discountAmount: 0n,
-          discountReason: null,
-          note: null,
-        },
-        now,
+          discountAmount: discountBigInt,
+          discountReason: input.discountReason || null,
+          note: input.note || null,
+          paidAt: now,
+        }
       })
     }
+
+    await tx.appointment.update({
+      where: { id: appointmentId, tenantId },
+      data: {
+        resultNote: input.note || null,
+        resultRecordedAt: now,
+        status: 'COMPLETED',
+      }
+    })
+
     return SUCCESS
   })
 
@@ -320,7 +394,6 @@ export async function recordInstallmentPaymentAction(
       return { ok: false, message: moduleFailureMessage(new Error('invalid method')) }
     }
 
-    // ۱. ثبت پرداخت (به installmentId وصل نمیشه تا بعداً بتونیم قسط رو پاک کنیم)
     await tx.payment.create({
       data: {
         tenantId,
@@ -337,18 +410,37 @@ export async function recordInstallmentPaymentAction(
       }
     })
 
-    // 👈 ۲. برو مرحله بعد (چون هر بار پرداخت = یک مرحله)
     const parts = installment.note?.split(':') || []
     const totalCount = Number(parts[1] || 1)
+    const intervalMonths = Number(parts[5] || 1)
     const nextSequence = installment.sequence + 1
     
-    // حذف رکورد فعلی
     await tx.installment.delete({ where: { id: installment.id } })
 
     if (nextSequence <= totalCount) {
-      // ساخت رکورد جدید
-      const nextDueDate = new Date(installment.dueAt)
-      nextDueDate.setMonth(nextDueDate.getMonth() + 1)
+      const settings = await readDebtSettings(tx, tenantId)
+      
+      const currentLocalDate = fromUtcInstant(installment.dueAt, settings.utcOffsetMinutes).localDate
+      const dateParts = currentLocalDate.split('-').map(Number)
+      let y = dateParts[0] ?? 0
+      let m = dateParts[1] ?? 0
+      let d = dateParts[2] ?? 0
+      
+      m += intervalMonths
+      while (m > 12) {
+        m -= 12
+        y += 1
+      }
+      
+      const isLeapYear = (y % 33 === 1 || y % 33 === 5 || y % 33 === 9 || y % 33 === 13 || y % 33 === 17 || y % 33 === 22 || y % 33 === 26 || y % 33 === 30)
+      const maxDaysInMonth = m === 12 ? (isLeapYear ? 30 : 29) : (m <= 6 ? 31 : 30)
+      
+      if (d > maxDaysInMonth) {
+        d = maxDaysInMonth
+      }
+      
+      const nextLocalDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const nextDueDate = toUtcInstant(asLocalDate(nextLocalDate), MIDNIGHT, settings.utcOffsetMinutes)
       
       await tx.installment.create({
         data: {

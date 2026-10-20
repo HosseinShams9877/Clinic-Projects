@@ -18,6 +18,8 @@ import {
   markNoShowAction,
   type ActionResult,
 } from './actions'
+
+// 👈 ایمپورت دیالوگ جدید و مستقل
 import { ResultDialog } from './result-dialog'
 
 type ActionPanel = 'reception' | 'doctor' | 'admin'
@@ -36,6 +38,8 @@ export interface RowEditContext {
 
 export interface RowActionsProps {
   readonly appointmentId: string
+  readonly customerId?: string
+  readonly customerName?: string
   readonly status: string
   readonly panel: ActionPanel
   readonly charged?: bigint
@@ -46,6 +50,8 @@ export interface RowActionsProps {
 
 export function RowActions({
   appointmentId,
+  customerId,
+  customerName,
   status,
   panel,
   charged,
@@ -63,9 +69,7 @@ export function RowActions({
     label: string,
   ) {
     startTransition(async () => {
-      console.log(`[RowActions] running ${label} for ${appointmentId} (status=${status})`)
       const outcome = await action(panel, appointmentId)
-      console.log(`[RowActions] ${label} outcome:`, outcome)
       if (outcome.ok) {
         setMessage(null)
         router.refresh()
@@ -114,23 +118,30 @@ export function RowActions({
             {APPOINTMENTS_PAGE.controls.arrived}
           </Button>
         ) : null}
+        
         {canCloseBlock ? (
           <ResultDialog
             panel={panel}
             appointmentId={appointmentId}
+            customerId={customerId}
+            customerName={customerName}
             charged={charged ?? 0n}
             alreadyPaid={alreadyPaid ?? 0n}
             triggerLabel={APPOINTMENTS_PAGE.controls.arrived}
           />
         ) : null}
+
         {canCompleteAsBooking ? (
           <ResultDialog
             panel={panel}
             appointmentId={appointmentId}
+            customerId={customerId}
+            customerName={customerName}
             charged={charged ?? 0n}
             alreadyPaid={alreadyPaid ?? 0n}
           />
         ) : null}
+        
         {canNoShow ? (
           <ActionButton
             label={APPOINTMENTS_PAGE.controls.noShow}
@@ -139,6 +150,7 @@ export function RowActions({
             onClick={() => run(markNoShowAction, 'markNoShowAction')}
           />
         ) : null}
+        
         {canEdit && edit !== undefined ? (
           <EditDialog
             appointmentId={appointmentId}
@@ -156,6 +168,7 @@ export function RowActions({
             }}
           />
         ) : null}
+        
         {canCancel ? (
           <ActionButton
             label={APPOINTMENTS_PAGE.controls.cancel}
