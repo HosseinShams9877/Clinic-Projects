@@ -20,13 +20,12 @@ import { PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS, paymentsThisMonth } from '@
 import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import { requireStaffPanel } from '@/app/_shell/session'
 
-// 👈 تغییر ۱: استفاده از کامپوننت‌های ادمین
 import { DebtsKpi } from '@/app/admin/debts/_components/DebtsKpi'
 import { DebtsFollowUpDateField } from './_components/debts-follow-up-date-field'
 
-
 export const metadata: Metadata = { title: DEBTS_PAGE.reception.title }
 
+// 👈 as const حذف شد تا مشکل readonly حل بشه
 const PAYMENT_OPTIONS = {
   method: [
     { value: 'CASH', label: PAYMENT_METHOD_LABELS.CASH },
@@ -37,7 +36,7 @@ const PAYMENT_OPTIONS = {
     { value: 'PARTIAL', label: PAYMENT_KIND_LABELS.PARTIAL },
     { value: 'FINAL', label: PAYMENT_KIND_LABELS.FINAL },
   ],
-} as const
+}
 
 const BASE_PATH = '/reception/debts'
 
@@ -66,7 +65,7 @@ export default async function ReceptionDebtsPage({
     async (tx) => {
       const settings = await readDebtSettings(tx, session.tenantId)
       const [buckets, collectedRial, doctors] = await Promise.all([
-        clinicDebts({ tx, ctx: session.permissions, now }), // 👈 تغییر ۲: دیدن همه بدهی‌ها مثل ادمین
+        clinicDebts({ tx, ctx: session.permissions, now }),
         paymentsThisMonth(tx, session.tenantId, now, settings.utcOffsetMinutes),
         tx.user.findMany({
           where: { tenantId: session.tenantId, isActive: true },
@@ -139,7 +138,7 @@ export default async function ReceptionDebtsPage({
         <p className="text-sm text-ink-2">{DEBTS_PAGE.reception.lead}</p>
       </div>
 
-           <DebtsKpi
+      <DebtsKpi
         totalRial={allRows.reduce((total, row) => total + row.balance, 0n)}
         totalDebtors={new Set(allRows.map((row) => row.customerId)).size}
         over30Count={buckets.overdue30?.length ?? 0}
@@ -163,12 +162,12 @@ export default async function ReceptionDebtsPage({
         basePath={BASE_PATH}
       />
 
-            <DebtsTable
+      <DebtsTable
         rows={slice}
         showActions
         paymentOptions={PAYMENT_OPTIONS}
         followUpsMap={followUpsMap}
-        panel="reception" // 👈 این خط رو حتماً اضافه کن
+        panel="reception"
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm">

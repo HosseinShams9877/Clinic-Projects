@@ -37,13 +37,13 @@ const APPOINTMENT_SELECT = {
   debtDueDateOverride: true,
   customer: { select: { firstName: true, lastName: true, mobile: true } },
   doctor: { select: { firstName: true, lastName: true } },
-  service: { select: { name: true } }, // 👈 اسم خدمت
+  service: { select: { name: true } },
   installments: {
     select: {
       sequence: true,
       amount: true,
       note: true,
-      dueAt: true, // 👈 تاریخ سررسید قسط
+      dueAt: true,
     }
   },
 } as const
@@ -134,24 +134,27 @@ async function tenantDebts(
     if (row.installments && row.installments.length > 0) {
       const inst = row.installments[0]
       
-      const parts = inst.note?.split(':') || []
-      totalInstallments = Number(parts[1] || 1)
-      const totalAmount = BigInt(parts[3] || row.priceAtBooking)
-      
-      charged = totalAmount
-      paid = sumsForRow?._sum.amount ?? 0n
-      paidInstallments = inst.sequence - 1
-      
-      currentDueAt = inst.dueAt
-      installmentSequence = inst.sequence
-      installmentAmount = inst.amount
+      // 👈 این شرط اضافه شد تا ارور undefined برطرف بشه
+      if (inst) {
+        const parts = inst.note?.split(':') || []
+        totalInstallments = Number(parts[1] || 1)
+        const totalAmount = BigInt(parts[3] || row.priceAtBooking)
+        
+        charged = totalAmount
+        paid = sumsForRow?._sum.amount ?? 0n
+        paidInstallments = inst.sequence - 1
+        
+        currentDueAt = inst.dueAt
+        installmentSequence = inst.sequence
+        installmentAmount = inst.amount
+      }
     }
 
     const balance = asBalance(charged, discount, paid)
     if (balance.balance <= 0n) continue
 
     const dueAt = effectiveDueInstant({
-      scheduledAt: currentDueAt, // 👈 تاریخ سررسید از روی قسط فعلی
+      scheduledAt: currentDueAt,
       override: row.debtDueDateOverride,
       graceDays: settings.debtGraceDays,
     })
