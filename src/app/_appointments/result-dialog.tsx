@@ -125,8 +125,9 @@ function ResultDialogContent({
   const rawAmount = toEnglishDigits(amount.replace(/,/g, ''))
   const rawDiscount = toEnglishDigits(discount.replace(/,/g, ''))
   
-  const paidBigInt = rawAmount ? BigInt(rawAmount) : 0n
-  const discountBigInt = rawDiscount ? BigInt(rawDiscount) : 0n
+  // 👈 اینجا عددی که تایپ شده (تومان) را در ۱۰ ضرب می‌کنیم تا به ریال تبدیل شود و با remaining (که ریال است) هم‌جنس شود
+  const paidBigInt = rawAmount ? BigInt(rawAmount) * 10n : 0n
+  const discountBigInt = rawDiscount ? BigInt(rawDiscount) * 10n : 0n
   
   const finalAmount = remaining - discountBigInt - paidBigInt
   const installmentAmount = Math.floor(Number(finalAmount) / Number(installmentCount || 1))
@@ -145,12 +146,12 @@ function ResultDialogContent({
           appointmentId,
           customerId,
           {
-            amount: rawAmount || '0',
+            amount: paidBigInt.toString(), // 👈 ارسال ریالی (پسوند * 10n این را تضمین می‌کند)
             method: dbMethod,
             installmentCount: Number(installmentCount),
             firstDueDate: firstDueDate || todayLocalDate(realClock()),
             installmentInterval: `${intervalMonths}_MONTH`,
-            discountAmount: rawDiscount || '0',
+            discountAmount: discountBigInt.toString(), // 👈 ارسال ریالی
             discountReason: discountReason || null,
             forceInstallment: true,
             note: note || null,
@@ -161,10 +162,10 @@ function ResultDialogContent({
           panel,
           appointmentId,
           {
-            amount: rawAmount || '0',
+            amount: paidBigInt.toString(), // 👈 ارسال ریالی
             method: dbMethod,
             kind: 'FINAL',
-            discountAmount: rawDiscount || '0',
+            discountAmount: discountBigInt.toString(), // 👈 ارسال ریالی
             discountReason: discountReason || null,
             note: note || null,
           }
@@ -203,6 +204,7 @@ function ResultDialogContent({
              
              <div className="flex items-center justify-between mt-1">
                 <span className="text-sm text-ink-2">مبلغ بدهی:</span>
+                {/* 👈 دقیقاً مثل نسخه اصلی و دست‌نخورده */}
                 <span className="text-sm font-semibold text-ink tabular-nums">{formatMoney(remaining)} تومان</span>
              </div>
              
@@ -254,7 +256,8 @@ function ResultDialogContent({
              <div className="flex gap-2 justify-end mt-1">
                 <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount1Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount1Label}</button>
                 <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount2Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount2Label}</button>
-                <button type="button" onClick={() => setAmount(formatNumberWithCommas(remaining.toString()))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
+                {/* 👈 دکمه همه مبلغ، چون remaining ریال است، تقسیم بر ۱۰ می‌شود تا به تومان در اینپوت قرار گیرد */}
+                <button type="button" onClick={() => setAmount(formatNumberWithCommas(Math.floor(Number(remaining) / 10).toString()))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
              </div>
            </div>
 

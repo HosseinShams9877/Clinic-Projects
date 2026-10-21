@@ -1,11 +1,20 @@
 'use client'
 
 import { useState } from 'react'
-import { formatDate, formatMoney, dateToLocalDate, toPersianDigits } from '@/core/localization'
+import { formatDate, dateToLocalDate, toPersianDigits } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import { ADMIN_INSTALLMENTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
 import { InstallmentPaymentDialog } from '@/app/admin/installments/_components/InstallmentPaymentDialog'
+import { EditInstallmentDialog } from './EditInstallmentDialog'
+import { FollowUpDialog } from '@/app/admin/debts/_components/FollowUpDialog'
+
+function formatToman(value: bigint | number | string) {
+  const str = value.toString().replace(/[^\d]/g, '')
+  if (!str) return '۰'
+  const withCommas = str.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return toPersianDigits(withCommas)
+}
 
 interface InstallmentRow {
   readonly id: string
@@ -16,32 +25,18 @@ interface InstallmentRow {
   readonly appointmentId: string
   readonly payments: readonly { readonly amount: bigint }[]
   readonly appointment: {
-    readonly customer: {
-      readonly firstName: string
-      readonly lastName: string | null
-      readonly mobile: string
-    } | null
-    readonly doctor: {
-      readonly firstName: string
-      readonly lastName: string | null
-    } | null
+    readonly customer: { readonly firstName: string; readonly lastName: string | null; readonly mobile: string } | null
+    readonly doctor: { readonly firstName: string; readonly lastName: string | null } | null
     readonly service: { readonly name: string } | null
   }
 }
 
-type InstallmentsTableProps = {
-  readonly rows: ReadonlyArray<InstallmentRow>
-}
-
-export function InstallmentsTable({ rows }: InstallmentsTableProps) {
+export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<InstallmentRow> }) {
   const [selectedInstallment, setSelectedInstallment] = useState<InstallmentRow | null>(null)
+  const [followUpRow, setFollowUpRow] = useState<InstallmentRow | null>(null)
 
   if (rows.length === 0) {
-    return (
-      <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">
-        {ADMIN_INSTALLMENTS.table.empty}
-      </p>
-    )
+    return <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">{ADMIN_INSTALLMENTS.table.empty}</p>
   }
 
   return (
@@ -58,7 +53,7 @@ export function InstallmentsTable({ rows }: InstallmentsTableProps) {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] table-fixed border-collapse text-sm text-right">
+          <table className="w-full min-w-[1150px] table-fixed border-collapse text-sm text-right">
             <thead>
               <tr className="border-b border-line-2 bg-surface-2/50 text-ink-3">
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.customer}</th>
@@ -67,9 +62,9 @@ export function InstallmentsTable({ rows }: InstallmentsTableProps) {
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.dueDate}</th>
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.daysRemaining}</th>
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.amount}</th>
-                <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.stage}</th>
+                <th className="px-4 py-3 font-semibold text-start w-[8%]">{ADMIN_INSTALLMENTS.table.columns.stage}</th>
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.progress}</th>
-                <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.action}</th>
+                <th className="px-4 py-3 font-semibold text-start w-[18%]">{ADMIN_INSTALLMENTS.table.columns.action}</th>
               </tr>
             </thead>
             <tbody>
@@ -87,12 +82,10 @@ export function InstallmentsTable({ rows }: InstallmentsTableProps) {
                 const totalAmount = BigInt(parts[3] || row.amount)
 
                 const perInstallmentAmount = row.amount
-                
-                // 👈 محاسبه مبلغ پرداخت شده: تعداد مراحل گذشته ضربدر مبلغ هر قسط
                 const paidSoFar = BigInt(row.sequence - 1) * perInstallmentAmount
-                
-                // 👈 محاسبه درصد پیشرفت بر اساس مبلغ کل
                 const progressPercent = totalAmount > 0n ? Math.min(100, Number((paidSoFar * 100n) / totalAmount)) : 0
+
+                const customerName = customer ? `${customer.firstName} ${customer.lastName ?? ''}`.trim() : 'مشتری'
 
                 return (
                   <tr key={row.id} className="border-b border-line last:border-0 hover:bg-surface-2">
@@ -102,72 +95,68 @@ export function InstallmentsTable({ rows }: InstallmentsTableProps) {
                           {customer?.firstName.slice(0, 1)}
                         </span>
                         <span className="flex flex-col">
-                          <span className="font-semibold text-ink">{customer ? `${customer.firstName} ${customer.lastName ?? ''}` : '—'}</span>
+                          <span className="font-semibold text-ink">{customerName}</span>
                           <span className="text-xs text-ink-3 tabular-nums" dir="ltr">{customer?.mobile}</span>
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-4 text-ink-2">{doctorName}</td>
                     <td className="px-4 py-4 text-ink-2">{serviceName}</td>
-                    
-                    <td className="px-4 py-4 text-ink-3 tabular-nums">
-                      {formatDate(dateToLocalDate(due), 'short')}
-                    </td>
+                    <td className="px-4 py-4 text-ink-3 tabular-nums">{formatDate(dateToLocalDate(due), 'short')}</td>
                     
                     <td className="px-4 py-4">
                       {diffDays === 0 ? (
-                        <span className="inline-flex rounded-pill bg-warn-bg px-2 py-1 text-xs font-semibold text-warn items-center gap-1">
-                          <span className="size-1.5 rounded-full bg-warn"></span> {ADMIN_INSTALLMENTS.filters.today}
-                        </span>
+                        <span className="inline-flex rounded-pill bg-warn-bg px-2 py-1 text-xs font-semibold text-warn items-center gap-1"><span className="size-1.5 rounded-full bg-warn"></span> {ADMIN_INSTALLMENTS.filters.today}</span>
                       ) : diffDays === 1 ? (
-                        <span className="inline-flex rounded-pill bg-info-bg px-2 py-1 text-xs font-semibold text-info items-center gap-1">
-                          <span className="size-1.5 rounded-full bg-info"></span> {ADMIN_INSTALLMENTS.filters.tomorrow}
-                        </span>
+                        <span className="inline-flex rounded-pill bg-info-bg px-2 py-1 text-xs font-semibold text-info items-center gap-1"><span className="size-1.5 rounded-full bg-info"></span> {ADMIN_INSTALLMENTS.filters.tomorrow}</span>
                       ) : diffDays > 1 ? (
                         <span className="inline-flex text-xs text-ink-3">{toPersianDigits(diffDays)} {ADMIN_INSTALLMENTS.daysRemainingSuffix}</span>
                       ) : (
-                        <span className="inline-flex rounded-pill bg-danger-bg px-2 py-1 text-xs font-semibold text-danger items-center gap-1">
-                          <span className="size-1.5 rounded-full bg-danger"></span> {ADMIN_INSTALLMENTS.filters.past}
-                        </span>
+                        <span className="inline-flex rounded-pill bg-danger-bg px-2 py-1 text-xs font-semibold text-danger items-center gap-1"><span className="size-1.5 rounded-full bg-danger"></span> {ADMIN_INSTALLMENTS.filters.past}</span>
                       )}
                     </td>
                     
-                    <td className="px-4 py-4 font-bold text-ink tabular-nums">{formatMoney(perInstallmentAmount)}</td>
+                    <td className="px-4 py-4 font-bold text-ink tabular-nums">{formatToman(perInstallmentAmount)}</td>
                     
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1">
-                        <span className="font-semibold text-ink-2 whitespace-nowrap">
-                          {ADMIN_INSTALLMENTS.table.installmentPrefix} {toPersianDigits(row.sequence)} {ADMIN_INSTALLMENTS.table.of} {toPersianDigits(totalInstallments)}
-                        </span>
-                        <span className="text-xs text-ink-3">{ADMIN_INSTALLMENTS.table.installmentPrefix}</span>
+                        <span className="font-semibold text-ink-2 whitespace-nowrap text-xs">{ADMIN_INSTALLMENTS.table.installmentPrefix} {toPersianDigits(row.sequence)} {ADMIN_INSTALLMENTS.table.of} {toPersianDigits(totalInstallments)}</span>
+                        <span className="text-[10px] text-ink-3">{ADMIN_INSTALLMENTS.table.installmentPrefix}</span>
                       </div>
                     </td>
 
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1.5 w-32">
-                        <span className="text-[10px] text-ink-3">
-                           {formatMoney(paidSoFar)} {ADMIN_INSTALLMENTS.table.of} {formatMoney(totalAmount)} {ADMIN_INSTALLMENTS.table.million}
-                        </span>
-                        <div className="h-1.5 w-full overflow-hidden rounded-pill bg-surface-sunken">
-                           <div className="h-full bg-brand" style={{ width: `${progressPercent}%` }} />
-                        </div>
-                        <span className="text-[10px] text-ink-3">
-                           {ADMIN_INSTALLMENTS.table.paidPercent} {toPersianDigits(progressPercent)}٪
-                        </span>
+                        <span className="text-[10px] text-ink-3">{formatToman(paidSoFar)} {ADMIN_INSTALLMENTS.table.of} {formatToman(totalAmount)} {ADMIN_INSTALLMENTS.table.million}</span>
+                        <div className="h-1.5 w-full overflow-hidden rounded-pill bg-surface-sunken"><div className="h-full bg-brand" style={{ width: `${progressPercent}%` }} /></div>
+                        <span className="text-[10px] text-ink-3">{ADMIN_INSTALLMENTS.table.paidPercent} {toPersianDigits(progressPercent)}٪</span>
                       </div>
                     </td>
                     
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <button 
-                          onClick={() => setSelectedInstallment(row)}
-                          className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-ink-inverse hover:bg-brand-600 transition-colors whitespace-nowrap shadow-sm"
+                          onClick={() => setSelectedInstallment(row)} 
+                          className="rounded-lg bg-brand px-2.5 py-1 text-[11px] font-semibold text-ink-inverse hover:bg-brand-600 transition-colors whitespace-nowrap shadow-sm"
                         >
                           {ADMIN_INSTALLMENTS.table.payButton}
                         </button>
-                        <button className="grid size-8 place-items-center rounded-lg border border-line-2 text-ink-3 hover:bg-surface-2 transition-colors">
-                          <Icon name="view" size="compact" />
+                        
+                        <button 
+                          type="button"
+                          onClick={() => setFollowUpRow(row)} 
+                          className="grid size-7 place-items-center rounded-lg border border-line-2 text-ink-3 hover:bg-surface-2 hover:text-brand transition-colors"
+                          title="ثبت پیگیری"
+                        >
+                          <Icon name="phone" size="compact" />
                         </button>
+
+                        <EditInstallmentDialog 
+                          installmentId={row.id}
+                          currentDueDate={dateToLocalDate(due)}
+                          currentAmount={perInstallmentAmount}
+                          panel="admin"
+                        />
                       </div>
                     </td>
                   </tr>
@@ -186,6 +175,20 @@ export function InstallmentsTable({ rows }: InstallmentsTableProps) {
           customerName={`${selectedInstallment.appointment.customer?.firstName || ''} ${selectedInstallment.appointment.customer?.lastName || ''}`.trim()}
           amountDue={selectedInstallment.amount}
           onSuccess={() => setSelectedInstallment(null)}
+        />
+      )}
+
+      {followUpRow && (
+        <FollowUpDialog
+          isOpen={true}
+          onClose={() => setFollowUpRow(null)}
+          appointmentId={followUpRow.appointmentId}
+          customerName={`${followUpRow.appointment.customer?.firstName || ''} ${followUpRow.appointment.customer?.lastName || ''}`.trim()}
+          amountDue={followUpRow.amount.toString()}
+          onSuccess={() => {
+            setFollowUpRow(null)
+            window.location.reload()
+          }} // 👈 پاس دادن پراپ onSuccess
         />
       )}
     </>

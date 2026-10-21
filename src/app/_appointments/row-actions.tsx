@@ -19,7 +19,6 @@ import {
   type ActionResult,
 } from './actions'
 
-// 👈 ایمپورت دیالوگ جدید و مستقل
 import { ResultDialog } from './result-dialog'
 
 type ActionPanel = 'reception' | 'doctor' | 'admin'

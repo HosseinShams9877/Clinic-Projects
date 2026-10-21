@@ -44,7 +44,11 @@ export function PaymentDialog({
   const isClient = useIsClient()
   
   const initialAmount = typeof amountDue === 'bigint' ? amountDue.toString() : amountDue
-  const [amount, setAmount] = useState(formatNumberWithCommas(initialAmount))
+  
+  // 👈 اصلاح ۱: تبدیل ریال به تومان برای نمایش در اینپوت
+  const initialAmountInToman = Math.floor(Number(initialAmount) / 10).toString()
+
+  const [amount, setAmount] = useState(formatNumberWithCommas(initialAmountInToman))
   const [discount, setDiscount] = useState('')
   const [discountReason, setDiscountReason] = useState('')
   
@@ -65,14 +69,17 @@ export function PaymentDialog({
 
   if (!isOpen || !isClient) return null
 
-  const rawAmount = toEnglishDigits(amount.replace(/,/g, ''))
-  const rawDiscount = toEnglishDigits(discount.replace(/,/g, ''))
+  const rawAmountToman = toEnglishDigits(amount.replace(/,/g, ''))
+  const rawDiscountToman = toEnglishDigits(discount.replace(/,/g, ''))
   
   const baseAmount = BigInt(initialAmount)
-  const discountBigInt = rawDiscount ? BigInt(rawDiscount) : 0n
-  const finalAmount = baseAmount - discountBigInt
-
-  const installmentAmount = Math.floor(Number(finalAmount) / Number(installmentCount || 1))
+  
+  // 👈 اصلاح ۲: تبدیل مقادیر تومانِ اینپوت به ریال برای محاسبات دیتابیس
+  const amountRialBigInt = rawAmountToman ? BigInt(rawAmountToman) * 10n : 0n
+  const discountRialBigInt = rawDiscountToman ? BigInt(rawDiscountToman) * 10n : 0n
+  
+  const finalAmountRial = baseAmount - discountRialBigInt
+  const installmentAmountRial = Math.floor(Number(finalAmountRial) / Number(installmentCount || 1))
 
   const handleSubmit = () => {
     startTransition(async () => {
@@ -81,18 +88,22 @@ export function PaymentDialog({
         dbMethod = 'CASH'
       }
 
+      // 👈 اصلاح ۳: ارسال مقادیر ریالی به اکشن‌ها
+      const submitAmount = amountRialBigInt.toString()
+      const submitDiscount = discountRialBigInt.toString()
+
       if (method === 'INSTALLMENT' || method === 'CHEQUE') {
         const res = await recordPaymentWithInstallmentsAction(
           panel,
           appointmentId,
           customerId,
           {
-            amount: rawAmount || '0',
+            amount: submitAmount,
             method: dbMethod,
             installmentCount: Number(installmentCount),
             firstDueDate: firstDueDate || todayLocalDate(realClock()),
             installmentInterval: `${intervalMonths}_MONTH`,
-            discountAmount: rawDiscount || '0',
+            discountAmount: submitDiscount,
             discountReason: discountReason || null,
             forceInstallment: true,
           }
@@ -104,15 +115,15 @@ export function PaymentDialog({
           alert(res.message)
         }
       } else {
-        if (rawDiscount && rawDiscount !== '0') {
+        if (submitDiscount && submitDiscount !== '0') {
           const res = await recordPaymentAction(
             panel,
             appointmentId,
             {
-              amount: rawAmount || '0',
+              amount: submitAmount,
               method: dbMethod,
               kind: 'FINAL',
-              discountAmount: rawDiscount,
+              discountAmount: submitDiscount,
               discountReason: discountReason || null,
               note: null,
             }
@@ -129,7 +140,7 @@ export function PaymentDialog({
             appointmentId,
             customerId,
             {
-              amount: finalAmount.toString(),
+              amount: finalAmountRial.toString(),
               method: dbMethod,
               installmentCount: 1,
               firstDueDate: firstDueDate || todayLocalDate(realClock()),
@@ -173,15 +184,15 @@ export function PaymentDialog({
                 <span className="text-sm font-semibold text-ink tabular-nums">{formatMoney(baseAmount)} تومان</span>
              </div>
              
-             {discountBigInt > 0n && (
+             {discountRialBigInt > 0n && (
                <>
                  <div className="flex items-center justify-between">
                    <span className="text-sm text-ink-2">تخفیف:</span>
-                   <span className="text-sm font-semibold text-danger tabular-nums">{formatMoney(discountBigInt)} تومان</span>
+                   <span className="text-sm font-semibold text-danger tabular-nums">{formatMoney(discountRialBigInt)} تومان</span>
                  </div>
                  <div className="flex items-center justify-between border-t border-info/20 pt-1 mt-1">
                    <span className="text-sm font-bold text-ink">مانده نهایی:</span>
-                   <span className="text-sm font-bold text-brand tabular-nums">{formatMoney(finalAmount)} تومان</span>
+                   <span className="text-sm font-bold text-brand tabular-nums">{formatMoney(finalAmountRial)} تومان</span>
                  </div>
                </>
              )}
@@ -202,7 +213,8 @@ export function PaymentDialog({
              <div className="flex gap-2 justify-end mt-1">
                 <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount1Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount1Label}</button>
                 <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount2Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount2Label}</button>
-                <button type="button" onClick={() => setAmount(formatNumberWithCommas(amountDue.toString()))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
+                {/* 👈 اصلاح ۴: دکمه "همه مبلغ" هم باید تومان را بفرستد */}
+                <button type="button" onClick={() => setAmount(formatNumberWithCommas(initialAmountInToman))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
              </div>
            </div>
 
@@ -290,7 +302,7 @@ export function PaymentDialog({
                           <tr key={i} className="bg-surface">
                             <td className="py-2 text-xs">{toPersianDigits(i + 1)} {ADMIN_DEBTS.paymentDialog.of} {toPersianDigits(installmentCount)}</td>
                             <td className="py-2 text-xs tabular-nums">{toPersianDigits(displayDate)}</td>
-                            <td className="py-2 text-xs tabular-nums">{formatMoney(BigInt(installmentAmount))}</td>
+                            <td className="py-2 text-xs tabular-nums">{formatMoney(BigInt(installmentAmountRial))}</td>
                           </tr>
                         )
                       })}

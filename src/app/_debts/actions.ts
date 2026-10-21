@@ -68,6 +68,7 @@ function revalidateDebts(): void {
   revalidatePath('/admin/debts')
   revalidatePath('/doctor/debts')
   revalidatePath('/admin/installments')
+  revalidatePath('/reception/installments')
 }
 
 export async function recordPaymentAction(
@@ -453,6 +454,33 @@ export async function recordInstallmentPaymentAction(
         }
       })
     }
+
+    return SUCCESS
+  })
+
+  if (!('succeeded' in result)) return result
+  revalidateDebts()
+  return { ok: true }
+}
+
+// 👈 اکشن جدید که هم تاریخ و هم مبلغ را تغییر می‌دهد
+export async function updateInstallmentAction(
+  panel: Panel,
+  installmentId: string,
+  input: { newDueDate: string; newAmount: string }
+): Promise<ActionResult> {
+  const result = await inTenantScope(panel, async ({ tx, tenantId }) => {
+    const settings = await readDebtSettings(tx, tenantId)
+    const dueAt = toUtcInstant(asLocalDate(input.newDueDate), MIDNIGHT, settings.utcOffsetMinutes)
+    const amountBigInt = asAmount(input.newAmount)
+
+    await tx.installment.update({
+      where: { id: installmentId, tenantId },
+      data: { 
+        dueAt,
+        amount: amountBigInt
+      }
+    })
 
     return SUCCESS
   })
