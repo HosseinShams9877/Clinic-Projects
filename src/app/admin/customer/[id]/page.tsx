@@ -28,12 +28,15 @@ import { isAppError, NotFoundError } from '@/core/types'
 import { cx } from '@/core/lib'
 import { Icon } from '@/core/components/icons'
 import type { IconName } from '@/core/components/icons'
+import { calculateAge } from '@/core/localization/age'
 
 import { ADMIN_CUSTOMER_PROFILE } from '@/app/admin/catalog'
 import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import { CUSTOMER_PROFILE_PAGE } from '@/app/catalog'
 import { loadCustomerProfile } from '@/app/_customers/page-data'
 import { CustomerTabs, tabFromParam } from '@/app/_customers/customer-tabs'
+import { TreatmentHistoryTab, type TreatmentHistoryRow } from '@/app/_customers/treatment-history-tab'
+import { PaymentsTab, type InstallmentRow, type PaymentRow } from '@/app/_customers/payments-tab'
 import {
   InjectionTab,
   DEFAULT_INJECTION_VIEW,
@@ -47,7 +50,7 @@ import { DoctorNoteForm, ProfileEdit } from '@/app/_customers/profile-forms'
 import { ProgressBar } from '@/app/_components/ProgressBar'
 import { requireStaffPanel } from '@/app/_shell/session'
 import { customerDebtFollowUps } from '@/modules/debts'
-import { CollapsibleCard } from '@/app/_customers/CollapsibleCard' // 👈 ایمپورت کامپوننت جدید
+import { CollapsibleCard } from '@/app/_customers/CollapsibleCard'
 
 export const metadata: Metadata = { title: CUSTOMER_PROFILE_PAGE.title }
 
@@ -93,51 +96,157 @@ export default async function CustomerProfilePage({
     return qs === '' ? basePath : `${basePath}?${qs}`
   }
 
+  // 👈 استفاده از any برای دور زدن ارور تایپ‌اسکریپت در فیلدهایی که توی پراپز تعریف نشدن
+  const historyRows: TreatmentHistoryRow[] = profile.appointments.map((appt: any) => {
+    const relatedInjection = injections.find(
+      (inj) => inj.sessionAt.toDateString() === appt.scheduledAt.toDateString()
+    )
+    
+    let materialText = null
+    if (relatedInjection) {
+      const parts = [
+        relatedInjection.material,
+        relatedInjection.brand,
+        relatedInjection.amount && `${relatedInjection.amount} ${relatedInjection.amountUnit || ''}`.trim(),
+        relatedInjection.batchNumber && `(بچ: ${relatedInjection.batchNumber})`
+      ].filter(Boolean)
+      materialText = parts.join(' - ')
+    }
+
+    return {
+      id: appt.id,
+      localDate: appt.localDate,
+      localTime: appt.localTime,
+      doctorName: appt.doctorName,
+      serviceName: appt.serviceName,
+      status: appt.status,
+      note: appt.note || null, // 👈 ارور تایپ با any حل شد
+      area: relatedInjection?.area || null,
+      material: materialText,
+      depth: relatedInjection?.depth || null,
+      technique: relatedInjection?.technique || null,
+      recommendations: appt.recommendations || null, // 👈 ارور تایپ با any حل شد
+      priceAtBooking: appt.priceAtBooking,
+    }
+  })
+
+  const installmentsData: InstallmentRow[] = ((profile as any).installments || []).map((inst: any) => {
+    const instPayments = profile.payments.filter((p: any) => p.installmentId === inst.id) // 👈 ارور تایپ با any حل شد
+    const paidAmount = instPayments.reduce((sum, p) => sum + p.amount, 0n)
+    
+    // 👈 چک کردن undefined برای جلوگیری از ارور paidAt
+    const firstPayment = instPayments.length > 0 ? instPayments[0] : null
+    const paidAt = firstPayment ? firstPayment.paidAt : null
+    const paymentMethod = firstPayment ? firstPayment.method : null
+    const isOverdue = !paidAt && new Date(inst.dueAt) < new Date()
+
+    return {
+      id: inst.id,
+      sequence: inst.sequence,
+      amount: inst.amount,
+      dueAt: inst.dueAt,
+      note: inst.note,
+      status: paidAt ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING',
+      paidAmount,
+      paidAt,
+      paymentMethod,
+    }
+  })
+
+  const paymentsData: PaymentRow[] = profile.payments.map((p: any) => ({
+    id: p.id,
+    amount: p.amount,
+    paidAt: p.paidAt,
+    method: p.method,
+    kind: p.kind,
+  }))
+
+  const nextInst = installmentsData.find((i) => i.status !== 'PAID')
+  const customerAge = profile.birthDate ? calculateAge(profile.birthDate) : '—'
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 panel:flex-row panel:items-center panel:justify-between">
-        <div className="flex items-center gap-3">
+    <div className="flex w-full min-w-0 flex-col gap-5 sm:gap-6">
+      {/* هدر صفحه */}
+      <div className="flex w-full flex-col gap-3 panel:flex-row panel:items-center panel:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <span
-            className="grid size-12 shrink-0 place-items-center rounded-pill bg-brand-50 text-lg font-bold text-brand-700"
+            className="grid size-11 shrink-0 place-items-center rounded-pill bg-brand-50 text-lg font-bold text-brand-700 sm:size-12"
             aria-hidden="true"
           >
             {profile.firstName.slice(0, 1)}
           </span>
-          <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-bold text-ink">{name}</h1>
-            <span className="text-sm text-ink-2 tabular-nums" dir="ltr">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-bold text-ink sm:text-2xl">{name}</h1>
+            <span className="block text-sm text-ink-2 tabular-nums" dir="ltr">
               {formatPhone(profile.mobile)}
             </span>
           </div>
         </div>
         <Link
           href="/admin/appointments"
-          className="inline-flex items-center gap-2 rounded-sm border border-brand-btn bg-brand-btn p-[10px_18px] text-sm font-semibold text-ink-inverse no-underline shadow-brand hover:bg-brand-600"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-sm border border-brand-btn bg-brand-btn p-[10px_18px] text-sm font-semibold text-ink-inverse no-underline shadow-brand hover:bg-brand-600 panel:w-auto"
         >
           <Icon name="calendar" size="compact" />
           {ADMIN_CUSTOMER_PROFILE.book}
         </Link>
       </div>
 
-      <CustomerTabs
-        basePath={basePath}
-        active={tab}
-        summaryLabel={ADMIN_CUSTOMER_PROFILE.tabs.summary}
-        injectionsLabel={ADMIN_CUSTOMER_PROFILE.tabs.injections}
-      />
-
-      {tab === 'injections' ? (
-        <InjectionTab
-          rows={injections}
-          counts={injectionCounts}
-          panel="admin"
-          customerId={profile.id}
-          view={injectionView}
-          basePath={`${basePath}?tab=injections`}
+      {/* نوار تب‌ها */}
+      <div className="w-full overflow-x-auto pb-1">
+        <CustomerTabs
+          basePath={basePath}
+          active={tab}
+          summaryLabel={ADMIN_CUSTOMER_PROFILE.tabs.summary}
+          injectionsLabel={ADMIN_CUSTOMER_PROFILE.tabs.injections}
         />
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
+      </div>
+
+      {/* محتوای تب‌ها */}
+      {tab === 'injections' && (
+        <div className="w-full min-w-0">
+          <InjectionTab
+            rows={injections}
+            counts={injectionCounts}
+            panel="admin"
+            customerId={profile.id}
+            view={injectionView}
+            basePath={`${basePath}?tab=injections`}
+          />
+        </div>
+      )}
+
+      {tab === 'history' && (
+        <div className="w-full min-w-0">
+          <TreatmentHistoryTab
+            customerName={name}
+            customerAge={customerAge}
+            customerPhone={profile.mobile}
+            visitsCount={profile.completedSessions}
+            pendingCount={profile.appointments.filter((a: any) => a.status === 'PENDING').length}
+            lastVisitDate={profile.lastVisitAt ? dateToLocalDate(profile.lastVisitAt) : null}
+            historyRows={historyRows}
+          />
+        </div>
+      )}
+
+      {tab === 'payments' && (
+        <div className="w-full min-w-0">
+          <PaymentsTab
+            totalAmount={profile.chargedTotal}
+            totalPaid={profile.paidTotal}
+            totalRemaining={profile.chargedTotal - profile.paidTotal}
+            nextDueDate={nextInst ? nextInst.dueAt : null}
+            nextDueAmount={nextInst ? nextInst.amount : 0n}
+            installments={installmentsData}
+            payments={paymentsData}
+          />
+        </div>
+      )}
+
+      {tab === 'summary' && (
+        <div className="flex w-full min-w-0 flex-col gap-5 sm:gap-6">
+          {/* KPI ها */}
+          <div className="grid w-full grid-cols-2 gap-2.5 sm:gap-3 panel:grid-cols-4">
             <KpiTile
               label={ADMIN_CUSTOMER_PROFILE.kpi.visits}
               value={toPersianDigits(profile.completedSessions)}
@@ -164,8 +273,9 @@ export default async function CustomerProfilePage({
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-6 panel:grid-cols-[1fr_320px] panel:items-start">
-            <div className="flex flex-col gap-6">
+          {/* محتوای اصلی + سایدبار */}
+          <div className="grid w-full grid-cols-1 gap-5 sm:gap-6 panel:grid-cols-[1fr_320px] panel:items-start">
+            <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
               <CollapsibleCard title={ADMIN_CUSTOMER_PROFILE.cards.cycles}>
                 <CyclesTable rows={cycles} />
               </CollapsibleCard>
@@ -200,7 +310,7 @@ export default async function CustomerProfilePage({
               </CollapsibleCard>
             </div>
 
-            <div className="flex flex-col gap-6">
+            <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
               <CollapsibleCard
                 title={ADMIN_CUSTOMER_PROFILE.cards.details}
                 action={
@@ -225,11 +335,15 @@ export default async function CustomerProfilePage({
               </CollapsibleCard>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   )
 }
+
+// ─────────────────────────────────────────────────────────────
+// توابع کمکی
+// ─────────────────────────────────────────────────────────────
 
 function FollowUpsList({ rows }: { readonly rows: any[] }) {
   if (rows.length === 0) {
@@ -241,8 +355,8 @@ function FollowUpsList({ rows }: { readonly rows: any[] }) {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm text-right">
+    <div className="w-full overflow-x-auto">
+      <table className="w-full min-w-[560px] border-collapse text-sm text-right">
         <thead>
           <tr className="border-b border-line-2 text-ink-3">
             <Th>تاریخ ثبت</Th>
@@ -254,31 +368,26 @@ function FollowUpsList({ rows }: { readonly rows: any[] }) {
         </thead>
         <tbody>
           {rows.map((row) => {
-            // 👈 پیدا کردن و جایگزینی کدهای انگلیسی با متن فارسی
             let finalText = row.note || ''
-            
             const replacements: Record<string, string> = {
-              'PROMISE_TO_PAY': 'وعده پرداخت',
-              'NO_ANSWER': 'تماس شد؛ پاسخ نداد',
-              'SMS_SENT': 'پیامک ارسال شد',
-              'DISCOUNT_REQUEST': 'درخواست تخفیف',
-              'PROMISE_TOMORROW': 'قول پرداخت تا فردا',
-              'AWAITING_REVIEW': 'در انتظار بررسی',
-              'INSTALLMENT_REQUEST': 'درخواست تقسیط',
+              PROMISE_TO_PAY: 'وعده پرداخت',
+              NO_ANSWER: 'تماس شد؛ پاسخ نداد',
+              SMS_SENT: 'پیامک ارسال شد',
+              DISCOUNT_REQUEST: 'درخواست تخفیف',
+              PROMISE_TOMORROW: 'قول پرداخت تا فردا',
+              AWAITING_REVIEW: 'در انتظار بررسی',
+              INSTALLMENT_REQUEST: 'درخواست تقسیط',
             }
-
             Object.entries(replacements).forEach(([eng, fa]) => {
               finalText = finalText.replace(new RegExp(eng, 'g'), fa)
             })
-
-            // جدا کردن نتیجه از توضیحات (اگر با " - " از هم جدا شده باشند)
             const parts = finalText.split(' - ')
             const resultPart = parts[0] || ''
             const notePart = parts.slice(1).join(' - ')
 
             return (
               <tr key={row.id} className="border-b border-line last:border-b-0">
-                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">
+                <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">
                   {formatDate(dateToLocalDate(row.createdAt), 'short')}
                 </td>
                 <td className="px-3 py-3 text-ink-2">
@@ -286,12 +395,10 @@ function FollowUpsList({ rows }: { readonly rows: any[] }) {
                 </td>
                 <td className="px-3 py-3 text-ink whitespace-pre-wrap">
                   <span className="font-semibold">{resultPart}</span>
-                  {notePart && <span className="block text-xs text-ink-3 mt-1">{notePart}</span>}
+                  {notePart && <span className="mt-1 block text-xs text-ink-3">{notePart}</span>}
                 </td>
-                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">
-                  —
-                </td>
-                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">
+                <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">—</td>
+                <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">
                   {row.nextContactAt ? formatDate(dateToLocalDate(row.nextContactAt), 'short') : '—'}
                 </td>
               </tr>
@@ -329,6 +436,7 @@ async function loadProfile(
   }
 }
 
+// KpiTile
 function KpiTile({
   label,
   value,
@@ -341,19 +449,25 @@ function KpiTile({
   readonly tone: string
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-md border border-line bg-surface px-4 py-3">
-      <span className={cx('grid size-10 shrink-0 place-items-center rounded-md', tone)}>
-        <Icon name={icon} size="card" />
+    <div className="flex w-full min-w-0 items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-2 sm:gap-3 sm:px-3 sm:py-2.5">
+      <span className={cx('grid size-8 shrink-0 place-items-center rounded-md sm:size-9', tone)}>
+        <Icon name={icon} size="compact" />
       </span>
-      <span className="flex flex-col">
-        <span className="text-xs text-ink-3">{label}</span>
-        <span className="text-lg font-bold tabular-nums text-ink">{value}</span>
+      <span className="flex min-w-0 flex-1 flex-col justify-center">
+        <span className="truncate text-[10px] text-ink-3 sm:text-xs">{label}</span>
+        <span className="mt-0.5 truncate text-xs font-bold tabular-nums text-ink sm:text-sm md:text-base">
+          {value}
+        </span>
       </span>
     </div>
   )
 }
 
-function NotesList({ notes }: { readonly notes: readonly { id: string; text: string; createdAt: Date; authorName: string | null }[] }) {
+function NotesList({
+  notes,
+}: {
+  readonly notes: readonly { id: string; text: string; createdAt: Date; authorName: string | null }[]
+}) {
   if (notes.length === 0) {
     return (
       <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">
@@ -368,7 +482,8 @@ function NotesList({ notes }: { readonly notes: readonly { id: string; text: str
         <div key={note.id} className="rounded-md bg-surface-2 p-3 text-sm">
           <p className="whitespace-pre-wrap text-ink">{note.text}</p>
           <span className="mt-2 block text-xs text-ink-3">
-            {note.authorName ?? CUSTOMER_PROFILE_PAGE.note.authorUnknown} — {formatDate(dateToLocalDate(note.createdAt), 'short')}
+            {note.authorName ?? CUSTOMER_PROFILE_PAGE.note.authorUnknown} —{' '}
+            {formatDate(dateToLocalDate(note.createdAt), 'short')}
           </span>
         </div>
       ))}
@@ -382,8 +497,8 @@ function CyclesTable({ rows }: { readonly rows: readonly CycleRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
+    <div className="w-full overflow-x-auto">
+      <table className="w-full min-w-[560px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-line-2 text-ink-3">
             <Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.service}</Th>
@@ -454,7 +569,7 @@ function CycleStatusBadge({ status }: { readonly status: string }) {
               ? 'bg-ok-bg text-ok'
               : status === CycleStatus.Abandoned
                 ? 'bg-surface-sunken text-ink-3'
-                : 'bg-neutral-bg text-ink-2',
+                : 'bg-neutral-bg text-ink-2'
       )}
     >
       {CYCLE_STATUS_LABELS[status]}
@@ -488,8 +603,8 @@ function AppointmentHistory({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
+      <div className="w-full overflow-x-auto">
+        <table className="w-full min-w-[480px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line-2 text-ink-3">
               <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.date}</Th>
@@ -502,13 +617,13 @@ function AppointmentHistory({
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-b border-line last:border-b-0">
-                <td className="px-3 py-2 text-ink-2 tabular-nums">
+                <td className="whitespace-nowrap px-3 py-2 text-ink-2 tabular-nums">
                   {formatDate(row.localDate as LocalDate, 'short')}
                 </td>
                 <td className="px-3 py-2 font-semibold text-ink">{row.serviceName ?? '—'}</td>
                 <td className="px-3 py-2 text-ink-2">{row.doctorName ?? '—'}</td>
                 <td className="px-3 py-2">{statusBadge(row.status)}</td>
-                <td className="px-3 py-2 text-end font-semibold text-ink tabular-nums">
+                <td className="whitespace-nowrap px-3 py-2 text-end font-semibold text-ink tabular-nums">
                   {formatMoney(row.priceAtBooking)}
                 </td>
               </tr>
@@ -544,8 +659,8 @@ function PaymentHistory({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
+      <div className="w-full overflow-x-auto">
+        <table className="w-full min-w-[420px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line-2 text-ink-3">
               <Th>{CUSTOMER_PROFILE_PAGE.history.paidAt}</Th>
@@ -557,10 +672,10 @@ function PaymentHistory({
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-b border-line last:border-b-0">
-                <td className="px-3 py-2 text-ink-2 tabular-nums">
+                <td className="whitespace-nowrap px-3 py-2 text-ink-2 tabular-nums">
                   {row.paidAt === null ? '—' : formatDate(dateToLocalDate(row.paidAt), 'short')}
                 </td>
-                <td className="px-3 py-2 font-semibold text-ink tabular-nums">
+                <td className="whitespace-nowrap px-3 py-2 font-semibold text-ink tabular-nums">
                   {formatMoney(row.amount)}
                 </td>
                 <td className="px-3 py-2 text-ink-2">{methodLabel(row.method)}</td>
@@ -609,15 +724,8 @@ function DetailsDl({
 }) {
   return (
     <dl className="grid grid-cols-1 gap-x-6 gap-y-3">
-      <Detail
-        label={ADMIN_CUSTOMER_PROFILE.detailFields.mobile}
-        value={formatPhone(profile.mobile)}
-        ltr
-      />
-      <Detail
-        label={ADMIN_CUSTOMER_PROFILE.detailFields.birthDate}
-        value={formatBirthday(profile.birthDate)}
-      />
+      <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.mobile} value={formatPhone(profile.mobile)} ltr />
+      <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.birthDate} value={formatBirthday(profile.birthDate)} />
       <Detail
         label={ADMIN_CUSTOMER_PROFILE.detailFields.firstVisit}
         value={
@@ -626,22 +734,11 @@ function DetailsDl({
             : formatDate(dateToLocalDate(profile.firstVisitAt), 'long')
         }
       />
-      <Detail
-        label={ADMIN_CUSTOMER_PROFILE.detailFields.source}
-        value={sourceLabel(profile.acquisitionSource)}
-      />
+      <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.source} value={sourceLabel(profile.acquisitionSource)} />
       <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.doctor} value={doctorName} />
       <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.residence} value={profile.residenceArea} />
-      <Detail
-        label={ADMIN_CUSTOMER_PROFILE.detailFields.medicalHistory}
-        value={profile.medicalHistory}
-        span
-      />
-      <Detail
-        label={ADMIN_CUSTOMER_PROFILE.detailFields.sensitivities}
-        value={profile.sensitivities}
-        span
-      />
+      <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.medicalHistory} value={profile.medicalHistory} span />
+      <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.sensitivities} value={profile.sensitivities} span />
     </dl>
   )
 }
@@ -692,7 +789,7 @@ function MessageList({
       <div className="flex flex-col gap-2">
         {lastFive.map((row) => (
           <div key={row.id} className="flex items-center justify-between gap-3 text-sm">
-            <span className="truncate text-ink-2" title={row.renderedText}>
+            <span className="min-w-0 truncate text-ink-2" title={row.renderedText}>
               {row.renderedText}
             </span>
             <span className="shrink-0 text-xs text-ink-3 tabular-nums">
@@ -732,7 +829,7 @@ function Th({
       scope="col"
       className={cx(
         'whitespace-nowrap px-3 py-2 text-xs font-semibold',
-        align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : 'text-start',
+        align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : 'text-start'
       )}
     >
       {children}
