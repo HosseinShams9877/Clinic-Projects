@@ -73,7 +73,16 @@ export function InstallmentPaymentDialog({
       
       if (!englishDigits) return alert('مبلغ را وارد کنید')
       
-      const amountRial = (BigInt(englishDigits) * 10n).toString()
+      // 👈 تبدیل مبلغ وارد شده به ریال برای مقایسه با مانده قسط
+      const enteredAmountRial = BigInt(englishDigits) * 10n
+      const maxAllowedAmount = BigInt(amountDue)
+
+      // 👈 چک کردن اینکه مبلغ وارد شده بیشتر از مانده نباشه
+      if (enteredAmountRial > maxAllowedAmount) {
+        return alert(`مبلغ وارد شده نمی‌تواند بیشتر از مانده قسط (${formatMoney(maxAllowedAmount)} تومان) باشد.`)
+      }
+
+      const amountRial = enteredAmountRial.toString()
 
       const res = await recordInstallmentPaymentAction(
         'admin',

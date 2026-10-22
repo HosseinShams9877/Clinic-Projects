@@ -102,14 +102,26 @@ export async function customerLedger(args: {
 export async function listInstallments(tx: TransactionClient, tenantId: string) {
   const rows = await tx.installment.findMany({
     where: { tenantId },
-    include: {
-      payments: true,
+    select: {
+      id: true,
+      appointmentId: true,
+      sequence: true,
+      amount: true,
+      paidAmount: true, // 👈 این خط اضافه شد تا مبلغ پرداختی از دیتابیس خوانده شود
+      dueAt: true,
+      note: true,
+      type: true, // 👈 این خط هم برای تشخیص چک از قسط
+      totalPlanAmount: true, // 👈 این خط برای مبلغ کل بدهی
+      totalPlanCount: true, // 👈 این خط برای تعداد کل اقساط
+      intervalMonths: true,
+      payments: true, // (برای سازگاری با کدهای قبلی، می‌تونی نگهش داری)
       appointment: {
         select: {
           localDate: true,
           doctorId: true,
           customer: {
             select: {
+              id: true,
               firstName: true,
               lastName: true,
               mobile: true,
@@ -132,9 +144,8 @@ export async function listInstallments(tx: TransactionClient, tenantId: string) 
     orderBy: { dueAt: 'asc' },
   })
 
-  // 👈 فیلتر کردن اقساطی که مانده‌شون صفر شده
+  // 👈 فیلتر کردن: فقط اقساطی که هنوز کامل پرداخت نشدن (با استفاده از paidAmount)
   return rows.filter((row) => {
-    const paid = row.payments.reduce((sum, p) => sum + p.amount, 0n)
-    return paid < row.amount // فقط اقساطی که هنوز کامل پرداخت نشدن
+    return row.paidAmount < row.amount
   })
 }

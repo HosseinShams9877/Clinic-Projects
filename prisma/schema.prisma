@@ -1193,7 +1193,7 @@ model Installment {
   sequence Int
   amount   BigInt       // مبلغ کل این قسط
   paidAmount BigInt @default(0) // مبلغی که تا الان پرداخت شده
-  
+   type String @default("INSTALLMENT")
   dueAt    DateTime     // تاریخ سررسید
   note     String?      // برای توضیحات دلخواه (دیگه نباید دیتای فرمت‌شده توش ذخیره کنی)
   

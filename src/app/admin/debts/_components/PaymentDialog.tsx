@@ -44,8 +44,6 @@ export function PaymentDialog({
   const isClient = useIsClient()
   
   const initialAmount = typeof amountDue === 'bigint' ? amountDue.toString() : amountDue
-  
-  // 👈 اصلاح ۱: تبدیل ریال به تومان برای نمایش در اینپوت
   const initialAmountInToman = Math.floor(Number(initialAmount) / 10).toString()
 
   const [amount, setAmount] = useState(formatNumberWithCommas(initialAmountInToman))
@@ -74,7 +72,6 @@ export function PaymentDialog({
   
   const baseAmount = BigInt(initialAmount)
   
-  // 👈 اصلاح ۲: تبدیل مقادیر تومانِ اینپوت به ریال برای محاسبات دیتابیس
   const amountRialBigInt = rawAmountToman ? BigInt(rawAmountToman) * 10n : 0n
   const discountRialBigInt = rawDiscountToman ? BigInt(rawDiscountToman) * 10n : 0n
   
@@ -83,12 +80,22 @@ export function PaymentDialog({
 
   const handleSubmit = () => {
     startTransition(async () => {
+      if (amountRialBigInt > baseAmount) {
+        return alert(`مبلغ پرداختی نمی‌تواند بیشتر از کل بدهی (${formatMoney(baseAmount)} تومان) باشد.`)
+      }
+
+      if (method === 'INSTALLMENT' || method === 'CHEQUE') {
+        const totalInstallmentsRial = BigInt(installmentCount) * BigInt(installmentAmountRial)
+        if (totalInstallmentsRial > finalAmountRial) {
+          return alert('مجموع مبالغ اقساط نمی‌تواند بیشتر از مبلغ کل بدهی باشد.')
+        }
+      }
+
       let dbMethod = method
       if (method === 'INSTALLMENT' || method === 'CHEQUE') {
         dbMethod = 'CASH'
       }
 
-      // 👈 اصلاح ۳: ارسال مقادیر ریالی به اکشن‌ها
       const submitAmount = amountRialBigInt.toString()
       const submitDiscount = discountRialBigInt.toString()
 
@@ -99,7 +106,7 @@ export function PaymentDialog({
           customerId,
           {
             amount: submitAmount,
-            method: dbMethod,
+            method: method,
             installmentCount: Number(installmentCount),
             firstDueDate: firstDueDate || todayLocalDate(realClock()),
             installmentInterval: `${intervalMonths}_MONTH`,
@@ -213,7 +220,6 @@ export function PaymentDialog({
              <div className="flex gap-2 justify-end mt-1">
                 <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount1Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount1Label}</button>
                 <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount2Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount2Label}</button>
-                {/* 👈 اصلاح ۴: دکمه "همه مبلغ" هم باید تومان را بفرستد */}
                 <button type="button" onClick={() => setAmount(formatNumberWithCommas(initialAmountInToman))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
              </div>
            </div>

@@ -8,13 +8,15 @@ import { Icon } from '@/core/components/icons'
 import { InstallmentPaymentDialog } from '@/app/admin/installments/_components/InstallmentPaymentDialog'
 import { EditInstallmentDialog } from '@/app/_payments/EditInstallmentDialog'
 import { FollowUpDialog } from '@/app/admin/debts/_components/FollowUpDialog'
-import { deleteInstallmentAction } from '@/app/_debts/actions' // 👈 ایمپورت اکشن حذف
-import { useRouter } from 'next/navigation'
+import { deleteInstallmentAction } from '@/app/_debts/actions'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Pagination } from '@/app/_components/Pagination' // 👈 ایمپورت کامپوننت صفحه‌بندی
 
 function formatToman(value: bigint | number | string) {
   const str = value.toString().replace(/[^\d]/g, '')
   if (!str) return '۰'
-  const withCommas = str.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const toman = Math.floor(Number(str) / 10)
+  const withCommas = toman.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   return toPersianDigits(withCommas)
 }
 
@@ -25,6 +27,7 @@ interface InstallmentRow {
   readonly paidAmount: bigint
   readonly dueAt: Date
   readonly note: string | null
+  readonly type: string
   readonly appointmentId: string
   readonly totalPlanAmount: bigint | null
   readonly totalPlanCount: number | null
@@ -35,11 +38,20 @@ interface InstallmentRow {
   }
 }
 
+const PAGE_SIZE = 10 // 👈 تعداد رکورد در هر صفحه
+
 export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<InstallmentRow> }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const currentPage = Number(searchParams.get('page')) || 1 // 👈 صفحه فعلی
+
   const [selectedInstallment, setSelectedInstallment] = useState<InstallmentRow | null>(null)
   const [followUpRow, setFollowUpRow] = useState<InstallmentRow | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  // 👈 محاسبه رکوردهای صفحه جاری
+  const totalPages = Math.ceil(rows.length / PAGE_SIZE)
+  const paginatedRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   if (rows.length === 0) {
     return <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">{ADMIN_INSTALLMENTS.table.empty}</p>
@@ -55,6 +67,18 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
         alert(res.message)
       }
     })
+  }
+
+  // 👈 تابع ساخت لینک برای صفحه‌بندی
+  const hrefFor = (page: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (page > 1) {
+      params.set('page', String(page))
+    } else {
+      params.delete('page')
+    }
+    const qs = params.toString()
+    return qs ? `?${qs}` : ''
   }
 
   return (
@@ -86,7 +110,8 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
+              {/* 👈 استفاده از رکوردهای صفحه‌بندی شده */}
+              {paginatedRows.map((row) => {
                 const customer = row.appointment.customer
                 const doctorName = row.appointment.doctor ? `${row.appointment.doctor.firstName} ${row.appointment.doctor.lastName ?? ''}`.trim() : '—'
                 const serviceName = row.appointment.service?.name ?? '—'
@@ -95,17 +120,13 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                 const today = realClock()
                 const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24))
                 
-                // 👈 اصلاح تعداد کل اقساط
                 const totalInstallments = row.totalPlanCount || 1
                 const totalAmount = row.totalPlanAmount || row.amount
                 const perInstallmentAmount = row.amount
-                
-                const remainingAmount = perInstallmentAmount - row.paidAmount
-                
-                // 👈 اصلاح محاسبه درصد پیشرفت
-                const paidSoFar = totalAmount - remainingAmount
+
+                const paidSoFar = totalAmount - (perInstallmentAmount - row.paidAmount)
                 const progressPercent = totalAmount > 0n 
-                  ? Math.min(100, Number((paidSoFar * 100n) / totalAmount)) 
+                  ? Math.min(100, Math.round(Number((paidSoFar * 100n) / totalAmount))) 
                   : 0
 
                 const customerName = customer ? `${customer.firstName} ${customer.lastName ?? ''}`.trim() : 'مشتری'
@@ -143,9 +164,8 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                     
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1">
-                        {/* 👈 اصلاح متن: قسط {شماره} از {تعداد کل} */}
                         <span className="font-semibold text-ink-2 whitespace-nowrap text-xs">
-                          {ADMIN_INSTALLMENTS.table.installmentPrefix} {toPersianDigits(row.sequence)} {ADMIN_INSTALLMENTS.table.of} {toPersianDigits(totalInstallments)}
+                          {row.type === 'CHEQUE' ? 'چک' : 'قسط'} {toPersianDigits(row.sequence)} {ADMIN_INSTALLMENTS.table.of} {toPersianDigits(totalInstallments)}
                         </span>
                       </div>
                     </td>
@@ -185,14 +205,13 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                           appointmentId={row.appointmentId}
                           customerId={customer?.id || ''}
                           customerName={customerName}
-                          remainingAmount={row.amount - row.paidAmount}
+                          remainingAmount={(row.totalPlanAmount || row.amount) - row.paidAmount}
                           sequence={row.sequence}
                           currentDueDate={dateToLocalDate(due)}
                           currentAmount={perInstallmentAmount}
                           panel="admin"
                         />
 
-                        {/* 👈 دکمه حذف */}
                         <button 
                           type="button"
                           onClick={() => handleDelete(row.id)}
@@ -209,6 +228,11 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
               })}
             </tbody>
           </table>
+        </div>
+        
+        {/* 👈 اضافه شدن صفحه‌بندی */}
+        <div className="border-t border-line px-4 py-3">
+          <Pagination page={currentPage} totalPages={totalPages} hrefFor={hrefFor} />
         </div>
       </section>
 

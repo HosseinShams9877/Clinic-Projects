@@ -160,17 +160,18 @@ export function ReceptionInstallmentsClient({ rows }: { rows: readonly Installme
                           <Icon name="phone" size="compact" />
                         </button>
 
-                        <EditInstallmentDialog 
-                          installmentId={row.id}
-                          appointmentId={row.appointmentId}
-                          customerId={row.appointment.customer?.id || ''}
-                          customerName={customerName}
-                          remainingAmount={row.amount - row.paidAmount}
-                          sequence={row.sequence}
-                          currentDueDate={dateToLocalDate(due)}
-                          currentAmount={perInstallmentAmount}
-                          panel="reception" // 👈 پنل منشی
-                        />
+                       <EditInstallmentDialog 
+  installmentId={row.id}
+  appointmentId={row.appointmentId}
+  customerId={customer?.id || ''}
+  customerName={customerName}
+  // 👈 محاسبه کل مانده حساب: (کل بدهی اصلی) - (مبلغی که از این قسط پرداخت شده)
+  remainingAmount={(row.totalPlanAmount || row.amount) - row.paidAmount} 
+  sequence={row.sequence}
+  currentDueDate={dateToLocalDate(due)}
+  currentAmount={perInstallmentAmount}
+  panel="admin"
+/>
                       </div>
                     </td>
                   </tr>
