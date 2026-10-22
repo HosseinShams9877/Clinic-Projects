@@ -52,6 +52,9 @@ import { requireStaffPanel } from '@/app/_shell/session'
 import { customerDebtFollowUps } from '@/modules/debts'
 import { CollapsibleCard } from '@/app/_customers/CollapsibleCard'
 
+// 👈 ایمپورت تب یادداشت‌های داخلی
+import { InternalNotesTab } from '@/app/_customers/internal-notes-tab'
+
 export const metadata: Metadata = { title: CUSTOMER_PROFILE_PAGE.title }
 
 const APPTS_PAGE_PARAM = 'appts'
@@ -84,7 +87,9 @@ export default async function CustomerProfilePage({
 
   const data = await loadProfile(session.permissions, id)
 
-  const { profile, cycles, messages, injections, injectionCounts, notes, followUps } = data
+  // 👈 اضافه شدن installments به دیتای دریافتی
+  const { profile, cycles, messages, injections, injectionCounts, notes, followUps, internalNotes, installments } = data
+  
   const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
   const balance = profile.chargedTotal - profile.paidTotal
   const activeCycles = cycles.filter(
@@ -201,12 +206,37 @@ export default async function CustomerProfilePage({
     })
   })
 
-  historyRows.sort((a, b) => b.localDate.localeCompare(a.localDate))
+   // 👈 استخراج مبلغ کل و تعداد کل از فیلد note (کل بدهی اصلی)
+  let totalCount = 1
+  let totalInstallmentsAmount = 0n
+  
+  installments.forEach((inst: any) => {
+    if (inst.note && inst.note.startsWith('TOTAL:')) {
+      const parts = inst.note.split(':')
+      const count = Number(parts[1] || 1)
+      const totalAmt = parts[3] ? BigInt(parts[3]) : inst.amount
+      
+      if (count > totalCount) totalCount = count 
+      totalInstallmentsAmount += totalAmt
+    } else {
+      totalInstallmentsAmount += inst.amount
+    }
+  })
+       // 👈 پیدا کردن شناسه نوبت‌هایی که الان بدهی قسطی/چکی دارن
+  const installmentAppointmentIds = new Set(installments.map((inst: any) => inst.appointmentId))
 
-  const installmentsData: InstallmentRow[] = ((profile as any).installments || []).map((inst: any) => {
-    const instPayments = profile.payments.filter((p: any) => p.installmentId === inst.id)
-    const paidAmount = instPayments.reduce((sum, p) => sum + p.amount, 0n)
-
+  // 👈 مبلغ پرداخت شده: فقط پرداخت‌های "جزئی" که مربوط به همین نوبت‌های قسطی/چکی هستن
+  const totalPaidOnInstallments = profile.payments
+    .filter((p: any) => 
+      (p.kind === 'PARTIAL' || p.kind === PaymentKind.Partial) && 
+      installmentAppointmentIds.has(p.appointmentId)
+    )
+    .reduce((sum: bigint, p: any) => sum + BigInt(p.amount || 0), BigInt(0))
+    
+  const installmentsData: InstallmentRow[] = installments.map((inst: any) => {
+    const instPayments = inst.payments || []
+    const paidAmount = instPayments.reduce((sum: bigint, p: any) => sum + p.amount + (p.discountAmount || 0n), 0n)
+    
     const firstPayment = instPayments.length > 0 ? instPayments[0] : null
     const paidAt = firstPayment ? firstPayment.paidAt : null
     const paymentMethod = firstPayment ? firstPayment.method : null
@@ -214,24 +244,28 @@ export default async function CustomerProfilePage({
 
     return {
       id: inst.id,
+      appointmentId: inst.appointmentId,
       sequence: inst.sequence,
       amount: inst.amount,
       dueAt: inst.dueAt,
       note: inst.note,
-      status: paidAt ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING',
+      status: paidAmount >= inst.amount ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING', 
       paidAmount,
       paidAt,
       paymentMethod,
     }
   })
-
-  const paymentsData: PaymentRow[] = profile.payments.map((p: any) => ({
-    id: p.id,
-    amount: p.amount,
-    paidAt: p.paidAt,
-    method: p.method,
-    kind: p.kind,
-  }))
+  
+  // 👈 حذف پرداخت‌های مربوط به اقساط از تاریخچه پایین
+  const paymentsData: PaymentRow[] = profile.payments
+    .filter((p: any) => !p.installmentId)
+    .map((p: any) => ({
+      id: p.id,
+      amount: p.amount,
+      paidAt: p.paidAt,
+      method: p.method,
+      kind: p.kind,
+    }))
 
   const nextInst = installmentsData.find((i) => i.status !== 'PAID')
   const customerAge = profile.birthDate ? calculateAge(profile.birthDate) : '—'
@@ -310,6 +344,7 @@ export default async function CustomerProfilePage({
       {tab === 'payments' && (
         <div className="w-full min-w-0">
           <PaymentsTab
+            customerId={profile.id}
             totalAmount={profile.chargedTotal}
             totalPaid={profile.paidTotal}
             totalRemaining={profile.chargedTotal - profile.paidTotal}
@@ -317,6 +352,35 @@ export default async function CustomerProfilePage({
             nextDueAmount={nextInst ? nextInst.amount : 0n}
             installments={installmentsData}
             payments={paymentsData}
+            totalInstallmentsAmount={totalInstallmentsAmount}
+            totalPaidOnInstallments={totalPaidOnInstallments}
+            totalCount={totalCount}
+          />
+        </div>
+      )}
+
+      {/* 👈 تب یادداشت‌های داخلی */}
+      {tab === 'internal' && (
+        <div className="w-full min-w-0">
+          <InternalNotesTab
+            customerId={profile.id}
+            panel="admin"
+            notes={internalNotes.map((n: any) => {
+              const role = n.author.memberships[0]?.role;
+              let roleLabel = 'کادر درمان';
+              if (role === 'MANAGER') roleLabel = 'مدیر';
+              else if (role === 'DOCTOR') roleLabel = 'پزشک';
+              else if (role === 'RECEPTION') roleLabel = 'منشی';
+
+              return {
+                id: n.id,
+                content: n.content,
+                category: n.category,
+                createdAt: n.createdAt,
+                authorName: n.author.lastName ? `${n.author.firstName} ${n.author.lastName}` : n.author.firstName,
+                authorRole: roleLabel,
+              }
+            })}
           />
         </div>
       )}
@@ -515,7 +579,35 @@ async function loadProfile(
         getCustomerNotes({ tx, tenantId: ctx.tenantId, customerId }),
         customerDebtFollowUps({ tx, tenantId: ctx.tenantId, customerId }),
       ])
-      return { ...base, cycles, messages, notes, followUps } as const
+
+      const internalNotes = await tx.internalNote.findMany({
+        where: { customerId },
+        include: { 
+          author: { 
+            select: { 
+              firstName: true, 
+              lastName: true, 
+              memberships: { 
+                where: { tenantId: ctx.tenantId },
+                select: { role: true } 
+              } 
+            } 
+          } 
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      const installments = await tx.installment.findMany({
+        where: {
+          appointment: { customerId: customerId }
+        },
+        include: {
+          payments: true
+        },
+        orderBy: { dueAt: 'asc' }
+      })
+      
+      return { ...base, cycles, messages, notes, followUps, internalNotes, installments } as const
     })
   } catch (error: unknown) {
     if (isAppError(error) && error instanceof NotFoundError) notFound()
@@ -689,7 +781,7 @@ function AppointmentHistory({ rows, page, totalPages, hrefFor }: { readonly page
 
 function PaymentHistory({ rows, page, totalPages, hrefFor }: { readonly page: number; readonly totalPages: number; readonly hrefFor: (page: number) => string; readonly rows: ReadonlyArray<{ readonly id: string; readonly amount: bigint; readonly paidAt: Date | null; readonly method: string; readonly kind: string }> }) {
   if (rows.length === 0) {
-    return <EmptyState sentence={ADMIN_CUSTOMER_PROFILE.empty.payments} />
+    return <EmptyState sentence={CUSTOMER_PROFILE_PAGE.empty.payments} />
   }
 
   return (

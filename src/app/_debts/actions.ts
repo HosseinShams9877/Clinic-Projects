@@ -190,7 +190,9 @@ export async function recordPaymentWithInstallmentsAction(
           sequence: 1, 
           amount: perInstallmentAmount, 
           dueAt: baseDate,
-          note: `TOTAL:${input.installmentCount}:AMOUNT:${payableAmount}:INTERVAL:${intervalMonths}`,
+          totalPlanAmount: payableAmount,
+          totalPlanCount: input.installmentCount,
+          intervalMonths,
         }
       })
 
@@ -362,39 +364,27 @@ export async function rescheduleDueDateAction(
   return { ok: true }
 }
 
+// 👈 ۱. پرداخت قسط (با قابلیت پرداخت جزئی)
 export async function recordInstallmentPaymentAction(
   panel: Panel,
   installmentId: string,
-  input: {
-    amount: string
-    method: string
-    receiveDate: string
-    receiveTime: string
-  }
+  input: { amount: string; method: string; receiveDate: string; receiveTime: string }
 ): Promise<ActionResult> {
   let dbMethod = input.method
-  if (input.method === 'POS' || input.method === 'CARD_TO_CARD') {
-    dbMethod = 'CARD'
-  }
-
+  if (input.method === 'POS' || input.method === 'CARD_TO_CARD') dbMethod = 'CARD'
   const amountBigInt = asAmount(input.amount)
 
   const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
     const now = realClock()
-    
     const installment = await tx.installment.findUnique({
       where: { id: installmentId, tenantId },
       include: { appointment: { select: { customerId: true } } }
     })
     
-    if (!installment || !installment.appointment.customerId) {
-      throw new Error('Installment or customer not found')
-    }
+    if (!installment || !installment.appointment.customerId) throw new Error('Installment not found')
+    if (!isMember(PaymentMethod, dbMethod)) return { ok: false, message: 'روش پرداخت نامعتبر است' }
 
-    if (!isMember(PaymentMethod, dbMethod)) {
-      return { ok: false, message: moduleFailureMessage(new Error('invalid method')) }
-    }
-
+    // ثبت پرداخت
     await tx.payment.create({
       data: {
         tenantId,
@@ -408,53 +398,62 @@ export async function recordInstallmentPaymentAction(
         discountReason: null,
         note: `پرداخت قسط ${installment.sequence}`,
         paidAt: now,
+        installmentId: installment.id, // وصل کردن پرداخت به قسط
       }
     })
 
-    const parts = installment.note?.split(':') || []
-    const totalCount = Number(parts[1] || 1)
-    const intervalMonths = Number(parts[5] || 1)
-    const nextSequence = installment.sequence + 1
+    const newPaidAmount = installment.paidAmount + amountBigInt
     
-    await tx.installment.delete({ where: { id: installment.id } })
+    // اگر کل مبلغ قسط پرداخت شد
+    if (newPaidAmount >= installment.amount) {
+      const totalCount = installment.totalPlanCount || 1
+      const intervalMonths = installment.intervalMonths || 1
+      const nextSequence = installment.sequence + 1
 
-    if (nextSequence <= totalCount) {
-      const settings = await readDebtSettings(tx, tenantId)
-      
-      const currentLocalDate = fromUtcInstant(installment.dueAt, settings.utcOffsetMinutes).localDate
-      const dateParts = currentLocalDate.split('-').map(Number)
-      let y = dateParts[0] ?? 0
-      let m = dateParts[1] ?? 0
-      let d = dateParts[2] ?? 0
-      
-      m += intervalMonths
-      while (m > 12) {
-        m -= 12
-        y += 1
+      // قسط فعلی رو آپدیت میکنیم که کامل پرداخت شده
+      await tx.installment.update({
+        where: { id: installment.id },
+        data: { paidAmount: installment.amount }
+      })
+
+      if (nextSequence <= totalCount) {
+        const settings = await readDebtSettings(tx, tenantId)
+        const currentLocalDate = fromUtcInstant(installment.dueAt, settings.utcOffsetMinutes).localDate
+        const dateParts = currentLocalDate.split('-').map(Number)
+        let y = dateParts[0] ?? 0, m = dateParts[1] ?? 0, d = dateParts[2] ?? 0
+        m += intervalMonths
+        while (m > 12) { m -= 12; y += 1 }
+        
+        const isLeapYear = (y % 33 === 1 || y % 33 === 5 || y % 33 === 9 || y % 33 === 13 || y % 33 === 17 || y % 33 === 22 || y % 33 === 26 || y % 33 === 30)
+        const maxDaysInMonth = m === 12 ? (isLeapYear ? 30 : 29) : (m <= 6 ? 31 : 30)
+        if (d > maxDaysInMonth) d = maxDaysInMonth
+        
+        const nextLocalDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+        const nextDueDate = toUtcInstant(asLocalDate(nextLocalDate), MIDNIGHT, settings.utcOffsetMinutes)
+        
+        // ساخت قسط بعدی
+        await tx.installment.create({
+          data: {
+            tenantId,
+            appointmentId: installment.appointmentId,
+            sequence: nextSequence,
+            amount: installment.amount,
+            paidAmount: 0n,
+            dueAt: nextDueDate,
+            totalPlanAmount: installment.totalPlanAmount,
+            totalPlanCount: installment.totalPlanCount,
+            intervalMonths: installment.intervalMonths,
+            note: installment.note,
+          }
+        })
       }
-      
-      const isLeapYear = (y % 33 === 1 || y % 33 === 5 || y % 33 === 9 || y % 33 === 13 || y % 33 === 17 || y % 33 === 22 || y % 33 === 26 || y % 33 === 30)
-      const maxDaysInMonth = m === 12 ? (isLeapYear ? 30 : 29) : (m <= 6 ? 31 : 30)
-      
-      if (d > maxDaysInMonth) {
-        d = maxDaysInMonth
-      }
-      
-      const nextLocalDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-      const nextDueDate = toUtcInstant(asLocalDate(nextLocalDate), MIDNIGHT, settings.utcOffsetMinutes)
-      
-      await tx.installment.create({
-        data: {
-          tenantId,
-          appointmentId: installment.appointmentId,
-          sequence: nextSequence,
-          amount: installment.amount,
-          dueAt: nextDueDate,
-          note: installment.note,
-        }
+    } else {
+      // اگر پرداخت جزئی بود، فقط مبلغ پرداخت شده رو زیاد میکنیم
+      await tx.installment.update({
+        where: { id: installment.id },
+        data: { paidAmount: newPaidAmount }
       })
     }
-
     return SUCCESS
   })
 
@@ -463,7 +462,7 @@ export async function recordInstallmentPaymentAction(
   return { ok: true }
 }
 
-// 👈 اکشن جدید که هم تاریخ و هم مبلغ را تغییر می‌دهد
+// 👈 ۲. ویرایش تک قسط (مبلغ و تاریخ)
 export async function updateInstallmentAction(
   panel: Panel,
   installmentId: string,
@@ -476,15 +475,76 @@ export async function updateInstallmentAction(
 
     await tx.installment.update({
       where: { id: installmentId, tenantId },
-      data: { 
-        dueAt,
-        amount: amountBigInt
-      }
+      data: { dueAt, amount: amountBigInt }
     })
-
     return SUCCESS
   })
+  if (!('succeeded' in result)) return result
+  revalidateDebts()
+  return { ok: true }
+}
 
+// 👈 ۳. ویرایش گروهی اقساط آینده
+export async function updateFutureInstallmentsAction(
+  panel: Panel,
+  appointmentId: string,
+  currentSequence: number,
+  input: { newAmount: string; newIntervalMonths: number }
+): Promise<ActionResult> {
+  const result = await inTenantScope(panel, async ({ tx, tenantId }) => {
+    const amountBigInt = asAmount(input.newAmount)
+    const settings = await readDebtSettings(tx, tenantId)
+    
+    const futureInstallments = await tx.installment.findMany({
+      where: { appointmentId, tenantId, sequence: { gt: currentSequence } },
+      orderBy: { sequence: 'asc' }
+    })
+
+    for (let i = 0; i < futureInstallments.length; i++) {
+      const inst = futureInstallments[i]
+      if (!inst) continue // 👈 اصلاح شد: اگر undefined بود رد شو
+
+      const currentLocalDate = fromUtcInstant(inst.dueAt, settings.utcOffsetMinutes).localDate
+      const dateParts = currentLocalDate.split('-').map(Number)
+      let y = dateParts[0] ?? 0, m = dateParts[1] ?? 0, d = dateParts[2] ?? 0
+      
+      m += input.newIntervalMonths
+      while (m > 12) { m -= 12; y += 1 }
+      
+      const isLeapYear = (y % 33 === 1 || y % 33 === 5 || y % 33 === 9 || y % 33 === 13 || y % 33 === 17 || y % 33 === 22 || y % 33 === 26 || y % 33 === 30)
+      const maxDaysInMonth = m === 12 ? (isLeapYear ? 30 : 29) : (m <= 6 ? 31 : 30)
+      if (d > maxDaysInMonth) d = maxDaysInMonth
+      
+      const nextLocalDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const nextDueDate = toUtcInstant(asLocalDate(nextLocalDate), MIDNIGHT, settings.utcOffsetMinutes)
+      
+      await tx.installment.update({
+        where: { id: inst.id },
+        data: { amount: amountBigInt, dueAt: nextDueDate, intervalMonths: input.newIntervalMonths }
+      })
+    }
+    return SUCCESS
+  })
+  if (!('succeeded' in result)) return result
+  revalidateDebts()
+  return { ok: true }
+}
+
+// 👈 ۴. حذف قسط
+export async function deleteInstallmentAction(
+  panel: Panel,
+  installmentId: string
+): Promise<ActionResult> {
+  const result = await inTenantScope(panel, async ({ tx, tenantId }) => {
+    const inst = await tx.installment.findUnique({ where: { id: installmentId, tenantId } })
+    if (!inst) return SUCCESS
+    
+    // حذف پرداخت‌های مرتبط با این قسط (در صورت وجود)
+    await tx.payment.deleteMany({ where: { installmentId } })
+    await tx.installment.delete({ where: { id: installmentId } })
+    
+    return SUCCESS
+  })
   if (!('succeeded' in result)) return result
   revalidateDebts()
   return { ok: true }

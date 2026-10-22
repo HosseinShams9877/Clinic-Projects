@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { formatDate, dateToLocalDate, toPersianDigits } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import { ADMIN_INSTALLMENTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
 import { InstallmentPaymentDialog } from '@/app/admin/installments/_components/InstallmentPaymentDialog'
-import { EditInstallmentDialog } from './EditInstallmentDialog'
+import { EditInstallmentDialog } from '@/app/_payments/EditInstallmentDialog'
 import { FollowUpDialog } from '@/app/admin/debts/_components/FollowUpDialog'
+import { deleteInstallmentAction } from '@/app/_debts/actions' // 👈 ایمپورت اکشن حذف
+import { useRouter } from 'next/navigation'
 
 function formatToman(value: bigint | number | string) {
   const str = value.toString().replace(/[^\d]/g, '')
@@ -20,23 +22,39 @@ interface InstallmentRow {
   readonly id: string
   readonly sequence: number
   readonly amount: bigint
+  readonly paidAmount: bigint
   readonly dueAt: Date
   readonly note: string | null
   readonly appointmentId: string
-  readonly payments: readonly { readonly amount: bigint }[]
+  readonly totalPlanAmount: bigint | null
+  readonly totalPlanCount: number | null
   readonly appointment: {
-    readonly customer: { readonly firstName: string; readonly lastName: string | null; readonly mobile: string } | null
+    readonly customer: { readonly id?: string; readonly firstName: string; readonly lastName: string | null; readonly mobile: string } | null
     readonly doctor: { readonly firstName: string; readonly lastName: string | null } | null
     readonly service: { readonly name: string } | null
   }
 }
 
 export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<InstallmentRow> }) {
+  const router = useRouter()
   const [selectedInstallment, setSelectedInstallment] = useState<InstallmentRow | null>(null)
   const [followUpRow, setFollowUpRow] = useState<InstallmentRow | null>(null)
+  const [isPending, startTransition] = useTransition()
 
   if (rows.length === 0) {
     return <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">{ADMIN_INSTALLMENTS.table.empty}</p>
+  }
+
+  const handleDelete = (id: string) => {
+    if (!confirm('آیا از حذف این قسط مطمئن هستید؟')) return
+    startTransition(async () => {
+      const res = await deleteInstallmentAction('admin', id)
+      if (res.ok) {
+        router.refresh()
+      } else {
+        alert(res.message)
+      }
+    })
   }
 
   return (
@@ -77,13 +95,18 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                 const today = realClock()
                 const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24))
                 
-                const parts = row.note?.split(':') || []
-                const totalInstallments = Number(parts[1] || 1)
-                const totalAmount = BigInt(parts[3] || row.amount)
-
+                // 👈 اصلاح تعداد کل اقساط
+                const totalInstallments = row.totalPlanCount || 1
+                const totalAmount = row.totalPlanAmount || row.amount
                 const perInstallmentAmount = row.amount
-                const paidSoFar = BigInt(row.sequence - 1) * perInstallmentAmount
-                const progressPercent = totalAmount > 0n ? Math.min(100, Number((paidSoFar * 100n) / totalAmount)) : 0
+                
+                const remainingAmount = perInstallmentAmount - row.paidAmount
+                
+                // 👈 اصلاح محاسبه درصد پیشرفت
+                const paidSoFar = totalAmount - remainingAmount
+                const progressPercent = totalAmount > 0n 
+                  ? Math.min(100, Number((paidSoFar * 100n) / totalAmount)) 
+                  : 0
 
                 const customerName = customer ? `${customer.firstName} ${customer.lastName ?? ''}`.trim() : 'مشتری'
 
@@ -120,15 +143,21 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                     
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1">
-                        <span className="font-semibold text-ink-2 whitespace-nowrap text-xs">{ADMIN_INSTALLMENTS.table.installmentPrefix} {toPersianDigits(row.sequence)} {ADMIN_INSTALLMENTS.table.of} {toPersianDigits(totalInstallments)}</span>
-                        <span className="text-[10px] text-ink-3">{ADMIN_INSTALLMENTS.table.installmentPrefix}</span>
+                        {/* 👈 اصلاح متن: قسط {شماره} از {تعداد کل} */}
+                        <span className="font-semibold text-ink-2 whitespace-nowrap text-xs">
+                          {ADMIN_INSTALLMENTS.table.installmentPrefix} {toPersianDigits(row.sequence)} {ADMIN_INSTALLMENTS.table.of} {toPersianDigits(totalInstallments)}
+                        </span>
                       </div>
                     </td>
 
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1.5 w-32">
-                        <span className="text-[10px] text-ink-3">{formatToman(paidSoFar)} {ADMIN_INSTALLMENTS.table.of} {formatToman(totalAmount)} {ADMIN_INSTALLMENTS.table.million}</span>
-                        <div className="h-1.5 w-full overflow-hidden rounded-pill bg-surface-sunken"><div className="h-full bg-brand" style={{ width: `${progressPercent}%` }} /></div>
+                        <span className="text-[10px] text-ink-3">
+                          {formatToman(paidSoFar)} {ADMIN_INSTALLMENTS.table.of} {formatToman(totalAmount)} {ADMIN_INSTALLMENTS.table.million}
+                        </span>
+                        <div className="h-1.5 w-full overflow-hidden rounded-pill bg-surface-sunken">
+                          <div className="h-full bg-brand" style={{ width: `${progressPercent}%` }} />
+                        </div>
                         <span className="text-[10px] text-ink-3">{ADMIN_INSTALLMENTS.table.paidPercent} {toPersianDigits(progressPercent)}٪</span>
                       </div>
                     </td>
@@ -153,10 +182,26 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
 
                         <EditInstallmentDialog 
                           installmentId={row.id}
+                          appointmentId={row.appointmentId}
+                          customerId={customer?.id || ''}
+                          customerName={customerName}
+                          remainingAmount={row.amount - row.paidAmount}
+                          sequence={row.sequence}
                           currentDueDate={dateToLocalDate(due)}
                           currentAmount={perInstallmentAmount}
                           panel="admin"
                         />
+
+                        {/* 👈 دکمه حذف */}
+                        <button 
+                          type="button"
+                          onClick={() => handleDelete(row.id)}
+                          disabled={isPending}
+                          className="grid size-7 place-items-center rounded-lg border border-line-2 text-ink-3 hover:bg-danger-bg hover:text-danger hover:border-danger transition-colors disabled:opacity-50"
+                          title="حذف قسط"
+                        >
+                          <Icon name="remove" size="compact" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -173,7 +218,7 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
           onClose={() => setSelectedInstallment(null)}
           installmentId={selectedInstallment.id}
           customerName={`${selectedInstallment.appointment.customer?.firstName || ''} ${selectedInstallment.appointment.customer?.lastName || ''}`.trim()}
-          amountDue={selectedInstallment.amount}
+          amountDue={selectedInstallment.amount - selectedInstallment.paidAmount}
           onSuccess={() => setSelectedInstallment(null)}
         />
       )}
@@ -188,7 +233,7 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
           onSuccess={() => {
             setFollowUpRow(null)
             window.location.reload()
-          }} // 👈 پاس دادن پراپ onSuccess
+          }}
         />
       )}
     </>

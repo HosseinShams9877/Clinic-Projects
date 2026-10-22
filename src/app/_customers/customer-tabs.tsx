@@ -1,6 +1,6 @@
 /**
  * The tabs the customer profile renders under — «خلاصه پرونده», «سوابق درمان», 
- * «مالی و پرداخت‌ها», and «نقشه تزریق».
+ * «مالی و پرداخت‌ها», «نقشه تزریق» و «یادداشت‌های داخلی».
  *
  * The tabs are a `?tab=` search param and links, not client state: the URL is the
  * memory, and the pages that carry the tabs read it back.
@@ -9,7 +9,7 @@
 import Link from 'next/link'
 import { cx } from '@/core/lib'
 
-export type CustomerTab = 'summary' | 'history' | 'payments' | 'injections'
+export type CustomerTab = 'summary' | 'history' | 'payments' | 'injections' | 'internal'
 
 export function CustomerTabs({
   basePath,
@@ -52,6 +52,11 @@ export function CustomerTabs({
         active={active === 'injections'}
         label={injectionsLabel}
       />
+      <TabLink
+        href={`${basePath}?tab=internal`}
+        active={active === 'internal'}
+        label="یادداشت‌های داخلی"
+      />
     </div>
   )
 }
@@ -88,5 +93,6 @@ export function tabFromParam(value: string | string[] | undefined): CustomerTab 
   if (value === 'injections') return 'injections'
   if (value === 'payments') return 'payments'
   if (value === 'history') return 'history'
+  if (value === 'internal') return 'internal'
   return 'summary'
 }

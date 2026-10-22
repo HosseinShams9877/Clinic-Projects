@@ -49,7 +49,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider  = "sqlite"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -98,6 +98,7 @@ model Tenant {
   notificationReads NotificationRead[]
    injectionRecords  InjectionRecord[]
    debtFollowUps DebtFollowUp[]
+   internalNotes InternalNote[]
 
   @@map("tenants")
 }
@@ -246,6 +247,8 @@ model User {
   leavesApproved     LeaveRequest[]    @relation("LeaveApprover")
   auditLogs          AuditLog[]
   injections         InjectionRecord[]
+  
+  internalNotes      InternalNote[]    // 👈 این خط رو اضافه کن
 
   @@unique([tenantId, mobile], map: "user_tenant_mobile_key")
   @@map("users")
@@ -466,7 +469,7 @@ model Customer {
   firstName String
   lastName  String?
   searchName String
-
+  internalNotes InternalNote[]
   birthDate  String?
   birthMonth Int?
   birthDay   Int?
@@ -1188,9 +1191,16 @@ model Installment {
   appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
 
   sequence Int
-  amount   BigInt
-  dueAt    DateTime
-  note     String?
+  amount   BigInt       // مبلغ کل این قسط
+  paidAmount BigInt @default(0) // مبلغی که تا الان پرداخت شده
+  
+  dueAt    DateTime     // تاریخ سررسید
+  note     String?      // برای توضیحات دلخواه (دیگه نباید دیتای فرمت‌شده توش ذخیره کنی)
+  
+  // 👈 فیلدهای جدید برای مدیریت بهتر برنامه اقساط
+  totalPlanAmount BigInt?  // مبلغ کل بدهی اصلی (همون 480,000)
+  totalPlanCount  Int?     // تعداد کل اقساط (همون 4)
+  intervalMonths  Int? @default(1) // فاصله زمانی هر قسط (مثلا هر 1 ماه)
 
   payments Payment[]
 
@@ -1201,4 +1211,22 @@ model Installment {
   @@index([tenantId, dueAt], map: "installment_tenant_due_idx")
   @@index([tenantId, appointmentId], map: "installment_tenant_appt_idx")
   @@map("installments")
+}
+model InternalNote {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+  
+  content    String
+  category   String   // "هماهنگی جلسه", "مالی", "پزشکی" و ...
+  
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, customerId, createdAt(sort: Desc)])
+  @@map("internal_notes")
 }

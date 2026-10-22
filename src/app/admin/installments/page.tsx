@@ -62,7 +62,8 @@ export default async function AdminInstallmentsPage({
     return true
   })
 
-  const totalAmount = rows.reduce((sum, r) => sum + r.amount, 0n)
+  // 👈 فقط مبلغ باقی‌مانده هر قسط رو جمع می‌زنیم
+  const totalAmount = rows.reduce((sum, r) => sum + (r.amount - r.paidAmount), 0n)
   const todayCount = rows.filter(r => Math.ceil((new Date(r.dueAt).getTime() - todayTime) / (1000 * 3600 * 24)) === 0).length
   const tomorrowCount = rows.filter(r => Math.ceil((new Date(r.dueAt).getTime() - todayTime) / (1000 * 3600 * 24)) === 1).length
 

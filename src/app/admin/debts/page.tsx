@@ -20,16 +20,16 @@ import { DebtRowView, Th } from './_components/DebtRowView'
 export const metadata: Metadata = { title: 'بدهکاری‌ها' }
 
 const DEBT_COLUMNS = [
-  { key: 'customer', width: 'w-[16%]', align: 'start' },
-  { key: 'doctor', width: 'w-[10%]', align: 'start' },
-  { key: 'service', width: 'w-[12%]', align: 'start' },
+  { key: 'customer', width: 'w-[14%]', align: 'start' },
+  { key: 'doctor', width: 'w-[9%]', align: 'start' },
+  { key: 'service', width: 'w-[11%]', align: 'start' },
   { key: 'due', width: 'w-[10%]', align: 'start' },
   { key: 'status', width: 'w-[10%]', align: 'start' },
-  { key: 'balance', width: 'w-[12%]', align: 'start' },
-  { key: 'stage', width: 'w-[10%]', align: 'start' },
+  { key: 'balance', width: 'w-[11%]', align: 'start' },
+  { key: 'stage', width: 'w-[11%]', align: 'start' }, // 👈 فضای بیشتری برای "قسط X از Y" دادیم
   { key: 'followUp', width: 'w-[10%]', align: 'start' },
   { key: 'nextFollowUp', width: 'w-[8%]', align: 'start' },
-  { key: 'action', width: 'w-[15%]', align: 'start' },
+  { key: 'action', width: 'w-[16%]', align: 'start' }, // 👈 به عملیات ۱۶٪ دادیم تا بیرون نزنه
 ] as const
 
 export default async function AdminDebtsPage({ searchParams }: { searchParams: any }) {

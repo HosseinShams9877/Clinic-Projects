@@ -20,12 +20,19 @@ interface InstallmentRow {
   readonly id: string
   readonly sequence: number
   readonly amount: bigint
+  readonly paidAmount: bigint // 👈 اضافه شد
   readonly dueAt: Date
   readonly note: string | null
   readonly appointmentId: string
-  readonly payments: readonly { readonly amount: bigint }[]
+  readonly totalPlanAmount: bigint | null
+  readonly totalPlanCount: number | null
   readonly appointment: {
-    readonly customer: { readonly firstName: string; readonly lastName: string | null; readonly mobile: string } | null
+    readonly customer: { 
+      readonly id?: string // 👈 اختیاری شد تا خطای تایپ‌اسکریپت رفع بشه
+      readonly firstName: string
+      readonly lastName: string | null
+      readonly mobile: string 
+    } | null
     readonly doctor: { readonly firstName: string; readonly lastName: string | null } | null
     readonly service: { readonly name: string } | null
   }
@@ -77,12 +84,13 @@ export function ReceptionInstallmentsClient({ rows }: { rows: readonly Installme
                 const today = realClock()
                 const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24))
                 
-                const parts = row.note?.split(':') || []
-                const totalInstallments = Number(parts[1] || 1)
-                const totalAmount = BigInt(parts[3] || row.amount)
-
+                // 👈 استفاده از فیلدهای جدید
+                const totalInstallments = row.totalPlanCount || 1
+                const totalAmount = row.totalPlanAmount || row.amount
                 const perInstallmentAmount = row.amount
-                const paidSoFar = BigInt(row.sequence - 1) * perInstallmentAmount
+                
+                const remainingAmount = perInstallmentAmount - row.paidAmount
+                const paidSoFar = totalAmount - remainingAmount
                 const progressPercent = totalAmount > 0n ? Math.min(100, Number((paidSoFar * 100n) / totalAmount)) : 0
 
                 const customerName = customer ? `${customer.firstName} ${customer.lastName ?? ''}`.trim() : 'مشتری'
@@ -120,8 +128,9 @@ export function ReceptionInstallmentsClient({ rows }: { rows: readonly Installme
                     
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1">
-                        <span className="font-semibold text-ink-2 whitespace-nowrap text-xs">{ADMIN_INSTALLMENTS.table.installmentPrefix} {toPersianDigits(row.sequence)} {ADMIN_INSTALLMENTS.table.of} {toPersianDigits(totalInstallments)}</span>
-                        <span className="text-[10px] text-ink-3">{ADMIN_INSTALLMENTS.table.installmentPrefix}</span>
+                        <span className="font-semibold text-ink-2 whitespace-nowrap text-xs">
+                          {ADMIN_INSTALLMENTS.table.installmentPrefix} {toPersianDigits(row.sequence)} {ADMIN_INSTALLMENTS.table.of} {toPersianDigits(totalInstallments)}
+                        </span>
                       </div>
                     </td>
 
@@ -153,9 +162,14 @@ export function ReceptionInstallmentsClient({ rows }: { rows: readonly Installme
 
                         <EditInstallmentDialog 
                           installmentId={row.id}
+                          appointmentId={row.appointmentId}
+                          customerId={row.appointment.customer?.id || ''}
+                          customerName={customerName}
+                          remainingAmount={row.amount - row.paidAmount}
+                          sequence={row.sequence}
                           currentDueDate={dateToLocalDate(due)}
                           currentAmount={perInstallmentAmount}
-                          panel="reception"
+                          panel="reception" // 👈 پنل منشی
                         />
                       </div>
                     </td>
@@ -173,7 +187,7 @@ export function ReceptionInstallmentsClient({ rows }: { rows: readonly Installme
           onClose={() => setSelectedInstallment(null)}
           installmentId={selectedInstallment.id}
           customerName={`${selectedInstallment.appointment.customer?.firstName || ''} ${selectedInstallment.appointment.customer?.lastName || ''}`.trim()}
-          amountDue={selectedInstallment.amount}
+          amountDue={selectedInstallment.amount - selectedInstallment.paidAmount} // 👈 مانده قسط
           onSuccess={() => setSelectedInstallment(null)}
         />
       )}

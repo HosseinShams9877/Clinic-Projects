@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/core/components/icons'
-import { formatMoney, todayLocalDate } from '@/core/localization'
+import { formatMoney, todayLocalDate, toPersianDigits } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import { cx } from '@/core/lib'
 import { JalaliDatePicker } from '@/core/components/date-picker'
@@ -23,6 +23,14 @@ function useIsClient() {
   )
 }
 
+function formatNumberWithCommas(value: string) {
+  const persianNumbers = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹']
+  const english = value.replace(/[۰-۹]/g, (d) => String(persianNumbers.indexOf(d)))
+  const numericValue = english.replace(/,/g, '').replace(/[^\d]/g, '')
+  if (!numericValue) return ''
+  return toPersianDigits(numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ','))
+}
+
 export function InstallmentPaymentDialog({ 
   isOpen, 
   onClose, 
@@ -35,17 +43,18 @@ export function InstallmentPaymentDialog({
   onClose: () => void, 
   installmentId: string,
   customerName: string, 
-  amountDue: bigint | string,
+  amountDue: bigint | string, 
   onSuccess: () => void 
 }) {
   const router = useRouter()
   const isClient = useIsClient()
-  const [amount, setAmount] = useState(typeof amountDue === 'bigint' ? amountDue.toString() : amountDue)
-  const [method, setMethod] = useState<PaymentMethodType>('CASH')
   
+  const amountDueToman = Math.floor(Number(amountDue) / 10).toString()
+  const [amount, setAmount] = useState(formatNumberWithCommas(amountDueToman))
+  
+  const [method, setMethod] = useState<PaymentMethodType>('CASH')
   const [receiveDate, setReceiveDate] = useState<string>('')
   const [receiveTime, setReceiveTime] = useState<string>('')
-
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -58,11 +67,19 @@ export function InstallmentPaymentDialog({
 
   const handleSubmit = () => {
     startTransition(async () => {
+      const rawDigits = amount.replace(/[^\d۰-۹]/g, '')
+      const persianNumbers = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹']
+      const englishDigits = rawDigits.replace(/[۰-۹]/g, (d) => String(persianNumbers.indexOf(d)))
+      
+      if (!englishDigits) return alert('مبلغ را وارد کنید')
+      
+      const amountRial = (BigInt(englishDigits) * 10n).toString()
+
       const res = await recordInstallmentPaymentAction(
         'admin',
         installmentId,
         {
-          amount,
+          amount: amountRial,
           method,
           receiveDate: receiveDate || todayLocalDate(realClock()),
           receiveTime: receiveTime || '10:00',
@@ -110,7 +127,7 @@ export function InstallmentPaymentDialog({
                 <input 
                   type="text" 
                   value={amount}
-                  onChange={e => setAmount(e.target.value)}
+                  onChange={e => setAmount(formatNumberWithCommas(e.target.value))}
                   className="w-full rounded-lg border border-line-2 p-2 pl-16 text-left font-bold text-lg text-ink focus:border-brand focus:outline-none" 
                   dir="ltr"
                 />
