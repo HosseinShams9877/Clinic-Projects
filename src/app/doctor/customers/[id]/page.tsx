@@ -125,20 +125,21 @@ export default async function DoctorCustomerDetailPage({
       />
 
       {tab === 'injections' ? (
-        <InjectionTab
-          rows={injections}
-          counts={injectionCounts}
-          panel="doctor"
-          customerId={profile.id}
-          view={injectionView}
-          basePath={`${basePath}?tab=injections`}
-        />
+       <InjectionTab
+  rows={injections}
+  counts={injectionCounts}
+  panel="admin"
+  customerId={profile.id}
+  view={injectionView}
+  basePath={`${basePath}?tab=injections`}
+  appointments={profile.appointments} // 👈 این خط رو اضافه کن
+/>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
             <KpiTile
               label={ADMIN_CUSTOMER_PROFILE.kpi.visits}
-              value={toPersianDigits(profile.completedSessions)}
+              value={toPersianDigits(profile.appointments.filter((a: any) => a.status === 'COMPLETED').length)}
               icon="appointment"
               tone="bg-info-bg text-info"
             />

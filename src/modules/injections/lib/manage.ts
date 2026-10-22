@@ -71,6 +71,7 @@ export async function recordInjection(args: {
     data: {
       tenantId: args.ctx.tenantId,
       customerId: args.input.customerId,
+      appointmentId: args.input.appointmentId ?? null, // 👈 این خط اضافه شد
       doctorId: args.ctx.userId,
       area: args.input.area,
       material: args.input.material,
@@ -90,6 +91,7 @@ export async function recordInjection(args: {
   return {
     id: row.id,
     customerId: row.customerId,
+    appointmentId: row.appointmentId, // 👈 این خط اضافه شد
     doctorId: row.doctorId,
     doctorName:
       row.doctor.lastName === ''

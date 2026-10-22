@@ -6,8 +6,26 @@ import { formatMoney, toPersianDigits } from '@/core/localization'
 import { Icon } from '@/core/components/icons'
 import type { IconName } from '@/core/components/icons'
 
+import {
+  INJECTION_AREA_LABELS,
+  INJECTION_MATERIAL_LABELS,
+} from '@/modules/injections'
+
+export type TreatmentInjection = {
+  id: string
+  area: string | null
+  material: string | null
+  amount: string | null
+  amountUnit: string | null
+  brand: string | null
+  depth: string | null
+  technique: string | null
+  note: string | null
+}
+
 export type TreatmentHistoryRow = {
   id: string
+  kind: 'appointment' | 'standalone-injection'
   localDate: string
   localTime: string
   doctorName: string | null
@@ -16,10 +34,14 @@ export type TreatmentHistoryRow = {
   note: string | null
   area: string | null
   material: string | null
+  amount: string | null
+  amountUnit: string | null
+  brand: string | null
   depth: string | null
   technique: string | null
   recommendations: string | null
   priceAtBooking: bigint
+  injections: TreatmentInjection[]
 }
 
 interface TreatmentHistoryTabProps {
@@ -47,33 +69,41 @@ export function TreatmentHistoryTab({
   const services = Array.from(new Set(historyRows.map((r) => r.serviceName).filter(Boolean))) as string[]
 
   const filteredRows = historyRows.filter((row) => {
+    const s = search.toLowerCase()
+    
     const matchSearch =
-      (row.note && row.note.includes(search)) ||
-      (row.area && row.area.includes(search)) ||
-      (row.material && row.material.includes(search))
+      (row.note && row.note.toLowerCase().includes(s)) ||
+      (row.area && row.area.toLowerCase().includes(s)) ||
+      (row.material && row.material.toLowerCase().includes(s)) ||
+      row.injections.some(inj => 
+        (inj.area && inj.area.toLowerCase().includes(s)) ||
+        (inj.material && inj.material.toLowerCase().includes(s)) ||
+        (inj.note && inj.note.toLowerCase().includes(s))
+      )
 
     const matchDoctor = filterDoctor === 'all' || row.doctorName === filterDoctor
     const matchService = filterService === 'all' || row.serviceName === filterService
-    
-    const matchTab = 
+
+    const statusUpper = (row.status || '').toUpperCase()
+    const matchTab =
       activeSubTab === 'all' ? true :
-      activeSubTab === 'pending' ? row.status === 'PENDING' :
-      row.status === 'COMPLETED' || row.status === 'DONE'
+      activeSubTab === 'pending' ? statusUpper === 'PENDING' :
+      statusUpper !== 'PENDING' && statusUpper !== 'CANCELLED'
 
     return matchSearch && matchDoctor && matchService && matchTab
   })
 
+  const totalInjections = historyRows.reduce((sum, r) => sum + (r.injections?.length || 0), 0)
+
   return (
     <div className="flex w-full flex-col gap-5 sm:gap-6">
-      {/* ۱. کارت‌های آماری */}
       <div className="grid w-full grid-cols-2 gap-2.5 sm:gap-3 panel:grid-cols-4">
         <StatCard title="جلسات ثبت‌شده" value={toPersianDigits(visitsCount)} tone="bg-brand-50 text-brand" icon="appointment" />
         <StatCard title="در انتظار تأیید" value={toPersianDigits(pendingCount)} tone="bg-warn-bg text-warn" icon="alert" />
-        <StatCard title="اقلام مصرفی ثبت‌شده" value={toPersianDigits(historyRows.length)} tone="bg-info-bg text-info" icon="payment" />
+        <StatCard title="تزریق‌های ثبت‌شده" value={toPersianDigits(totalInjections)} tone="bg-info-bg text-info" icon="treatment" />
         <StatCard title="آخرین جلسه" value={lastVisitDate ? lastVisitDate : '—'} tone="bg-ok-bg text-ok" icon="calendar" />
       </div>
 
-      {/* ۲. نوار فیلترها */}
       <div className="flex w-full flex-col gap-2 rounded-xl border border-line bg-surface p-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="relative flex-1">
           <input
@@ -104,7 +134,6 @@ export function TreatmentHistoryTab({
         </div>
       </div>
 
-      {/* ۳. نوار تب‌های داخلی */}
       <div className="w-full border-b border-line">
         <div className="flex w-full gap-1 overflow-x-auto scrollbar-none sm:gap-2">
           {[
@@ -129,7 +158,6 @@ export function TreatmentHistoryTab({
         </div>
       </div>
 
-      {/* ۴. لیست کارت‌های سوابق */}
       <div className="flex w-full flex-col gap-4">
         {filteredRows.length === 0 ? (
           <div className="w-full rounded-xl border border-line bg-surface py-12 text-center text-sm text-ink-3 shadow-sm">
@@ -161,12 +189,10 @@ function StatCard({ title, value, tone, icon }: { title: string; value: string; 
   )
 }
 
-// کارت ریز سوابق
 function HistoryCard({ row }: { row: TreatmentHistoryRow }) {
   const [isOpen, setIsOpen] = useState(true)
 
-  const isPending = row.status === 'PENDING'
-  
+  const isPending = row.status.toUpperCase() === 'PENDING'
   const sideBorderColor = isPending ? 'border-r-warn' : 'border-r-ok'
   const badgeColor = isPending ? 'bg-warn-bg text-warn' : 'bg-ok-bg text-ok'
   const statusLabel = isPending ? 'در انتظار تایید پزشک' : 'تایید شده'
@@ -176,22 +202,27 @@ function HistoryCard({ row }: { row: TreatmentHistoryRow }) {
       "w-full overflow-hidden rounded-xl border border-line border-r-4 bg-surface shadow-sm transition-all",
       sideBorderColor
     )}>
-      {/* هدر کارت */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex w-full flex-col items-start justify-between gap-3 bg-surface-2/30 p-4 text-right transition-colors hover:bg-surface-2/60 sm:flex-row sm:items-center"
       >
         <div className="flex items-center gap-3">
-          <span className="flex flex-col items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-ink-3">
-             <span className="text-[10px] leading-tight">تاریخ</span>
+          <span className="flex flex-col items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-ink-3 min-w-[50px]">
+             <span className="text-[10px] leading-tight mb-0.5">تاریخ</span>
              <span className="text-base font-bold text-ink leading-tight">{toPersianDigits(row.localDate.slice(-2))}</span>
           </span>
           <div className="flex flex-col">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-bold text-ink sm:text-base">{row.serviceName || 'ویزیت'}</h3>
               <span className={cx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold', badgeColor)}>
+                {isPending && <span className="size-1.5 rounded-full bg-warn" />}
                 {statusLabel}
               </span>
+              {row.injections && row.injections.length > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
+                  {toPersianDigits(row.injections.length)} تزریق
+                </span>
+              )}
             </div>
             <span className="mt-1 text-xs text-ink-2">
               {row.localTime} • {row.doctorName || 'پزشک نامشخص'}
@@ -205,12 +236,11 @@ function HistoryCard({ row }: { row: TreatmentHistoryRow }) {
         </div>
       </button>
 
-      {/* محتوای باز شونده */}
       {isOpen && (
         <div className="border-t border-line-2 bg-surface p-5 sm:p-6 flex flex-col gap-5 text-sm">
           
           {row.note && (
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
               <div className="flex items-center gap-2 text-ink-3 shrink-0">
                 <Icon name="info" size="compact" />
                 <span className="text-xs">شرح اقدام</span>
@@ -219,27 +249,63 @@ function HistoryCard({ row }: { row: TreatmentHistoryRow }) {
             </div>
           )}
 
-          {row.area && (
-             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-              <div className="flex items-center gap-2 text-ink-3 shrink-0">
-                <Icon name="info" size="compact" />
-                <span className="text-xs">ناحیه</span>
-              </div>
-              <p className="text-ink text-right">{row.area}</p>
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+          {/* لیست تزریق‌ها با طراحی فشرده و مرتب */}
+          <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2 text-ink-3 shrink-0">
               <Icon name="treatment" size="compact" />
-              <span className="text-xs">مواد مصرفی</span>
+              <span className="text-xs">تزریق‌های این جلسه</span>
             </div>
-            <p className="text-ink text-right">
-              {row.material ? row.material : 'مواد مصرفی برای این جلسه ثبت نشده است.'}
-            </p>
+            
+            {!row.injections || row.injections.length === 0 ? (
+              <p className="text-ink-3 text-right">تزریقی برای این جلسه ثبت نشده است.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {row.injections.map((inj, index) => {
+                  const areaLabel = inj.area 
+                    ? (INJECTION_AREA_LABELS[inj.area as keyof typeof INJECTION_AREA_LABELS] || inj.area) 
+                    : 'نامشخص'
+                  const materialLabel = inj.material 
+                    ? (INJECTION_MATERIAL_LABELS[inj.material as keyof typeof INJECTION_MATERIAL_LABELS] || inj.material) 
+                    : 'نامشخص'
+                  const amountLabel = inj.amount
+                    ? `${toPersianDigits(inj.amount)} ${inj.amountUnit === 'CC' ? 'سی‌سی' : inj.amountUnit === 'UNIT' ? 'واحد' : inj.amountUnit || ''}`.trim()
+                    : null
+
+                  return (
+                    <div key={inj.id} className="rounded-lg border border-line-2 bg-surface-2/30 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      {/* سمت راست: ناحیه و ماده */}
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                        <span className="text-xs font-bold text-ink w-12 shrink-0">تزریق {toPersianDigits(index + 1)}</span>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="text-ink-3">ناحیه:</span>
+                          <span className="font-semibold text-ink">{areaLabel}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="text-ink-3">ماده:</span>
+                          <span className="font-semibold text-ink">{materialLabel}</span>
+                        </div>
+                        {amountLabel && (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="text-ink-3">مقدار:</span>
+                            <span className="font-semibold text-ink">{amountLabel}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* سمت چپ: یادداشت تزریق (اگر وجود داشته باشد) */}
+                      {inj.note && (
+                        <div className="text-xs text-ink-3 truncate sm:max-w-[30%]" title={inj.note}>
+                          {inj.note}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
             <div className="flex items-center gap-2 text-ink-3 shrink-0">
               <Icon name="info" size="compact" />
               <span className="text-xs">توصیه‌های پس از جلسه</span>

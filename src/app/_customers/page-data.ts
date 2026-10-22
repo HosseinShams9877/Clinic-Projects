@@ -1,38 +1,4 @@
-/**
- * The reads the six Phase 3 surfaces share, in one place.
- *
- * `02-architecture.md` §6 puts composition in `src/app/`, and the composition the
- * customer and lead pages have in common is not the table — each page renders its
- * own — but the reads behind it: the customer file under either of the two scopes,
- * the lead cartable with its counts, and the profile with the two names its row
- * carries as ids. Those are one transaction's worth of queries, written once so the
- * reception desk, the manager and the doctor do not drift apart on what a list holds.
- *
- * ## Why the two scopes are one function
- *
- * `searchCustomers` and `ownPatients` are the module's two answers to one question —
- * «پرونده مشتریان» — and the difference between them is a permission the caller
- * holds, not a page the caller is. The app tier picks one with a `scope` the three
- * pages each name, so the two queries are two arms of one read and a page cannot
- * reach for the wrong one without naming it.
- *
- * ## Why two names are read here and not in the module
- *
- * The profile's row carries `primaryDoctorId` and `primaryClinicId`, and the names
- * that render beside them belong to the `staff` and the clinic tables — tables
- * `customers` does not own and cannot reach (`02-architecture.md` §10 rule 2). A
- * join belongs in the app tier, which is the one place allowed to compose two
- * modules' rows; reading them in the same transaction is what keeps the two from
- * being a profile rendered against a membership that just changed.
- *
- * ## Why the injections are read here and not on their own tab
- *
- * The profile is one page and its two tabs are two views of it. Reading the
- * injections alongside the profile, the courses and the messages is what keeps the
- * whole record one transaction: a tab that opened its own read would be a second
- * scope the profile page did not need, and the KPI band it renders would be a
- * second place the same four counts are computed.
- */
+
 
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'

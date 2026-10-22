@@ -18,7 +18,7 @@ import {
   INJECTION_UNITS,
   type InjectionArea,
 } from '@/core/constants'
-import { asLocalDate, todayLocalDate, type LocalDate } from '@/core/localization'
+import { asLocalDate, todayLocalDate, type LocalDate, formatDate, dateToLocalDate } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import {
   INJECTION_AREA_LABELS,
@@ -37,9 +37,17 @@ export interface InjectionDialogProps {
   readonly defaultArea?: InjectionArea | null
   readonly open?: boolean
   readonly onOpenChange?: (open: boolean) => void
+  // 👈 پراپ جدید برای گرفتن لیست نوبت‌ها
+  readonly appointments?: ReadonlyArray<{
+    id: string
+    localDate: string
+    localTime: string
+    serviceName: string | null
+  }>
 }
 
 interface InjectionValues {
+  readonly appointmentId: string // 👈 فیلد جدید
   readonly area: string
   readonly material: string
   readonly brand: string
@@ -57,7 +65,6 @@ export function InjectionDialog(props: InjectionDialogProps) {
   const isOpen = props.open ?? internalOpen
   const setOpen = props.onOpenChange ?? setInternalOpen
 
-  // کلید برای ریست کردن فرم وقتی ناحیه تغییر می‌کند
   const [formKey, setFormKey] = useState(0)
   const titleId = useId()
 
@@ -65,7 +72,6 @@ export function InjectionDialog(props: InjectionDialogProps) {
     setOpen(false)
   }
 
-  // اگر دیالوگ بسته است، دکمه را نشان بده
   if (!isOpen) {
     return (
       <Button
@@ -82,13 +88,13 @@ export function InjectionDialog(props: InjectionDialogProps) {
     )
   }
 
-  // محتوای فرم
   return (
     <InjectionForm
       key={formKey}
       panel={props.panel}
       customerId={props.customerId}
       defaultArea={props.defaultArea}
+      appointments={props.appointments} // 👈 پاس دادن نوبت‌ها
       onClose={handleClose}
       titleId={titleId}
     />
@@ -99,16 +105,23 @@ function InjectionForm({
   panel,
   customerId,
   defaultArea,
+  appointments,
   onClose,
   titleId,
 }: {
   readonly panel: 'reception' | 'doctor' | 'admin'
   readonly customerId: string
   readonly defaultArea?: InjectionArea | null
+  readonly appointments?: ReadonlyArray<{
+    id: string
+    localDate: string
+    localTime: string
+    serviceName: string | null
+  }>
   readonly onClose: () => void
   readonly titleId: string
 }) {
-  const [values, setValues] = useState<InjectionValues>(() => emptyValues(defaultArea))
+  const [values, setValues] = useState<InjectionValues>(() => emptyValues(defaultArea, appointments))
   const [result, setResult] = useState<InjectionActionResult | null>(null)
   const [pending, setPending] = useState(false)
 
@@ -116,6 +129,7 @@ function InjectionForm({
     setPending(true)
     const input: InjectionInput = {
       customerId,
+      appointmentId: values.appointmentId === '' ? undefined : values.appointmentId, // 👈 پاس دادن شناسه
       area: values.area,
       material: values.material,
       brand: values.brand,
@@ -165,6 +179,23 @@ function InjectionForm({
         </header>
 
         <div className="flex flex-col gap-4 p-5">
+          
+          {/* 👈 منوی انتخاب جلسه */}
+          <Field label="جلسه مربوط به">
+            <select
+              className={CONTROL_CLASSES}
+              value={values.appointmentId}
+              onChange={(event) => setValues({ ...values, appointmentId: event.target.value })}
+            >
+              <option value="">— بدون اتصال به جلسه —</option>
+              {appointments?.map((appt) => (
+                <option key={appt.id} value={appt.id}>
+                  {formatDate(appt.localDate as LocalDate, 'short')} - {appt.localTime} ({appt.serviceName || 'ویزیت'})
+                </option>
+              ))}
+            </select>
+          </Field>
+
           <Field label={INJECTION_TAB.dialog.area} required>
             <select
               className={CONTROL_CLASSES}
@@ -315,8 +346,15 @@ function InjectionForm({
   )
 }
 
-function emptyValues(defaultArea?: InjectionArea | null): InjectionValues {
+// 👈 مقدار پیش‌فرض که آخرین نوبت را انتخاب می‌کند
+function emptyValues(
+  defaultArea?: InjectionArea | null,
+  appointments?: ReadonlyArray<{ id: string; localDate: string }>,
+): InjectionValues {
+  const latestAppointment = appointments && appointments.length > 0 ? appointments[0] : null
+  
   return {
+    appointmentId: latestAppointment ? latestAppointment.id : '',
     area: defaultArea ?? '',
     material: '',
     brand: '',
@@ -326,7 +364,7 @@ function emptyValues(defaultArea?: InjectionArea | null): InjectionValues {
     technique: '',
     batchNumber: '',
     note: '',
-    localDate: todayLocalDate(realClock()),
+    localDate: latestAppointment ? asLocalDate(latestAppointment.localDate) : todayLocalDate(realClock()),
   }
 }
 

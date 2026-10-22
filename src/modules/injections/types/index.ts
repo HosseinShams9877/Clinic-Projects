@@ -14,6 +14,8 @@ import type { InjectionsMessageKey } from '../catalog'
 export interface InjectionRow {
   readonly id: string
   readonly customerId: string
+  /** The appointment this injection was performed in, if any. */
+  readonly appointmentId: string | null
   readonly doctorId: string
   readonly doctorName: string
   readonly area: string
@@ -44,6 +46,8 @@ export interface InjectionCounts {
 /** What the create write takes — every field the form collects. */
 export interface CreateInjectionInput {
   readonly customerId: string
+  /** The appointment this injection is performed in, when the form picks one. */
+  readonly appointmentId?: string | null
   readonly area: string
   readonly material: string
   readonly brand?: string

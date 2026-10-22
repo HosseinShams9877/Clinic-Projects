@@ -105,13 +105,14 @@ export default async function ReceptionCustomerDetailPage({
 
       {tab === 'injections' ? (
         <InjectionTab
-          rows={injections}
-          counts={injectionCounts}
-          panel="reception"
-          customerId={profile.id}
-          view={injectionView}
-          basePath={`${basePath}?tab=injections`}
-        />
+  rows={injections}
+  counts={injectionCounts}
+  panel="admin"
+  customerId={profile.id}
+  view={injectionView}
+  basePath={`${basePath}?tab=injections`}
+  appointments={profile.appointments} // 👈 این خط رو اضافه کن
+/>
       ) : (
         <>
           <CollapsibleCard title={CUSTOMER_PROFILE_PAGE.sections.details}>
@@ -157,7 +158,7 @@ export default async function ReceptionCustomerDetailPage({
               />
               <Detail
                 label={CUSTOMER_PROFILE_PAGE.fields.completedSessions}
-                value={toPersianDigits(profile.completedSessions)}
+                value={toPersianDigits(profile.appointments.filter((a: any) => a.status === 'COMPLETED').length)}
               />
             </dl>
           </CollapsibleCard>

@@ -49,7 +49,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "sqlite"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -589,7 +589,8 @@ model InjectionRecord {
   customer   Customer @relation(fields: [customerId], references: [id])
   doctorId   String
   doctor     User     @relation(fields: [doctorId], references: [id])
-
+   appointmentId String? 
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
   area      String
   material  String
   brand     String?
@@ -646,6 +647,7 @@ model Appointment {
   scheduledAt DateTime
   localDate   String
   localTime   String
+   isDoctorApproved Boolean @default(false)
 
   durationMinutes Int
   status          String
@@ -672,7 +674,7 @@ model Appointment {
   debtFollowUpNote    String?
   debtNextContactAt   DateTime?
   debtDueDateOverride DateTime?
-  
+  injectionRecords InjectionRecord[]
   followUps DebtFollowUp[]
   installments Installment[]
   createdAt DateTime @default(now())

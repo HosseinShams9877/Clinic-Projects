@@ -37,6 +37,7 @@ export function InjectionTab({
   customerId,
   view = DEFAULT_INJECTION_VIEW,
   basePath,
+  appointments = [], // 👈 پراپ جدید با مقدار پیش‌فرض
 }: {
   readonly rows: readonly InjectionRow[]
   readonly counts: InjectionCounts
@@ -45,9 +46,16 @@ export function InjectionTab({
   readonly view?: InjectionView
   /** The profile's own route, so the view switch writes to it. */
   readonly basePath?: string
+  /** The customer's appointments, for the dialog's selector */
+  readonly appointments?: ReadonlyArray<{
+    id: string
+    localDate: string
+    localTime: string
+    serviceName: string | null
+  }>
 }) {
   const [selectedArea, setSelectedArea] = useState<InjectionArea | null>(null)
-  const [dialogOpen, setDialogOpen] = useState(false) // <-- استیت جدید
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   return (
     <section className="flex flex-col gap-4">
@@ -67,6 +75,7 @@ export function InjectionTab({
           defaultArea={selectedArea} 
           open={dialogOpen} 
           onOpenChange={setDialogOpen} 
+          appointments={appointments} // 👈 پاس دادن لیست نوبت‌ها به دیالوگ
         />
       </header>
 

@@ -83,6 +83,7 @@ function requireCustomerRead(ctx: TenantContext): void {
 function asRow(raw: {
   readonly id: string
   readonly customerId: string
+  readonly appointmentId: string | null
   readonly doctorId: string
   readonly doctor: { readonly firstName: string; readonly lastName: string }
   readonly area: string
@@ -101,6 +102,7 @@ function asRow(raw: {
   return {
     id: raw.id,
     customerId: raw.customerId,
+    appointmentId: raw.appointmentId,
     doctorId: raw.doctorId,
     doctorName:
       raw.doctor.lastName === ''

@@ -73,6 +73,15 @@ export default async function CustomerProfilePage({
   const paysPage = pageFromParam(query[PAYS_PAGE_PARAM])
   const injectionView = injectionViewFromParam(query.injectionView)
 
+  // ۱. گرفتن لیست نوبت‌ها مستقیماً از دیتابیس همراه با اطلاعات خدمت و پزشک
+  const dbAppts = await runInTenantScope(session.permissions, prisma(), async (tx) => {
+    return tx.appointment.findMany({
+      where: { customerId: id, isSlotBlock: false },
+      include: { service: true, doctor: true },
+      orderBy: { scheduledAt: 'desc' },
+    })
+  })
+
   const data = await loadProfile(session.permissions, id)
 
   const { profile, cycles, messages, injections, injectionCounts, notes, followUps } = data
@@ -85,7 +94,7 @@ export default async function CustomerProfilePage({
       row.status === CycleStatus.AtRisk,
   )
 
-  const appts = paginate(profile.appointments, apptsPage)
+  const appts = paginate(dbAppts, apptsPage)
   const pays = paginate(profile.payments, paysPage)
   const basePath = `/admin/customer/${id}`
   const historyHref = (next: { readonly appts: number; readonly pays: number }): string => {
@@ -96,45 +105,108 @@ export default async function CustomerProfilePage({
     return qs === '' ? basePath : `${basePath}?${qs}`
   }
 
-  // 👈 استفاده از any برای دور زدن ارور تایپ‌اسکریپت در فیلدهایی که توی پراپز تعریف نشدن
-  const historyRows: TreatmentHistoryRow[] = profile.appointments.map((appt: any) => {
-    const relatedInjection = injections.find(
-      (inj) => inj.sessionAt.toDateString() === appt.scheduledAt.toDateString()
-    )
-    
-    let materialText = null
-    if (relatedInjection) {
-      const parts = [
-        relatedInjection.material,
-        relatedInjection.brand,
-        relatedInjection.amount && `${relatedInjection.amount} ${relatedInjection.amountUnit || ''}`.trim(),
-        relatedInjection.batchNumber && `(بچ: ${relatedInjection.batchNumber})`
-      ].filter(Boolean)
-      materialText = parts.join(' - ')
-    }
+  // ─────────────────────────────────────────────
+  // ساخت ردیف‌های سوابق
+  // ─────────────────────────────────────────────
+  const historyRows: TreatmentHistoryRow[] = []
 
-    return {
-      id: appt.id,
-      localDate: appt.localDate,
-      localTime: appt.localTime,
-      doctorName: appt.doctorName,
-      serviceName: appt.serviceName,
-      status: appt.status,
-      note: appt.note || null, // 👈 ارور تایپ با any حل شد
-      area: relatedInjection?.area || null,
-      material: materialText,
-      depth: relatedInjection?.depth || null,
-      technique: relatedInjection?.technique || null,
-      recommendations: appt.recommendations || null, // 👈 ارور تایپ با any حل شد
-      priceAtBooking: appt.priceAtBooking,
-    }
+  // ۱. تزریق‌ها رو بر اساس appointmentId گروه‌بندی کن
+  const injectionsByAppointment = new Map<string, any[]>()
+  injections.forEach((inj: any) => {
+    if (!inj.appointmentId) return
+    const list = injectionsByAppointment.get(inj.appointmentId) ?? []
+    list.push(inj)
+    injectionsByAppointment.set(inj.appointmentId, list)
   })
 
+  // ۲. برای هر نوبت یک ردیف بساز — با همه تزریق‌های متصل بهش
+  dbAppts.forEach((appt: any) => {
+    const relatedInjections = injectionsByAppointment.get(appt.id) ?? []
+    const first = relatedInjections[0] ?? null
+    const isDoctorApproved = appt.isDoctorApproved === true
+    const finalStatus = isDoctorApproved ? 'COMPLETED' : 'PENDING'
+
+    historyRows.push({
+      id: appt.id,
+      kind: 'appointment',
+      localDate: appt.localDate || '—',
+      localTime: appt.localTime || '—',
+      doctorName: appt.doctor
+        ? `${appt.doctor.firstName} ${appt.doctor.lastName || ''}`.trim()
+        : 'نامشخص',
+      serviceName: appt.service?.name || 'ویزیت',
+      status: finalStatus,
+      note: appt.note || appt.resultNote || null,
+      recommendations: appt.recommendations || null,
+      priceAtBooking: appt.priceAtBooking || 0n,
+      area: first?.area ?? null,
+      material: first?.material ?? null,
+      amount: first?.amount ?? null,
+      amountUnit: first?.amountUnit ?? null,
+      brand: first?.brand ?? null,
+      depth: first?.depth ?? null,
+      technique: first?.technique ?? null,
+      injections: relatedInjections.map((inj: any) => ({
+        id: inj.id,
+        area: inj.area || null,
+        material: inj.material || null,
+        amount: inj.amount ?? null,
+        amountUnit: inj.amountUnit || null,
+        brand: inj.brand || null,
+        depth: inj.depth || null,
+        technique: inj.technique || null,
+        note: inj.note || null,
+      })),
+    })
+  })
+
+  // ۳. تزریق‌های بدون نوبت (standalone)
+  const knownAppointmentIds = new Set(dbAppts.map((a: any) => a.id))
+  injections.forEach((inj: any) => {
+    if (inj.appointmentId && knownAppointmentIds.has(inj.appointmentId)) return
+
+    historyRows.push({
+      id: inj.id,
+      kind: 'standalone-injection',
+      localDate: inj.localDate || '—',
+      localTime: inj.sessionAt
+        ? inj.sessionAt.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
+        : '—',
+      doctorName: 'نامشخص',
+      serviceName: 'تزریق بدون جلسه',
+      status: 'COMPLETED',
+      note: inj.note || null,
+      recommendations: null,
+      priceAtBooking: 0n,
+      area: inj.area || null,
+      material: inj.material || null,
+      amount: inj.amount ?? null,
+      amountUnit: inj.amountUnit || null,
+      brand: inj.brand || null,
+      depth: inj.depth || null,
+      technique: inj.technique || null,
+      injections: [
+        {
+          id: inj.id,
+          area: inj.area || null,
+          material: inj.material || null,
+          amount: inj.amount ?? null,
+          amountUnit: inj.amountUnit || null,
+          brand: inj.brand || null,
+          depth: inj.depth || null,
+          technique: inj.technique || null,
+          note: inj.note || null,
+        },
+      ],
+    })
+  })
+
+  historyRows.sort((a, b) => b.localDate.localeCompare(a.localDate))
+
   const installmentsData: InstallmentRow[] = ((profile as any).installments || []).map((inst: any) => {
-    const instPayments = profile.payments.filter((p: any) => p.installmentId === inst.id) // 👈 ارور تایپ با any حل شد
+    const instPayments = profile.payments.filter((p: any) => p.installmentId === inst.id)
     const paidAmount = instPayments.reduce((sum, p) => sum + p.amount, 0n)
-    
-    // 👈 چک کردن undefined برای جلوگیری از ارور paidAt
+
     const firstPayment = instPayments.length > 0 ? instPayments[0] : null
     const paidAt = firstPayment ? firstPayment.paidAt : null
     const paymentMethod = firstPayment ? firstPayment.method : null
@@ -211,6 +283,12 @@ export default async function CustomerProfilePage({
             customerId={profile.id}
             view={injectionView}
             basePath={`${basePath}?tab=injections`}
+            appointments={dbAppts.map((a: any) => ({
+              id: a.id,
+              localDate: a.localDate,
+              localTime: a.localTime,
+              serviceName: a.service?.name ?? null,
+            }))}
           />
         </div>
       )}
@@ -221,8 +299,8 @@ export default async function CustomerProfilePage({
             customerName={name}
             customerAge={customerAge}
             customerPhone={profile.mobile}
-            visitsCount={profile.completedSessions}
-            pendingCount={profile.appointments.filter((a: any) => a.status === 'PENDING').length}
+            visitsCount={dbAppts.length}
+            pendingCount={historyRows.filter((r) => r.status === 'PENDING').length}
             lastVisitDate={profile.lastVisitAt ? dateToLocalDate(profile.lastVisitAt) : null}
             historyRows={historyRows}
           />
@@ -249,7 +327,7 @@ export default async function CustomerProfilePage({
           <div className="grid w-full grid-cols-2 gap-2.5 sm:gap-3 panel:grid-cols-4">
             <KpiTile
               label={ADMIN_CUSTOMER_PROFILE.kpi.visits}
-              value={toPersianDigits(profile.completedSessions)}
+              value={toPersianDigits(dbAppts.length)}
               icon="appointment"
               tone="bg-info-bg text-info"
             />
@@ -282,10 +360,19 @@ export default async function CustomerProfilePage({
 
               <CollapsibleCard
                 title={ADMIN_CUSTOMER_PROFILE.cards.visits}
-                note={`${toPersianDigits(profile.appointments.length)} ${ADMIN_CUSTOMER_PROFILE.recentSuffix}`}
+                note={`${toPersianDigits(dbAppts.length)} ${ADMIN_CUSTOMER_PROFILE.recentSuffix}`}
               >
                 <AppointmentHistory
-                  rows={appts.slice}
+                  rows={appts.slice.map((a: any) => ({
+                    id: a.id,
+                    scheduledAt: a.scheduledAt,
+                    localDate: a.localDate,
+                    localTime: a.localTime,
+                    status: a.status,
+                    priceAtBooking: a.priceAtBooking,
+                    serviceName: a.service?.name ?? null,
+                    doctorName: a.doctor ? `${a.doctor.firstName} ${a.doctor.lastName || ''}`.trim() : null,
+                  }))}
                   page={apptsPage}
                   totalPages={appts.totalPages}
                   hrefFor={(next) => historyHref({ appts: next, pays: paysPage })}
@@ -436,18 +523,7 @@ async function loadProfile(
   }
 }
 
-// KpiTile
-function KpiTile({
-  label,
-  value,
-  icon,
-  tone,
-}: {
-  readonly label: string
-  readonly value: string
-  readonly icon: IconName
-  readonly tone: string
-}) {
+function KpiTile({ label, value, icon, tone }: { readonly label: string; readonly value: string; readonly icon: IconName; readonly tone: string }) {
   return (
     <div className="flex w-full min-w-0 items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-2 sm:gap-3 sm:px-3 sm:py-2.5">
       <span className={cx('grid size-8 shrink-0 place-items-center rounded-md sm:size-9', tone)}>
@@ -455,19 +531,13 @@ function KpiTile({
       </span>
       <span className="flex min-w-0 flex-1 flex-col justify-center">
         <span className="truncate text-[10px] text-ink-3 sm:text-xs">{label}</span>
-        <span className="mt-0.5 truncate text-xs font-bold tabular-nums text-ink sm:text-sm md:text-base">
-          {value}
-        </span>
+        <span className="mt-0.5 truncate text-xs font-bold tabular-nums text-ink sm:text-sm md:text-base">{value}</span>
       </span>
     </div>
   )
 }
 
-function NotesList({
-  notes,
-}: {
-  readonly notes: readonly { id: string; text: string; createdAt: Date; authorName: string | null }[]
-}) {
+function NotesList({ notes }: { readonly notes: readonly { id: string; text: string; createdAt: Date; authorName: string | null }[] }) {
   if (notes.length === 0) {
     return (
       <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">
@@ -577,26 +647,7 @@ function CycleStatusBadge({ status }: { readonly status: string }) {
   )
 }
 
-function AppointmentHistory({
-  rows,
-  page,
-  totalPages,
-  hrefFor,
-}: {
-  readonly page: number
-  readonly totalPages: number
-  readonly hrefFor: (page: number) => string
-  readonly rows: ReadonlyArray<{
-    readonly id: string
-    readonly scheduledAt: Date
-    readonly localDate: string
-    readonly localTime: string
-    readonly status: string
-    readonly priceAtBooking: bigint
-    readonly serviceName: string | null
-    readonly doctorName: string | null
-  }>
-}) {
+function AppointmentHistory({ rows, page, totalPages, hrefFor }: { readonly page: number; readonly totalPages: number; readonly hrefFor: (page: number) => string; readonly rows: ReadonlyArray<{ readonly id: string; readonly scheduledAt: Date; readonly localDate: string; readonly localTime: string; readonly status: string; readonly priceAtBooking: bigint; readonly serviceName: string | null; readonly doctorName: string | null }> }) {
   if (rows.length === 0) {
     return <EmptyState sentence={CUSTOMER_PROFILE_PAGE.empty.appointments} />
   }
@@ -636,23 +687,7 @@ function AppointmentHistory({
   )
 }
 
-function PaymentHistory({
-  rows,
-  page,
-  totalPages,
-  hrefFor,
-}: {
-  readonly page: number
-  readonly totalPages: number
-  readonly hrefFor: (page: number) => string
-  readonly rows: ReadonlyArray<{
-    readonly id: string
-    readonly amount: bigint
-    readonly paidAt: Date | null
-    readonly method: string
-    readonly kind: string
-  }>
-}) {
+function PaymentHistory({ rows, page, totalPages, hrefFor }: { readonly page: number; readonly totalPages: number; readonly hrefFor: (page: number) => string; readonly rows: ReadonlyArray<{ readonly id: string; readonly amount: bigint; readonly paidAt: Date | null; readonly method: string; readonly kind: string }> }) {
   if (rows.length === 0) {
     return <EmptyState sentence={ADMIN_CUSTOMER_PROFILE.empty.payments} />
   }
@@ -707,21 +742,7 @@ function statusBadge(status: string): React.ReactNode {
   )
 }
 
-function DetailsDl({
-  profile,
-  doctorName,
-}: {
-  readonly profile: {
-    readonly mobile: string
-    readonly birthDate: string | null
-    readonly firstVisitAt: Date | null
-    readonly acquisitionSource: string | null
-    readonly residenceArea: string | null
-    readonly medicalHistory: string | null
-    readonly sensitivities: string | null
-  }
-  readonly doctorName: string | null
-}) {
+function DetailsDl({ profile, doctorName }: { readonly profile: { readonly mobile: string; readonly birthDate: string | null; readonly firstVisitAt: Date | null; readonly acquisitionSource: string | null; readonly residenceArea: string | null; readonly medicalHistory: string | null; readonly sensitivities: string | null }; readonly doctorName: string | null }) {
   return (
     <dl className="grid grid-cols-1 gap-x-6 gap-y-3">
       <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.mobile} value={formatPhone(profile.mobile)} ltr />
@@ -743,39 +764,18 @@ function DetailsDl({
   )
 }
 
-function Detail({
-  label,
-  value,
-  span,
-  ltr,
-}: {
-  readonly label: string
-  readonly value: string | null
-  readonly span?: boolean
-  readonly ltr?: boolean
-}) {
+function Detail({ label, value, span, ltr }: { readonly label: string; readonly value: string | null; readonly span?: boolean; readonly ltr?: boolean }) {
   return (
     <div className={span ? 'col-span-1' : undefined}>
       <dt className="text-xs text-ink-3">{label}</dt>
-      <dd
-        className={cx('mt-1 text-sm font-semibold text-ink', ltr && 'tabular-nums')}
-        dir={ltr ? 'ltr' : undefined}
-      >
+      <dd className={cx('mt-1 text-sm font-semibold text-ink', ltr && 'tabular-nums')} dir={ltr ? 'ltr' : undefined}>
         {value ?? '—'}
       </dd>
     </div>
   )
 }
 
-function MessageList({
-  rows,
-}: {
-  readonly rows: ReadonlyArray<{
-    readonly id: string
-    readonly renderedText: string
-    readonly createdAt: Date
-  }>
-}) {
+function MessageList({ rows }: { readonly rows: ReadonlyArray<{ readonly id: string; readonly renderedText: string; readonly createdAt: Date }> }) {
   if (rows.length === 0) {
     return <EmptyState sentence={ADMIN_CUSTOMER_PROFILE.empty.messages} />
   }
@@ -817,13 +817,7 @@ function EmptyState({ sentence }: { readonly sentence: string }) {
   )
 }
 
-function Th({
-  children,
-  align = 'start',
-}: {
-  readonly children: React.ReactNode
-  readonly align?: 'start' | 'center' | 'end'
-}) {
+function Th({ children, align = 'start' }: { readonly children: React.ReactNode; readonly align?: 'start' | 'center' | 'end' }) {
   return (
     <th
       scope="col"
