@@ -28,11 +28,19 @@ export default async function DoctorInstallmentsPage({
 
   const today = realClock()
   const todayTime = today.getTime()
-  const myId = session.permissions.userId
+  
+  // 👈 به جای چک کردن آیدی، از نام دکتر استفاده می‌کنیم (چون id توی تایپ نیست)
+  const doctorName = await runInTenantScope(session.permissions, prisma(), async (tx) => {
+    const user = await tx.user.findUnique({ where: { id: session.permissions.userId } })
+    return user ? `${user.firstName} ${user.lastName}` : ''
+  })
 
   const rows = allRows.filter((row) => {
     // 👈 فیلتر کردن اقساطی که مال این دکتره
-    if (row.appointment.doctor?.id !== myId) return false
+    const rowDoctorName = row.appointment.doctor 
+      ? `${row.appointment.doctor.firstName} ${row.appointment.doctor.lastName}` 
+      : ''
+    if (rowDoctorName !== doctorName) return false
 
     const totalPlan = row.totalPlanAmount ?? row.amount
     if (row.paidAmount >= totalPlan) return false
@@ -64,7 +72,6 @@ export default async function DoctorInstallmentsPage({
     return true
   })
 
-  // 👈 محاسبه کارت‌های بالای صفحه
   const totalAmount = rows.reduce((sum, r) => sum + (r.amount - r.paidAmount), 0n)
   const todayCount = rows.filter(r => Math.ceil((new Date(r.dueAt).getTime() - todayTime) / (1000 * 3600 * 24)) === 0).length
   const tomorrowCount = rows.filter(r => Math.ceil((new Date(r.dueAt).getTime() - todayTime) / (1000 * 3600 * 24)) === 1).length
@@ -81,7 +88,6 @@ export default async function DoctorInstallmentsPage({
         <span>{ADMIN_INSTALLMENTS.alert}</span>
       </div>
 
-      {/* 👈 کارت‌های KPI */}
       <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
         <div className="flex flex-row-reverse items-center justify-between rounded-xl border border-line bg-surface px-4 py-4">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-info-bg text-info">
@@ -121,7 +127,6 @@ export default async function DoctorInstallmentsPage({
         </div>
       </div>
 
-      {/* 👈 فرم فیلترها */}
       <form action="/doctor/installments" method="GET" className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
         <div className="grid grid-cols-1 gap-4 panel:grid-cols-3">
            <div className="relative">
@@ -142,7 +147,6 @@ export default async function DoctorInstallmentsPage({
            </select>
         </div>
 
-        {/* 👈 دکمه‌های تب‌های تاریخ (سررسید) */}
         <div className="flex flex-wrap gap-2">
            <button type="submit" name="bucket" value="" className={`rounded-full px-5 py-2 text-sm font-semibold ${bucket === '' ? 'bg-brand text-ink-inverse' : 'border border-line-2 bg-surface text-ink-2'}`}>{ADMIN_INSTALLMENTS.filterAll}</button>
            <button type="submit" name="bucket" value="today" className={`rounded-full px-5 py-2 text-sm font-semibold ${bucket === 'today' ? 'bg-brand text-ink-inverse' : 'border border-line-2 bg-surface text-ink-2'}`}>{ADMIN_INSTALLMENTS.filterToday}</button>
@@ -162,7 +166,6 @@ export default async function DoctorInstallmentsPage({
         </div>
       </form>
 
-      {/* 👈 جدول اقساط */}
       <DoctorInstallmentsClient rows={rows} />
     </div>
   )

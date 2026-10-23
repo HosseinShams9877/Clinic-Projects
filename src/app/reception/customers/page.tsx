@@ -104,7 +104,8 @@ export default async function ReceptionCustomersPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ExportButton rows={rows} dateStamp={realClock().toISOString().slice(0, 10)} />
+          {/* 👈 اضافه کردن پراپ doctorNames */}
+          <ExportButton rows={rows} doctorNames={data.list.doctorNames} dateStamp={realClock().toISOString().slice(0, 10)} />
           <AddCustomerDialog />
         </div>
       </div>
@@ -125,7 +126,7 @@ export default async function ReceptionCustomersPage({
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <caption className="sr-only">{CUSTOMERS_PAGE.reception.title}</caption>
-                           <thead>
+              <thead>
                 <tr className="border-b border-line-2 bg-surface-2 text-ink-3">
                   <Th>{ADMIN_CUSTOMERS.columns.name}</Th>
                   <Th>{ADMIN_CUSTOMERS.columns.birthday}</Th>

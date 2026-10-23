@@ -277,7 +277,7 @@ export default async function ReceptionCustomerDetailPage({
           <InjectionTab
             rows={injections}
             counts={injectionCounts}
-            panel="reception" // 👈 پنل منشی
+            panel="reception"
             customerId={profile.id}
             view={injectionView}
             basePath={`${basePath}?tab=injections`}
@@ -327,7 +327,7 @@ export default async function ReceptionCustomerDetailPage({
         <div className="w-full min-w-0">
           <InternalNotesTab
             customerId={profile.id}
-            panel="reception" // 👈 پنل منشی
+            panel="reception"
             notes={internalNotes.map((n: any) => {
               const role = n.author.memberships[0]?.role;
               let roleLabel = 'کادر درمان';
@@ -397,14 +397,17 @@ export default async function ReceptionCustomerDetailPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {appts.slice.map((row) => (
+                    {appts.slice.map((row: any) => (
                       <tr key={row.id} className="border-b border-line last:border-b-0">
                         <td className="px-4 py-3 text-ink-2 tabular-nums">
                           {formatDate(asLocalDate(row.localDate), 'short')}{' '}
                           {formatTime(asLocalTime(row.localTime))}
                         </td>
-                        <td className="px-4 py-3 text-ink-2">{row.serviceName ?? '—'}</td>
-                        <td className="px-4 py-3 text-ink-2">{row.doctorName ?? '—'}</td>
+                        {/* 👈 اصلاح شد */}
+                        <td className="px-4 py-3 text-ink-2">{row.service?.name ?? '—'}</td>
+                        <td className="px-4 py-3 text-ink-2">
+                          {row.doctor ? `${row.doctor.firstName} ${row.doctor.lastName ?? ''}`.trim() : '—'}
+                        </td>
                         <td className="px-4 py-3 text-ink-2">
                           {APPOINTMENT_STATUS_LABELS[
                             row.status as keyof typeof APPOINTMENT_STATUS_LABELS
