@@ -79,15 +79,18 @@ export function DebtRowView({ row, today, serviceName, doctorName }: DebtRowView
           {formatMoney(row.balance)}
         </td>
         <td className="px-4 py-3 text-start align-middle">
-          <div className="flex flex-col gap-1">
-            {/* 👈 نمایش تعداد قسط پرداخت‌شده */}
-            <span className="font-semibold text-ink-2 whitespace-nowrap">
-              قسط {toPersianDigits(row.paidInstallments + 1)} از {toPersianDigits(row.totalInstallments)}
-            </span>
-            <span className="text-xs text-ink-3">
-              {toPersianDigits(row.paidInstallments)} از {toPersianDigits(row.totalInstallments)} پرداخت شده
-            </span>
-          </div>
+          {row.totalInstallments > 0 ? (
+            <div className="flex flex-col gap-1">
+              <span className="font-semibold text-ink-2 whitespace-nowrap">
+                قسط {toPersianDigits(row.paidInstallments + 1)} از {toPersianDigits(row.totalInstallments)}
+              </span>
+              <span className="text-xs text-ink-3">
+                {toPersianDigits(row.paidInstallments)} از {toPersianDigits(row.totalInstallments)} پرداخت شده
+              </span>
+            </div>
+          ) : (
+            <span className="text-xs text-ink-3">—</span>
+          )}
         </td>
         <td className="px-4 py-3 text-start align-middle">
           {row.lastFollowUp === null ? (
@@ -107,9 +110,13 @@ export function DebtRowView({ row, today, serviceName, doctorName }: DebtRowView
           )}
         </td>
         <td className="px-4 py-3 text-start align-middle">
-          <span className="inline-flex rounded-pill bg-warn-bg px-3 py-1 text-xs font-semibold text-warn">
-            {ADMIN_DEBTS.dueToday}
-          </span>
+          {row.nextContactAt === null ? (
+            <span className="text-xs text-ink-3">—</span>
+          ) : (
+            <span className="inline-flex rounded-pill bg-warn-bg px-3 py-1 text-xs font-semibold text-warn tabular-nums">
+              {formatDate(dateToLocalDate(row.nextContactAt), 'short')}
+            </span>
+          )}
         </td>
         <td className="px-4 py-3 text-start align-middle">
           <div className="flex flex-row items-center gap-2 flex-nowrap">
@@ -137,6 +144,7 @@ export function DebtRowView({ row, today, serviceName, doctorName }: DebtRowView
           appointmentId={row.appointmentId}
           customerName={name}
           amountDue={row.balance}
+          installmentId={row.installmentId} // 👈 اضافه شد
           onSuccess={() => setIsPaymentOpen(false)}
         />
       )}

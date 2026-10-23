@@ -17,6 +17,9 @@ import { BucketChips } from './_components/BucketChips'
 import { asString, bucketCounts, allDebtRows, bucketFromParam, matchesQuery } from './_components/helpers'
 import { DebtRowView, Th } from './_components/DebtRowView'
 
+// 👈 این خط باعث میشه صفحه با هر پرداخت آپدیت بشه
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = { title: 'بدهکاری‌ها' }
 
 const DEBT_COLUMNS = [
@@ -26,10 +29,10 @@ const DEBT_COLUMNS = [
   { key: 'due', width: 'w-[10%]', align: 'start' },
   { key: 'status', width: 'w-[10%]', align: 'start' },
   { key: 'balance', width: 'w-[11%]', align: 'start' },
-  { key: 'stage', width: 'w-[11%]', align: 'start' }, // 👈 فضای بیشتری برای "قسط X از Y" دادیم
+  { key: 'stage', width: 'w-[11%]', align: 'start' },
   { key: 'followUp', width: 'w-[10%]', align: 'start' },
   { key: 'nextFollowUp', width: 'w-[8%]', align: 'start' },
-  { key: 'action', width: 'w-[16%]', align: 'start' }, // 👈 به عملیات ۱۶٪ دادیم تا بیرون نزنه
+  { key: 'action', width: 'w-[16%]', align: 'start' },
 ] as const
 
 export default async function AdminDebtsPage({ searchParams }: { searchParams: any }) {
@@ -73,7 +76,6 @@ export default async function AdminDebtsPage({ searchParams }: { searchParams: a
   const page = pageFromParam(params.page)
   const { slice, totalPages } = paginate(visible, page)
   
-  // 👈 درست کردن اسم کلیدها
   const over30Count = data.buckets.overdue30?.length ?? 0
   const between1and7Count = data.buckets.overdue7?.length ?? 0
 

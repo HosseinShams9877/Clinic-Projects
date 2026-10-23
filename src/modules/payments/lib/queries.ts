@@ -2,7 +2,7 @@ import type { TransactionClient } from '@/core/db/scope'
 import type { BalanceSummary, PaymentRow } from '../types'
 import { customerBalance } from './balance'
 
-const LIST_LIMIT = 200
+const LIST_LIMIT = 10000
 
 const PAYMENT_SELECT = {
   id: true,

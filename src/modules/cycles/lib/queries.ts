@@ -61,7 +61,7 @@ import { refreshContactListForCycle } from './contact-list'
 import { readUtcOffsetMinutes } from './settings'
 
 /** The most a page reads in one go; a list is scrolled, not paged. */
-const LIST_LIMIT = 200
+const LIST_LIMIT = 10000
 
 /** The three open statuses, as the read's own filter array. */
 const OPEN_STATUSES: string[] = [

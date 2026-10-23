@@ -12,7 +12,7 @@ import type { DebtBuckets, DebtRow, LastFollowUp } from '../types'
 import { bucketOf, daysOverdueOf, effectiveDueInstant } from './buckets'
 import { readDebtSettings } from './settings'
 
-const LIST_LIMIT = 200
+const LIST_LIMIT = 10000
 
 const LIVE_STATUSES: string[] = [
   AppointmentStatus.Booked,
@@ -39,9 +39,15 @@ const APPOINTMENT_SELECT = {
   doctor: { select: { firstName: true, lastName: true } },
   service: { select: { name: true } },
   installments: {
+    orderBy: { sequence: 'desc' }, // 👈 مهم: جدیدترین قسط اول بیاد
     select: {
+      id: true,
       sequence: true,
       amount: true,
+      paidAmount: true,
+      totalPlanAmount: true,
+      totalPlanCount: true,
+      type: true,
       note: true,
       dueAt: true,
     }
@@ -72,8 +78,13 @@ type AppointmentRow = {
   }
   readonly service: { readonly name: string } | null
   readonly installments: readonly {
+    readonly id: string
     readonly sequence: number
     readonly amount: bigint
+    readonly paidAmount: bigint
+    readonly totalPlanAmount: bigint | null
+    readonly totalPlanCount: number | null
+    readonly type: string
     readonly note: string | null
     readonly dueAt: Date
   }[]
@@ -82,10 +93,6 @@ type AppointmentRow = {
 type PaymentSums = {
   readonly appointmentId: string
   readonly _sum: { readonly amount: bigint | null; readonly discountAmount: bigint | null }
-}
-
-function asBalance(charged: bigint, discount: bigint, paid: bigint) {
-  return Object.freeze({ charged, discount, paid, balance: charged - discount - paid })
 }
 
 async function tenantDebts(
@@ -99,7 +106,7 @@ async function tenantDebts(
   const appointments = (await tx.appointment.findMany({
     where: { tenantId, status: { in: LIVE_STATUSES }, ...scope },
     select: APPOINTMENT_SELECT,
-    orderBy: { scheduledAt: 'asc' },
+    orderBy: { scheduledAt: 'desc' },
     take: LIST_LIMIT,
   })) as readonly AppointmentRow[]
 
@@ -122,46 +129,55 @@ async function tenantDebts(
 
     const sumsForRow = byAppointment.get(row.id)
     
-    let charged = row.priceAtBooking
-    let paid = sumsForRow?._sum.amount ?? 0n
-    let discount = sumsForRow?._sum.discountAmount ?? 0n
+    const charged = row.priceAtBooking
+    const paid = sumsForRow?._sum.amount ?? 0n
+    const discount = sumsForRow?._sum.discountAmount ?? 0n
+    
+    // 👈 پیدا کردن جدیدترین قسط (چون قبلاً desc کردیم، ایندکس 0 همیشه آخرین قسطه)
+    const latestInstallment = row.installments[0]
+
+    let balance = 0n
     let totalInstallments = 0
     let paidInstallments = 0
-    let currentDueAt = row.scheduledAt
     let installmentSequence = 0
     let installmentAmount = 0n
+    let installmentId: string | null = null
 
-    if (row.installments && row.installments.length > 0) {
-      const inst = row.installments[0]
+    if (latestInstallment) {
+      const totalPlan = latestInstallment.totalPlanAmount ?? latestInstallment.amount
+      // 👈 بدهی قسطی بر اساس آخرین رکورد محاسبه میشه
+      balance = totalPlan - latestInstallment.paidAmount
       
-      if (inst) {
-        const parts = inst.note?.split(':') || []
-        totalInstallments = Number(parts[1] || 1)
-        const totalAmount = BigInt(parts[3] || row.priceAtBooking)
-        
-        charged = totalAmount
-        paid = sumsForRow?._sum.amount ?? 0n
-        paidInstallments = inst.sequence - 1
-        
-        currentDueAt = inst.dueAt
-        installmentSequence = inst.sequence
-        installmentAmount = inst.amount
-      }
+      totalInstallments = latestInstallment.totalPlanCount ?? 1
+      paidInstallments = Math.min(
+        totalInstallments,
+        Number(latestInstallment.paidAmount / (latestInstallment.amount > 0n ? latestInstallment.amount : 1n))
+      )
+      installmentSequence = latestInstallment.sequence
+      installmentAmount = latestInstallment.amount
+      installmentId = latestInstallment.id
+    } else {
+      // اگه اصلا قسطی نبود
+      balance = charged - discount - paid
     }
 
-    const balance = asBalance(charged, discount, paid)
-    if (balance.balance <= 0n) continue
+    // 👈 فقط بدهی‌های مثبت نمایش داده میشن
+    if (balance <= 0n) continue
 
-    const dueAt = effectiveDueInstant({
-      scheduledAt: currentDueAt,
+    // ۴. محاسبه تاریخ سررسید
+    let dueAt = row.scheduledAt
+    if (latestInstallment) {
+      dueAt = latestInstallment.dueAt
+    }
+
+    const effectiveDue = effectiveDueInstant({
+      scheduledAt: dueAt,
       override: row.debtDueDateOverride,
       graceDays: settings.debtGraceDays,
     })
 
-    const lastFollowUp: LastFollowUp | null =
-      row.debtFollowUpAt === null ? null : { at: row.debtFollowUpAt, note: row.debtFollowUpNote }
-
-    buckets[bucketKey(bucketOf(now, dueAt))].push({
+    // ۶. اضافه کردن به bucket
+    buckets[bucketKey(bucketOf(now, effectiveDue))].push({
       appointmentId: row.id,
       customerId: row.customerId,
       customerFirstName: row.customer.firstName,
@@ -171,20 +187,21 @@ async function tenantDebts(
       doctorName: doctorName(row.doctor.firstName, row.doctor.lastName),
       serviceId: row.serviceId,
       serviceName: row.service?.name ?? null,
-      charged: balance.charged,
-      discount: balance.discount,
-      paid: balance.paid,
-      balance: balance.balance,
-      dueLocalDate: dueLocalDate(dueAt, settings.utcOffsetMinutes),
-      lastFollowUp,
+      charged,
+      discount,
+      paid,
+      balance,
+      dueLocalDate: dueLocalDate(effectiveDue, settings.utcOffsetMinutes),
+      lastFollowUp: row.debtFollowUpAt === null ? null : { at: row.debtFollowUpAt, note: row.debtFollowUpNote },
       nextContactAt: row.debtNextContactAt,
       dueDateOverride: row.debtDueDateOverride,
-      bucket: bucketOf(now, dueAt),
-      daysOverdue: daysOverdueOf(now, dueAt),
-      totalInstallments: Math.max(1, totalInstallments),
+      bucket: bucketOf(now, effectiveDue),
+      daysOverdue: daysOverdueOf(now, effectiveDue),
+      totalInstallments,
       paidInstallments,
       installmentSequence,
       installmentAmount,
+      installmentId,
     })
   }
 

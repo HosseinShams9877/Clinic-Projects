@@ -35,12 +35,14 @@ function formatNumberWithCommas(value: string) {
 
 export function PaymentDialog({ 
   isOpen, onClose, customerId, appointmentId, customerName, amountDue, onSuccess, panel = 'admin',
-  mode = 'payment'
+  mode = 'payment',
+  installmentId // 👈 پراپ جدید
 }: { 
   isOpen: boolean, onClose: () => void, customerId: string, appointmentId: string,
   customerName: string, amountDue: bigint | string, onSuccess: () => void,
   panel?: 'admin' | 'reception' | 'doctor',
-  mode?: 'payment' | 'edit'
+  mode?: 'payment' | 'edit',
+  installmentId?: string | null // 👈 تایپ جدید
 }) {
   const router = useRouter()
   const isClient = useIsClient()
@@ -112,6 +114,7 @@ export function PaymentDialog({
             discountAmount: submitDiscount,
             discountReason: discountReason || null,
             forceInstallment: true,
+            installmentId: installmentId ?? undefined, // 👈 اضافه شد
           }
         )
         if (res.ok) {
@@ -135,6 +138,7 @@ export function PaymentDialog({
               discountAmount: submitDiscount,
               discountReason: discountReason || null,
               forceInstallment: true,
+              installmentId: installmentId ?? undefined, // 👈 اضافه شد
             }
           )
           if (res.ok) {
@@ -154,6 +158,7 @@ export function PaymentDialog({
               discountAmount: submitDiscount,
               discountReason: discountReason || null,
               note: null,
+              installmentId: installmentId ?? undefined, // 👈 اضافه شد
             }
           )
           if (res.ok) {
@@ -250,7 +255,6 @@ export function PaymentDialog({
               </div>
            </div>
 
-           {/* 👈 انتخاب روش پرداخت: در حالت ویرایش فقط قسط و چک */}
            <div className="flex flex-col gap-3">
              <label className="text-sm font-semibold text-ink-2">{ADMIN_DEBTS.paymentDialog.methodLabel}</label>
              

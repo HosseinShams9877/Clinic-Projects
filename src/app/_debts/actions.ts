@@ -25,6 +25,7 @@ export interface RecordPaymentInput {
   readonly discountAmount: string
   readonly discountReason: string | null
   readonly note: string | null
+  readonly installmentId?: string | null
 }
 
 export interface FollowUpInput {
@@ -71,6 +72,30 @@ function revalidateDebts(): void {
   revalidatePath('/reception/installments')
 }
 
+/**
+ * 👈 آپدیت paidAmount فقط روی اقساط باز. به رکوردهای تسویه‌شده دست نمی‌زنه.
+ */
+async function syncInstallmentPaidAmount(
+  tx: ScopeArgs['tx'],
+  installments: readonly { id: string; paidAmount: bigint; totalPlanAmount: bigint | null; amount: bigint }[],
+  totalPlanAmount: bigint,
+  newPaidTotal: bigint,
+) {
+  let capped = newPaidTotal
+  if (capped > totalPlanAmount) capped = totalPlanAmount
+
+  for (const inst of installments) {
+    const instTotal = inst.totalPlanAmount ?? inst.amount
+    if (inst.paidAmount < instTotal) {
+      await tx.installment.update({
+        where: { id: inst.id },
+        data: { paidAmount: capped },
+      })
+    }
+  }
+  return capped
+}
+
 export async function recordPaymentAction(
   panel: Panel,
   appointmentId: string,
@@ -87,14 +112,42 @@ export async function recordPaymentAction(
 
   const result = await inTenantScope(panel, async ({ tx, ctx, tenantId }) => {
     const now = realClock()
-    
+
     const appointment = await tx.appointment.findUnique({
       where: { id: appointmentId, tenantId },
-      select: { customerId: true }
+      select: { customerId: true, priceAtBooking: true },
     })
 
     if (!appointment || !appointment.customerId) {
       throw new Error('Appointment or customer not found')
+    }
+
+    let openInstallment = null
+    if (input.installmentId) {
+      openInstallment = await tx.installment.findUnique({
+        where: { id: input.installmentId, tenantId }
+      })
+    } else {
+      openInstallment = await tx.installment.findFirst({
+        where: { appointmentId, tenantId, paidAmount: { lt: 999999999999n } },
+        orderBy: { sequence: 'desc' }
+      })
+    }
+
+    const totalPaidBefore = await tx.payment.aggregate({
+      where: { tenantId, appointmentId },
+      _sum: { amount: true },
+    })
+    const paidSoFar = totalPaidBefore._sum.amount ?? 0n
+
+    const totalPlan = openInstallment ? (openInstallment.totalPlanAmount ?? openInstallment.amount) : 0n
+    const ceiling = openInstallment ? totalPlan : appointment.priceAtBooking
+
+    if (amountBigInt + discountBigInt > ceiling - paidSoFar) {
+      return {
+        ok: false as const,
+        message: 'مبلغ پرداختی نمی‌تواند بیشتر از باقی‌مانده بدهی باشد.',
+      }
     }
 
     if (amountBigInt > 0n || discountBigInt > 0n) {
@@ -111,8 +164,24 @@ export async function recordPaymentAction(
           discountReason: input.discountReason,
           note: input.note,
           paidAt: now,
-        }
+          installmentId: openInstallment?.id ?? null,
+        },
       })
+    }
+
+    if (openInstallment && amountBigInt > 0n) {
+      const openInstallments = await tx.installment.findMany({
+        where: { appointmentId, tenantId }
+      })
+      
+      const onlyOpen = openInstallments.filter(i => i.paidAmount < (i.totalPlanAmount ?? i.amount))
+
+      await syncInstallmentPaidAmount(
+        tx,
+        onlyOpen,
+        totalPlan,
+        openInstallment.paidAmount + amountBigInt,
+      )
     }
 
     await tx.appointment.update({
@@ -121,7 +190,7 @@ export async function recordPaymentAction(
         resultNote: input.note || null,
         resultRecordedAt: now,
         status: 'COMPLETED',
-      }
+      },
     })
 
     return SUCCESS
@@ -146,6 +215,7 @@ export async function recordPaymentWithInstallmentsAction(
     discountReason?: string | null 
     forceInstallment?: boolean 
     note?: string | null
+    installmentId?: string | null
   }
 ): Promise<ActionResult> {
   let dbMethod = input.method
@@ -173,64 +243,94 @@ export async function recordPaymentWithInstallmentsAction(
     const effectiveAmount = amountBigInt > 0n ? amountBigInt : appointment.priceAtBooking
     const payableAmount = effectiveAmount - discountBigInt
 
+    const totalPaidBefore = await tx.payment.aggregate({
+      where: { tenantId, appointmentId },
+      _sum: { amount: true },
+    })
+    const paidSoFar = totalPaidBefore._sum.amount ?? 0n
+    
+    let currentInstallment = null
+    if (input.installmentId) {
+      currentInstallment = await tx.installment.findUnique({
+        where: { id: input.installmentId, tenantId }
+      })
+    } else {
+      currentInstallment = await tx.installment.findFirst({
+        where: { appointmentId, tenantId },
+        orderBy: { sequence: 'desc' }
+      })
+    }
+
+    const totalDebt = currentInstallment 
+      ? (currentInstallment.totalPlanAmount ?? currentInstallment.amount) 
+      : appointment.priceAtBooking
+
     const intervalMonths = input.installmentInterval 
       ? Number(input.installmentInterval.replace('_MONTH', '')) 
       : 1
 
-    if ((input.method === 'INSTALLMENT' || input.method === 'CHEQUE' || input.forceInstallment) && input.installmentCount > 0) {
+    const isInstallmentMode = input.method === 'INSTALLMENT' || input.method === 'CHEQUE' || input.forceInstallment
+    
+    // 👈 چک سقف فقط برای پرداخت‌های نقدی باشه، نه برای قسطی کردن مجدد
+    if (!isInstallmentMode && amountBigInt + discountBigInt > totalDebt - paidSoFar) {
+      return {
+        ok: false as const,
+        message: 'مبلغ پرداختی نمی‌تواند بیشتر از باقی‌مانده بدهی باشد.',
+      }
+    }
+
+    if (isInstallmentMode && input.installmentCount > 0) {
       
-      // ۱. گرفتن رکورد بدهی فعلی (فقط یکی وجود داره)
-      const existingInstallment = await tx.installment.findFirst({
+      const allInstallments = await tx.installment.findMany({
         where: { appointmentId, tenantId },
+        orderBy: { sequence: 'desc' },
       })
 
-      // ۲. محاسبه کل مبلغ بدهی
       let totalPlanAmountFromExisting = payableAmount
-      if (existingInstallment) {
-        totalPlanAmountFromExisting = existingInstallment.totalPlanAmount || existingInstallment.amount
+      if (currentInstallment) {
+        totalPlanAmountFromExisting = currentInstallment.totalPlanAmount || currentInstallment.amount
       }
 
-      // ۳. محاسبه کل پرداختی تا الان
       let totalPaidSoFar = 0n
-      if (existingInstallment) {
-        totalPaidSoFar = existingInstallment.paidAmount
+      if (currentInstallment) {
+        totalPaidSoFar = currentInstallment.paidAmount
       }
 
-      // ۴. باقی‌مانده‌ای که باید قسطی بشه
       const remainingAmount = totalPlanAmountFromExisting - totalPaidSoFar
 
       if (remainingAmount <= 0n) {
         return { ok: false, message: 'بدهی به طور کامل پرداخت شده است.' }
       }
 
-      // 👈 ۵. بستن بدهی قبلی: totalPlanAmount = paidAmount
-      if (existingInstallment) {
+      // 👈 ۵. بستن همه‌ی اقساط قبلی (تسویه کامل)
+      for (const inst of allInstallments) {
         await tx.installment.update({
-          where: { id: existingInstallment.id },
+          where: { id: inst.id },
           data: { 
-            totalPlanAmount: totalPaidSoFar, 
-            totalPlanCount: existingInstallment.totalPlanCount || 1,
+            totalPlanAmount: inst.paidAmount, 
+            paidAmount: inst.paidAmount,      
+            totalPlanCount: inst.totalPlanCount || 1,
           }
         })
       }
 
-      // 👈 ۶. پیدا کردن بزرگترین sequence فعلی
-      const maxSequence = existingInstallment ? existingInstallment.sequence : 0
+      const maxSequence = allInstallments.length > 0 
+        ? Math.max(...allInstallments.map(i => i.sequence))
+        : 0
 
-      // 👈 ۷. ساخت بدهی جدید (فقط یک رکورد)
       const baseDate = toUtcInstant(asLocalDate(input.firstDueDate || '1405-01-01'), MIDNIGHT, settings.utcOffsetMinutes)
       const newPerInstallmentAmount = remainingAmount / BigInt(input.installmentCount)
 
-      await tx.installment.create({
+      const newInstallment = await tx.installment.create({
         data: {
           tenantId,
           appointmentId,
           sequence: maxSequence + 1,
-          amount: newPerInstallmentAmount, // مبلغ هر قسط
+          amount: newPerInstallmentAmount,
           paidAmount: 0n,
           dueAt: baseDate,
-          totalPlanAmount: remainingAmount, // کل بدهی جدید
-          totalPlanCount: input.installmentCount, // تعداد اقساط
+          totalPlanAmount: remainingAmount,
+          totalPlanCount: input.installmentCount,
           intervalMonths,
           type: input.method === 'CHEQUE' ? 'CHEQUE' : 'INSTALLMENT',
           note: input.note || null,
@@ -251,6 +351,7 @@ export async function recordPaymentWithInstallmentsAction(
             kind: PaymentKind.Final,
             note: 'تخفیف هنگام قسطی کردن',
             paidAt: now,
+            installmentId: newInstallment.id,
           }
         })
       }
@@ -272,8 +373,24 @@ export async function recordPaymentWithInstallmentsAction(
           discountReason: input.discountReason || null,
           note: input.note || null,
           paidAt: now,
+          installmentId: currentInstallment?.id ?? null,
         }
       })
+
+      if (currentInstallment && amountBigInt > 0n) {
+        const openInstallments = await tx.installment.findMany({
+          where: { appointmentId, tenantId }
+        })
+        
+        const onlyOpen = openInstallments.filter(i => i.paidAmount < (i.totalPlanAmount ?? i.amount))
+
+        await syncInstallmentPaidAmount(
+          tx,
+          onlyOpen,
+          totalDebt,
+          currentInstallment.paidAmount + amountBigInt,
+        )
+      }
     }
 
     await tx.appointment.update({
@@ -292,6 +409,7 @@ export async function recordPaymentWithInstallmentsAction(
   revalidateDebts()
   return { ok: true }
 }
+
 export async function recordFollowUpWithDetailsAction(
   panel: Panel,
   appointmentId: string,
@@ -431,15 +549,11 @@ export async function recordInstallmentPaymentAction(
     const customerId = currentInstallment.appointment.customerId
     const appointmentId = currentInstallment.appointmentId
 
-    // 👈 لاگ برای دیباگ پرداخت قسط
-    console.log('🚨 [RECORD INSTALLMENT PAYMENT] DEBUG:', {
-      installmentId,
-      paymentAmount: paymentAmount.toString(),
-      currentPaidAmount: currentInstallment.paidAmount.toString(),
-      currentAmount: currentInstallment.amount.toString(),
-      totalPlanAmount: currentInstallment.totalPlanAmount?.toString(),
-      totalPlanCount: currentInstallment.totalPlanCount,
-    })
+    const totalPlan = currentInstallment.totalPlanAmount ?? currentInstallment.amount
+    const remainingForThisInstallment = totalPlan - currentInstallment.paidAmount
+    if (paymentAmount > remainingForThisInstallment) {
+      return { ok: false, message: 'مبلغ پرداختی نمی‌تواند بیشتر از باقی‌مانده این قسط باشد.' }
+    }
 
     await tx.payment.create({
       data: {
@@ -458,28 +572,25 @@ export async function recordInstallmentPaymentAction(
       }
     })
 
-    // محاسبه کل پرداختی (چون paidAmount تجمعیه، حداکثر مقدار رو می‌گیریم)
-    const existingInstallments = await tx.installment.findMany({
-      where: { appointmentId, tenantId },
-      orderBy: { sequence: 'asc' }
+    const openInstallments = await tx.installment.findMany({
+      where: { appointmentId, tenantId }
     })
+    
+    const onlyOpen = openInstallments.filter(i => i.paidAmount < (i.totalPlanAmount ?? i.amount))
 
     let totalPaidBefore = 0n
-    for (const inst of existingInstallments) {
+    for (const inst of onlyOpen) {
       if (inst.paidAmount > totalPaidBefore) {
         totalPaidBefore = inst.paidAmount
       }
     }
 
     let newTotalPaid = totalPaidBefore + paymentAmount
-    const maxTotal = currentInstallment.totalPlanAmount || currentInstallment.amount
-    
-    if (newTotalPaid > maxTotal) {
-      newTotalPaid = maxTotal
+    if (newTotalPaid > totalPlan) {
+      newTotalPaid = totalPlan
     }
 
-    // آپدیت paidAmount روی همه اقساط
-    for (const inst of existingInstallments) {
+    for (const inst of onlyOpen) {
       await tx.installment.update({
         where: { id: inst.id },
         data: { paidAmount: newTotalPaid }

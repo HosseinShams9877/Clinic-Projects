@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { cx } from '@/core/lib'
 import { formatNumber } from '@/core/localization'
 import { ADMIN_DEBTS } from '@/app/admin/catalog'
+import { DebtBucket } from '@/core/constants'
 
 export interface BucketChipsProps {
   readonly active: string | null
@@ -14,10 +15,10 @@ export interface BucketChipsProps {
 export function BucketChips({ active, counts, total, query, doctorId }: BucketChipsProps) {
   const chips = [
     { key: '', label: ADMIN_DEBTS.filterAll, count: total },
-    { key: 'past_due', label: ADMIN_DEBTS.filterPastDue, count: counts['past_due'] ?? 0 },
-    { key: 'near_due', label: ADMIN_DEBTS.filterNearDue, count: counts['near_due'] ?? 0 },
-    { key: 'over_7', label: ADMIN_DEBTS.filterOver7, count: counts['over_7'] ?? 0 },
-    { key: 'over_30', label: ADMIN_DEBTS.filterOver30, count: counts['over_30'] ?? 0 },
+    { key: DebtBucket.PastDue, label: ADMIN_DEBTS.filterPastDue, count: counts[DebtBucket.PastDue] ?? 0 },
+    { key: DebtBucket.DueSoon, label: ADMIN_DEBTS.filterNearDue, count: counts[DebtBucket.DueSoon] ?? 0 },
+    { key: DebtBucket.Over7Days, label: ADMIN_DEBTS.filterOver7, count: counts[DebtBucket.Over7Days] ?? 0 },
+    { key: DebtBucket.Over30Days, label: ADMIN_DEBTS.filterOver30, count: counts[DebtBucket.Over30Days] ?? 0 },
   ]
 
   return (

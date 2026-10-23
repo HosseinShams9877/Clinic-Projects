@@ -28,7 +28,7 @@ export interface DebtRow {
   readonly doctorId: string
   readonly doctorName: string
   readonly serviceId: string | null
-  readonly serviceName: string | null // 👈 اضافه شد برای نمایش اسم خدمت
+  readonly serviceName: string | null
   readonly charged: bigint
   readonly discount: bigint
   readonly paid: bigint
@@ -41,8 +41,10 @@ export interface DebtRow {
   readonly daysOverdue: number
   readonly totalInstallments: number
   readonly paidInstallments: number
-  readonly installmentSequence: number // 👈 شماره قسط فعلی
-  readonly installmentAmount: bigint // 👈 مبلغ هر قسط
+  readonly installmentSequence: number
+  readonly installmentAmount: bigint
+  /** 👈 شناسه قسط باز مربوط به این بدهی (اگه قسطی باشه)، وگرنه null */
+  readonly installmentId: string | null
 }
 
 /** The four buckets, with the rows each one holds. */

@@ -124,16 +124,6 @@ function revalidateDebts(): void {
   revalidatePath('/admin/debts')
 }
 
-/**
- * The receipt writer this file owns.
- *
- * A payment row for one appointment, written inside the same transaction as the
- * completion. A booking is a **promise**, not a receipt: writing the deposit here
- * at booking time would show the desk's «پرداختی» column a figure nobody has
- * collected, and the balance the debt read computes would be short by money the
- * customer still holds. The deposit is written when the desk actually takes it —
- * through `/reception/debts` or through the result dialog's own payment fields.
- */
 async function writeReceipt(args: {
   readonly tx: ScopeArgs['tx']
   readonly tenantId: string
@@ -219,6 +209,14 @@ export async function createBookingAction(
       cycleId: input.cycleId,
     })
 
+    // 👈 لاگ اصلاح‌شده (customerId از متغیر خارجی)
+    console.log('🚨 BOOKING CREATED:', {
+      id: created.id,
+      status: created.status,
+      customerId: customerId,
+      servicePrice: service.price.toString(),
+    })
+
     await attributeAppointmentToCampaign({
       tx,
       tenantId: ctx.tenantId,
@@ -260,6 +258,14 @@ export async function quickBookAction(panel: Panel, input: BookingInput): Promis
       depositAmount: service.depositAmount,
       source: AppointmentSource.Reception,
       cycleId: input.cycleId,
+    })
+
+    // 👈 لاگ اصلاح‌شده
+    console.log('🚨 QUICK BOOKING CREATED:', {
+      id: created.id,
+      status: created.status,
+      customerId: customerId,
+      servicePrice: service.price.toString(),
     })
 
     await attributeAppointmentToCampaign({
@@ -331,6 +337,11 @@ export async function recordResultAction(
       appointmentId: input.appointmentId,
       note: input.note,
       now: realClock(),
+    })
+
+    console.log('🚨 RESULT RECORDED:', {
+      id: completed.id,
+      status: completed.status,
     })
 
     if (parsed.value.payment !== null) {
@@ -439,16 +450,6 @@ export async function updateAppointmentAction(
   return { ok: true, appointmentId: result.id }
 }
 
-/**
- * The free slots of one doctor on one day.
- *
- * The read merges the two day queries `loadDayGrid` performs — the grid's own
- * `clinicDay` and the alarm's `unrecordedOnDay` — because a slot already held by
- * a `RESULT_NOT_RECORDED` row is as occupied as one held by an `ARRIVED` row, and
- * the popup must not offer it. `excludeAppointmentId` is what keeps the row the
- * desk is editing's own slot in the list: `buildFreeSlots` drops it from the
- * occupied set by id.
- */
 export async function loadFreeSlotsAction(
   panel: Panel,
   doctorId: string,
