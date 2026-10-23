@@ -11,6 +11,7 @@ import { cx } from '@/core/lib'
 import { JalaliDatePicker } from '@/core/components/date-picker'
 import { TimePicker } from '@/core/components/date-picker/TimePicker'
 import { Field } from '@/core/components/form'
+import { recordResultAction } from './actions' // 👈 ایمپورت شد
 import { recordPaymentAction, recordPaymentWithInstallmentsAction } from '@/app/_debts/actions'
 import { ADMIN_DEBTS } from '@/app/admin/catalog'
 
@@ -119,13 +120,13 @@ function ResultDialogContent({
   const [receiveDate, setReceiveDate] = useState<string>('')
   const [receiveTime, setReceiveTime] = useState<string>('')
   const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
 
   const remaining = charged - alreadyPaid
 
   const rawAmount = toEnglishDigits(amount.replace(/,/g, ''))
   const rawDiscount = toEnglishDigits(discount.replace(/,/g, ''))
   
-  // 👈 اینجا عددی که تایپ شده (تومان) را در ۱۰ ضرب می‌کنیم تا به ریال تبدیل شود و با remaining (که ریال است) هم‌جنس شود
   const paidBigInt = rawAmount ? BigInt(rawAmount) * 10n : 0n
   const discountBigInt = rawDiscount ? BigInt(rawDiscount) * 10n : 0n
   
@@ -133,51 +134,67 @@ function ResultDialogContent({
   const installmentAmount = Math.floor(Number(finalAmount) / Number(installmentCount || 1))
 
   const handleSubmit = () => {
+    setError(null)
     startTransition(async () => {
-      let dbMethod = method
-      if (method === 'INSTALLMENT' || method === 'CHEQUE') {
-        dbMethod = 'CASH'
+      // ۱. ثبت نتیجه (تغییر وضعیت به COMPLETED و جلو بردن چرخه)
+      const resultOutcome = await recordResultAction(panel, {
+        appointmentId,
+        note: note || undefined,
+      })
+
+      if (!resultOutcome.ok) {
+        setError(resultOutcome.message)
+        return
       }
 
-      let res
-      if (method === 'INSTALLMENT' || method === 'CHEQUE') {
-        res = await recordPaymentWithInstallmentsAction(
-          panel,
-          appointmentId,
-          customerId,
-          {
-            amount: paidBigInt.toString(), // 👈 ارسال ریالی (پسوند * 10n این را تضمین می‌کند)
-            method: dbMethod,
-            installmentCount: Number(installmentCount),
-            firstDueDate: firstDueDate || todayLocalDate(realClock()),
-            installmentInterval: `${intervalMonths}_MONTH`,
-            discountAmount: discountBigInt.toString(), // 👈 ارسال ریالی
-            discountReason: discountReason || null,
-            forceInstallment: true,
-            note: note || null,
-          }
-        )
-      } else {
-        res = await recordPaymentAction(
-          panel,
-          appointmentId,
-          {
-            amount: paidBigInt.toString(), // 👈 ارسال ریالی
-            method: dbMethod,
-            kind: 'FINAL',
-            discountAmount: discountBigInt.toString(), // 👈 ارسال ریالی
-            discountReason: discountReason || null,
-            note: note || null,
-          }
-        )
+      // ۲. ثبت پرداخت (اگر مبلغی وارد شده بود)
+      if (paidBigInt > 0n || discountBigInt > 0n) {
+        let dbMethod = method
+        if (method === 'INSTALLMENT' || method === 'CHEQUE') {
+          dbMethod = 'CASH'
+        }
+
+        let paymentOutcome
+        if (method === 'INSTALLMENT' || method === 'CHEQUE') {
+          paymentOutcome = await recordPaymentWithInstallmentsAction(
+            panel,
+            appointmentId,
+            customerId,
+            {
+              amount: paidBigInt.toString(),
+              method: dbMethod,
+              installmentCount: Number(installmentCount),
+              firstDueDate: firstDueDate || todayLocalDate(realClock()),
+              installmentInterval: `${intervalMonths}_MONTH`,
+              discountAmount: discountBigInt.toString(),
+              discountReason: discountReason || null,
+              forceInstallment: true,
+              note: note || null,
+            }
+          )
+        } else {
+          paymentOutcome = await recordPaymentAction(
+            panel,
+            appointmentId,
+            {
+              amount: paidBigInt.toString(),
+              method: dbMethod,
+              kind: 'FINAL',
+              discountAmount: discountBigInt.toString(),
+              discountReason: discountReason || null,
+              note: note || null,
+            }
+          )
+        }
+
+        if (!paymentOutcome.ok) {
+          setError('نتیجه ثبت شد اما خطا در ثبت پرداخت: ' + paymentOutcome.message)
+          return
+        }
       }
 
-      if (res.ok) {
-        onClose()
-        window.location.reload()
-      } else {
-        alert(res.message)
-      }
+      onClose()
+      window.location.reload()
     })
   }
 
@@ -204,7 +221,6 @@ function ResultDialogContent({
              
              <div className="flex items-center justify-between mt-1">
                 <span className="text-sm text-ink-2">مبلغ بدهی:</span>
-                {/* 👈 دقیقاً مثل نسخه اصلی و دست‌نخورده */}
                 <span className="text-sm font-semibold text-ink tabular-nums">{formatMoney(remaining)} تومان</span>
              </div>
              
@@ -256,7 +272,6 @@ function ResultDialogContent({
              <div className="flex gap-2 justify-end mt-1">
                 <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount1Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount1Label}</button>
                 <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount2Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount2Label}</button>
-                {/* 👈 دکمه همه مبلغ، چون remaining ریال است، تقسیم بر ۱۰ می‌شود تا به تومان در اینپوت قرار گیرد */}
                 <button type="button" onClick={() => setAmount(formatNumberWithCommas(Math.floor(Number(remaining) / 10).toString()))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
              </div>
            </div>
@@ -360,6 +375,12 @@ function ResultDialogContent({
               <div className="flex flex-col gap-2"><Field label={ADMIN_DEBTS.paymentDialog.receiveDate}><JalaliDatePicker value={receiveDate} onChange={setReceiveDate} /></Field></div>
               <div className="flex flex-col gap-2"><Field label={ADMIN_DEBTS.paymentDialog.receiveTime}><TimePicker value={receiveTime} onChange={setReceiveTime} /></Field></div>
            </div>
+           
+           {error && (
+             <div className="rounded-lg bg-danger-bg px-4 py-3 text-sm text-danger font-semibold border border-danger/20">
+               {error}
+             </div>
+           )}
         </div>
 
         <div className="flex items-center justify-between border-t border-line px-6 py-4 bg-surface-2 rounded-b-2xl shrink-0">

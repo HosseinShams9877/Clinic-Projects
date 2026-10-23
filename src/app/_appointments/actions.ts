@@ -348,7 +348,7 @@ export async function recordResultAction(
       now: realClock(),
     })
 
-    // ۳. ثبت پرداخت (اگر وجود داشت)
+    // ۳. ثبت پرداخت (اگر ورودی پرداخت داشت، هرچند الان از دیالوگ خالی میاد)
     if (parsed.value.payment !== null) {
       await writeReceipt({
         tx,
@@ -366,11 +366,9 @@ export async function recordResultAction(
     }
 
     // ۴. جلو بردن جلسه درمان
-    // 👈 اگر نوبت مربوط به یک چرخه (cycleId) باشه، حتماً چرخه رو آپدیت میکنیم
     if (originalAppointment.cycleId !== null) {
       console.log('🎯 Attempting to advance cycle:', originalAppointment.cycleId)
       
-      // نکته مهم: اینجا دیگه سرویس رو چک نمیکنیم، خود تابع هندل میکنه
       await recordCompletedSession({
         tx,
         ctx,
