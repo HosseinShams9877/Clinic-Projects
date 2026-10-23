@@ -3,7 +3,7 @@ import { prisma, runInTenantScope } from '@/core/db'
 import { requireStaffPanel } from '@/app/_shell/session'
 import { realClock } from '@/core/lib/clock'
 import { ADMIN_FINANCIAL_REPORTS } from '@/app/catalog'
-import { clinicDebts } from '@/modules/debts' // 👈 به clinicDebts تغییر کرد
+import { clinicDebts } from '@/modules/debts'
 import { loadDoctorNamesByUserId } from '@/app/_customers/page-data'
 import type { DebtRow } from '@/modules/debts'
 import { DoctorFinancialReportsClient } from './_components/DoctorFinancialReportsClient'
@@ -24,10 +24,9 @@ export default async function DoctorFinancialReportsPage({
   const now = realClock()
   
   const data = await runInTenantScope(session.permissions, prisma(), async (tx) => {
-    // 👈 همه بدهی‌ها رو می‌گیریم
     const allDebts = await clinicDebts({ tx, ctx: session.permissions, now })
     
-    // 👈 فیلتر می‌کنیم فقط مال این دکتر
+    // 👈 فیلتر کردن بر اساس آی‌دی دکتر
     const myId = session.permissions.userId
     const debts = {
       overdue30: allDebts.overdue30.filter(r => r.doctorId === myId),

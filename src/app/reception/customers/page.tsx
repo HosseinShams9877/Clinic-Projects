@@ -1,19 +1,5 @@
 /**
  * The desk's customer file — `02-architecture.md` §9's `reception/customers.html`.
- *
- * The secretary's default holds `view_all_customers` (`04-roles-permissions.md` §2.1's
- * 1–12), so the file the desk reads is the clinic's whole file under the same
- * permission the manager reads it with. The two pages are one table and differ only
- * in the copy block they render it with, which is what makes the two agree about
- * which columns a customer's file holds.
- *
- * ## What the desk cannot do from here
- *
- * Open the profile. §9 puts `customer.html` in the manager panel, and the reception
- * shell sends a secretary elsewhere; the desk's own action on a row is «ثبت نوبت»,
- * which is the appointment surface the desk books from. The profile's edit and
- * consent surfaces are the manager's, and the table renders a name rather than a link
- * it cannot follow.
  */
 
 import type { Metadata } from 'next'
@@ -21,39 +7,53 @@ import Link from 'next/link'
 
 import { prisma, runInTenantScope } from '@/core/db'
 import { realClock } from '@/core/lib/clock'
+import {
+  asLocalDate,
+  dateToLocalDate,
+  formatDate,
+  fromUtcInstant,
+  formatMoney,
+  formatNumber,
+  formatPhone,
+  jalaliParts,
+  monthName,
+  toPersianDigits,
+} from '@/core/localization'
+import { AudienceGroupKey, AcquisitionSource, isMember } from '@/core/constants'
+import { ACQUISITION_SOURCE_LABELS } from '@/modules/customers'
+import { AUDIENCE_GROUP_LABELS, evaluateGroup } from '@/modules/audience-groups'
+import { readReportOffset } from '@/modules/reports'
+import { readManagerHome } from '@/modules/dashboard'
+import type { CustomerListRow } from '@/modules/customers'
 import { cx } from '@/core/lib'
-import { CustomerLifecycle } from '@/core/constants'
+import { Icon } from '@/core/components/icons'
 
-import { CUSTOMERS_PAGE, RECEPTION_CUSTOMERS } from '@/app/catalog'
+import { CUSTOMERS_PAGE } from '@/app/catalog'
 import { loadCustomersList } from '@/app/_customers/page-data'
-import { CustomersTable } from '@/app/_customers/customers-table'
 import { CustomerSearchForm, CUSTOMER_QUERY_PARAM } from '@/app/_customers/customers-search'
 import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import { requireStaffPanel } from '@/app/_shell/session'
 
 import { AddCustomerDialog } from './_components/AddCustomerDialog'
 import { ExportButton } from './_components/ExportButton'
+import { ADMIN_CUSTOMERS } from '@/app/admin/catalog'
 
 export const metadata: Metadata = { title: CUSTOMERS_PAGE.reception.title }
 
-/** The page's own route, as the search form submits to and the chips link to. */
 const BASE_PATH = '/reception/customers'
+const PROFILE_BASE_PATH = '/reception/customers'
+const GROUP_PARAM = 'group'
 
-/** The lifecycle chip the URL names, as the filter param writes it. */
-const FILTER_PARAM = 'filter'
+const CHIP_KEYS = [
+  AudienceGroupKey.Debtors,
+  AudienceGroupKey.CycleDue,
+  AudienceGroupKey.Loyal,
+  AudienceGroupKey.Dormant,
+  AudienceGroupKey.New,
+] as const
 
-/** The search params every page in the product reads, as the framework hands them. */
 type PageSearchParams = Promise<{ readonly [key: string]: string | string[] | undefined }>
 
-/** The lifecycle filter the URL names, or «all» for every customer. */
-function filterFromParam(value: string | string[] | undefined): 'all' | 'CUSTOMER' | 'LEAD' {
-  if (value === CustomerLifecycle.Customer || value === CustomerLifecycle.Lead) return value
-  return 'all'
-}
-
-/**
- * The clinic's customer file, searched by name or mobile and filtered by lifecycle.
- */
 export default async function ReceptionCustomersPage({
   searchParams,
 }: {
@@ -62,20 +62,33 @@ export default async function ReceptionCustomersPage({
   const session = await requireStaffPanel('reception')
   const params = await searchParams
   const query = asString(params[CUSTOMER_QUERY_PARAM])
-  const filter = filterFromParam(params[FILTER_PARAM])
+  const group = groupFromParam(params[GROUP_PARAM])
 
-  const data = await runInTenantScope(session.permissions, prisma(), (tx) =>
-    loadCustomersList({ tx, ctx: session.permissions, scope: 'all', query }),
-  )
+  const data = await runInTenantScope(session.permissions, prisma(), async (tx) => {
+    const today = fromUtcInstant(realClock(), await readReportOffset(tx, session.tenantId)).localDate
+    const [list, month, groupIds] = await Promise.all([
+      loadCustomersList({ tx, ctx: session.permissions, scope: 'all', query }),
+      readManagerHome(tx, session.tenantId, today),
+      group === null
+        ? Promise.resolve(null)
+        : evaluateGroup({
+            tx,
+            tenantId: session.tenantId,
+            predicate: { kind: 'BUILT_IN', key: group },
+            now: realClock(),
+          }),
+    ])
+    return { list, month, groupIds } as const
+  })
 
-  const rows = filter === 'all' ? data.rows : data.rows.filter((row) => row.lifecycle === filter)
+  const rows = applyGroupFilter(data.list.rows, data.groupIds, group)
   const page = pageFromParam(params.page)
   const { slice, totalPages } = paginate(rows, page)
-
+  
   const hrefFor = (next: number): string => {
     const sp = new URLSearchParams()
     if (query !== '') sp.set(CUSTOMER_QUERY_PARAM, query)
-    if (filter !== 'all') sp.set(FILTER_PARAM, filter)
+    if (group !== null) sp.set(GROUP_PARAM, group)
     if (next > 1) sp.set('page', String(next))
     const qs = sp.toString()
     return qs === '' ? BASE_PATH : `${BASE_PATH}?${qs}`
@@ -86,52 +99,101 @@ export default async function ReceptionCustomersPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold text-ink">{CUSTOMERS_PAGE.reception.title}</h1>
-          <p className="text-sm text-ink-2">{CUSTOMERS_PAGE.reception.lead}</p>
+          <p className="text-sm text-ink-2">
+            {formatNumber(data.month.month.newCustomers)} {ADMIN_CUSTOMERS.subNewThisMonth}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ExportButton rows={rows} doctorNames={data.doctorNames} dateStamp={realClock().toISOString().slice(0, 10)} />
+          <ExportButton rows={rows} dateStamp={realClock().toISOString().slice(0, 10)} />
           <AddCustomerDialog />
         </div>
       </div>
 
-      <CustomerSearchForm query={query} basePath={BASE_PATH} />
+      <section className="flex flex-col rounded-lg border border-line bg-surface">
+        <div className="flex flex-col gap-3 border-b border-line px-4 py-3 panel:flex-row panel:items-center">
+          <div className="w-full panel:w-72">
+            <CustomerSearchForm query={query} basePath={BASE_PATH} />
+          </div>
+          <GroupChips active={group} basePath={BASE_PATH} />
+        </div>
 
-      <LifecycleChips active={filter} basePath={BASE_PATH} />
+        {rows.length === 0 ? (
+          <p className="px-4 py-8 text-center text-sm text-ink-3">
+            {query === '' ? CUSTOMERS_PAGE.empty.noCustomers : CUSTOMERS_PAGE.empty.noResults}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <caption className="sr-only">{CUSTOMERS_PAGE.reception.title}</caption>
+                           <thead>
+                <tr className="border-b border-line-2 bg-surface-2 text-ink-3">
+                  <Th>{ADMIN_CUSTOMERS.columns.name}</Th>
+                  <Th>{ADMIN_CUSTOMERS.columns.birthday}</Th>
+                  <Th>{ADMIN_CUSTOMERS.columns.source}</Th>
+                  <Th>{ADMIN_CUSTOMERS.columns.lastVisit}</Th>
+                  <Th align="center">{ADMIN_CUSTOMERS.columns.visits}</Th>
+                  <Th align="center">{ADMIN_CUSTOMERS.columns.balance}</Th>
+                  <Th>{ADMIN_CUSTOMERS.columns.message}</Th>
+                  <Th align="center">عملیات</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {slice.map((row) => (
+                  <CustomerRow key={row.id} row={row} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-      <CustomersTable
-        rows={slice}
-        doctorNames={data.doctorNames}
-        profileBasePath={BASE_PATH}
-        showBookAction
-        emptyMessage={query === '' ? CUSTOMERS_PAGE.empty.noCustomers : CUSTOMERS_PAGE.empty.noResults}
-      />
-
-      <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
+          <span className="text-xs text-ink-3">
+            {ADMIN_CUSTOMERS.showingPrefix}
+            {formatNumber(slice.length)}
+            {ADMIN_CUSTOMERS.showingOf}
+            {formatNumber(rows.length)}
+            {ADMIN_CUSTOMERS.showingSuffix}
+          </span>
+          <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
+        </footer>
+      </section>
     </div>
   )
 }
 
-/** The lifecycle chip filter — همه / مشتری / لید, as `?filter=` links. */
-function LifecycleChips({
+function applyGroupFilter(
+  rows: readonly CustomerListRow[],
+  groupIds: readonly string[] | null,
+  group: AudienceGroupKey | null,
+): readonly CustomerListRow[] {
+  if (groupIds === null) return rows
+  return rows.filter((row) => {
+    if (!groupIds.includes(row.id)) return false
+    if (group !== AudienceGroupKey.Debtors) return true
+    return row.chargedTotal - row.paidTotal > 0n
+  })
+}
+
+function GroupChips({
   active,
   basePath,
 }: {
-  readonly active: 'all' | 'CUSTOMER' | 'LEAD'
+  readonly active: string | null
   readonly basePath: string
 }) {
-  const chips: readonly { key: 'all' | 'CUSTOMER' | 'LEAD'; label: string }[] = [
-    { key: 'all', label: RECEPTION_CUSTOMERS.filter.all },
-    { key: CustomerLifecycle.Customer, label: RECEPTION_CUSTOMERS.filter.customer },
-    { key: CustomerLifecycle.Lead, label: RECEPTION_CUSTOMERS.filter.lead },
+  const chips: readonly { readonly key: string; readonly label: string }[] = [
+    { key: '', label: ADMIN_CUSTOMERS.filterAll },
+    ...CHIP_KEYS.map((key) => ({ key, label: AUDIENCE_GROUP_LABELS[key] })),
   ]
+
   return (
     <nav className="flex flex-wrap gap-2" aria-label={CUSTOMERS_PAGE.reception.title}>
       {chips.map((chip) => {
-        const isActive = chip.key === active
+        const isActive = chip.key === (active ?? '')
         return (
           <Link
             key={chip.key}
-            href={chip.key === 'all' ? basePath : `${basePath}?${FILTER_PARAM}=${chip.key}`}
+            href={chip.key === '' ? basePath : `${basePath}?${GROUP_PARAM}=${chip.key}`}
             aria-current={isActive ? 'page' : undefined}
             className={cx(
               'shrink-0 rounded-xs border px-3 py-[6px] text-xs font-semibold no-underline',
@@ -148,7 +210,122 @@ function LifecycleChips({
   )
 }
 
-/** One search param as a plain string, or '' when the URL does not carry one. */
+function CustomerRow({ row }: { readonly row: CustomerListRow }) {
+  const name = row.lastName === null ? row.firstName : `${row.firstName} ${row.lastName}`
+  const balance = row.chargedTotal - row.paidTotal
+
+  return (
+    <tr className="border-b border-line last:border-b-0 hover:bg-surface-2">
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span
+            className="grid size-8 shrink-0 place-items-center rounded-pill bg-brand-50 text-xs font-bold text-brand-700"
+            aria-hidden="true"
+          >
+            {row.firstName.slice(0, 1)}
+          </span>
+          <span className="flex flex-col">
+            <Link
+              href={`${PROFILE_BASE_PATH}/${row.id}`}
+              className="font-semibold text-brand-700 underline-offset-2 hover:underline"
+            >
+              {name}
+            </Link>
+            <span className="text-xs text-ink-3 tabular-nums" dir="ltr">
+              {formatPhone(row.mobile)}
+            </span>
+          </span>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-ink-3 tabular-nums">{formatBirthday(row.birthDate)}</td>
+      <td className="px-4 py-3">{sourceTag(row.acquisitionSource)}</td>
+      <td className="px-4 py-3 text-ink-2 tabular-nums">
+        {row.lastVisitAt === null ? '—' : formatDate(dateToLocalDate(row.lastVisitAt), 'short')}
+      </td>
+      <td className="px-4 py-3 text-center font-semibold text-ink tabular-nums">
+        {toPersianDigits(row.completedSessions)}
+      </td>
+      <td className="px-4 py-3 text-center font-bold tabular-nums">
+        {balance <= 0 ? (
+          <span className="text-ink-3">—</span>
+        ) : (
+          <span className="text-warn">{formatMoney(balance)}</span>
+        )}
+      </td>
+      <td className="px-4 py-3">
+        <span
+          className={cx(
+            'inline-flex rounded-pill px-2 py-1 text-xs font-semibold',
+            row.consentWhatsApp ? 'bg-ok-bg text-ok' : 'bg-neutral-bg text-ink-3',
+          )}
+        >
+          {row.consentWhatsApp ? ADMIN_CUSTOMERS.messageable.yes : ADMIN_CUSTOMERS.messageable.no}
+        </span>
+      </td>
+      
+      {/* 👈 ستون دکمه‌های عملیات */}
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-center gap-1.5">
+          <Link
+            href={`${PROFILE_BASE_PATH}/${row.id}`}
+            className="inline-flex items-center rounded-full border border-line-2 bg-surface px-3 py-1.5 text-[11px] font-semibold text-ink-2 no-underline hover:bg-surface-2 transition-colors whitespace-nowrap shadow-sm"
+          >
+            پرونده
+          </Link>
+          <Link
+            href="/reception/appointments"
+            className="inline-flex items-center gap-1 rounded-full bg-brand-btn px-3 py-1.5 text-[11px] font-semibold text-ink-inverse no-underline hover:bg-brand-600 transition-colors whitespace-nowrap shadow-sm"
+          >
+            <Icon name="appointment" size="compact" />
+            ثبت نوبت
+          </Link>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+function formatBirthday(birthDate: string | null): string {
+  if (birthDate === null) return '—'
+  const { month, day } = jalaliParts(asLocalDate(birthDate))
+  return `${toPersianDigits(day)} ${monthName(month)}`
+}
+
+function sourceTag(source: string | null): React.ReactNode {
+  if (source === null) return <span className="text-ink-3">—</span>
+  if (!isMember(AcquisitionSource, source)) return <span className="text-ink-2">{source}</span>
+  return (
+    <span className="inline-flex rounded-pill bg-surface-sunken px-2 py-1 text-xs font-semibold text-ink-2">
+      {ACQUISITION_SOURCE_LABELS[source]}
+    </span>
+  )
+}
+
+function Th({
+  children,
+  align = 'start',
+}: {
+  readonly children: React.ReactNode
+  readonly align?: 'start' | 'center' | 'end'
+}) {
+  return (
+    <th
+      scope="col"
+      className={cx(
+        'whitespace-nowrap px-4 py-3 text-xs font-semibold',
+        align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : 'text-start',
+      )}
+    >
+      {children}
+    </th>
+  )
+}
+
+function groupFromParam(value: string | string[] | undefined): AudienceGroupKey | null {
+  if (typeof value !== 'string') return null
+  return isMember(AudienceGroupKey, value) ? value : null
+}
+
 function asString(value: string | string[] | undefined): string {
   return typeof value === 'string' ? value : ''
 }

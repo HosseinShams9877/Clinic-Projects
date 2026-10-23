@@ -31,11 +31,6 @@ export interface LeaveInput {
 
 /**
  * «اعلام مرخصی» — the doctor's own leave request, to the manager's approval queue.
- *
- * The two days are Jalali `LocalDate` strings; the module stores instants, so each is
- * converted at the day's start through `toUtcInstant`, which the admin leave table
- * reads back with `dateToLocalDate`. A reversed or malformed range is refused here with
- * the form's own sentence rather than stored as a zero- or negative-length leave.
  */
 export async function requestLeaveAction(input: LeaveInput): Promise<ActionResult> {
   if (
@@ -59,6 +54,25 @@ export async function requestLeaveAction(input: LeaveInput): Promise<ActionResul
     .then(() => {
       revalidatePath('/admin/staff')
       revalidatePath('/doctor')
+      return { ok: true } as const
+    })
+    .catch((error: unknown) => ({ ok: false, message: moduleFailureMessage(error) }) as const)
+}
+
+// 👈 اکشن جدید برای تایید جلسه توسط دکتر
+export async function approveAppointmentAction(appointmentId: string): Promise<ActionResult> {
+  const session = await resolveStaffPanel('doctor')
+  
+  return runInTenantScope(session.permissions, prisma(), async (tx) => {
+    await tx.appointment.update({
+      where: { id: appointmentId, tenantId: session.tenantId },
+      data: { isDoctorApproved: true }
+    })
+  })
+    .then(() => {
+      revalidatePath('/doctor')
+      revalidatePath('/admin')
+      revalidatePath('/reception')
       return { ok: true } as const
     })
     .catch((error: unknown) => ({ ok: false, message: moduleFailureMessage(error) }) as const)

@@ -331,6 +331,15 @@ export async function recordResultAction(
   if (!parsed.ok) return parsed
 
   const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
+    // ۱. گرفتن اطلاعات نوبت قبل از تغییر وضعیت
+    const originalAppointment = await tx.appointment.findUnique({
+      where: { id: input.appointmentId, tenantId },
+      select: { cycleId: true, customerId: true, serviceId: true, doctorId: true, scheduledAt: true }
+    })
+
+    if (!originalAppointment) throw new Error('Appointment not found')
+
+    // ۲. تغییر وضعیت نوبت به COMPLETED
     const completed = await recordResult({
       tx,
       ctx,
@@ -339,11 +348,7 @@ export async function recordResultAction(
       now: realClock(),
     })
 
-    console.log('🚨 RESULT RECORDED:', {
-      id: completed.id,
-      status: completed.status,
-    })
-
+    // ۳. ثبت پرداخت (اگر وجود داشت)
     if (parsed.value.payment !== null) {
       await writeReceipt({
         tx,
@@ -360,26 +365,29 @@ export async function recordResultAction(
       })
     }
 
-    if (completed.customerId !== null && completed.serviceId !== null) {
-      const service = await tx.service.findFirst({
-        where: { id: completed.serviceId, tenantId: ctx.tenantId },
-        select: { defaultIntervalDays: true },
+    // ۴. جلو بردن جلسه درمان
+    // 👈 اگر نوبت مربوط به یک چرخه (cycleId) باشه، حتماً چرخه رو آپدیت میکنیم
+    if (originalAppointment.cycleId !== null) {
+      console.log('🎯 Attempting to advance cycle:', originalAppointment.cycleId)
+      
+      // نکته مهم: اینجا دیگه سرویس رو چک نمیکنیم، خود تابع هندل میکنه
+      await recordCompletedSession({
+        tx,
+        ctx,
+        facts: {
+          appointmentId: input.appointmentId,
+          customerId: originalAppointment.customerId as string,
+          serviceId: originalAppointment.serviceId as string,
+          doctorId: originalAppointment.doctorId,
+          scheduledAt: originalAppointment.scheduledAt,
+        },
+        now: realClock(),
       })
-      if (service !== null && service.defaultIntervalDays > 0) {
-        await recordCompletedSession({
-          tx,
-          ctx,
-          facts: {
-            appointmentId: completed.id,
-            customerId: completed.customerId,
-            serviceId: completed.serviceId,
-            doctorId: completed.doctorId,
-            scheduledAt: completed.scheduledAt,
-          },
-          now: realClock(),
-        })
-      }
+      console.log('✅ Cycle advanced successfully!')
+    } else {
+      console.log('⚠️ Appointment has no cycleId, skipping cycle update.')
     }
+    
     return completed
   })
 
@@ -389,7 +397,6 @@ export async function recordResultAction(
   revalidateDebts()
   return { ok: true, appointmentId: result.id }
 }
-
 export async function markNoShowAction(
   panel: Panel,
   appointmentId: string,

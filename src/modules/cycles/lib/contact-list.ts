@@ -227,6 +227,9 @@ async function clearContactListFlag(tx: TransactionClient, cycleId: string): Pro
  *   rule, `09-security.md` §6.3).
  * @throws DomainError, as `cycle.closed` — the cycle already ended.
  */
+/**
+ * «نتیجه تماس» — the desk called, and recorded when to try again.
+ */
 export async function recordContactResult(args: {
   readonly tx: TransactionClient
   readonly ctx: TenantContext
@@ -234,6 +237,11 @@ export async function recordContactResult(args: {
   /** The instant the next contact is due, built by the action from a `LocalDate`. */
   readonly nextContactAt: Date
   readonly now: Date
+  readonly promiseDate?: Date | null
+  readonly note?: string | null
+  readonly result?: string | null
+  readonly contactMethod?: string | null
+  readonly userId: string
 }): Promise<void> {
   requirePermission(args.ctx, 'act_on_cycles')
 
@@ -245,10 +253,56 @@ export async function recordContactResult(args: {
     })
   }
 
+  // ۱. آپدیت چرخه درمان
   await args.tx.treatmentCycle.update({
     where: { id: row.id },
     data: { lastContactAt: args.now, nextContactAt: args.nextContactAt },
   })
+
+  // ۲. پیدا کردن آخرین نوبت این چرخه (برای اتصال پیگیری به آن)
+  const lastAppointment = await args.tx.appointment.findFirst({
+    where: { cycleId: args.cycleId, tenantId: args.ctx.tenantId },
+    orderBy: { scheduledAt: 'desc' },
+  })
+
+  if (lastAppointment) {
+    let finalNote = args.note || ''
+    
+    // اگر نتیجه‌ای انتخاب شده بود، آن را به متن یادداشت اضافه می‌کنیم
+    if (args.result) {
+      const resultLabels: Record<string, string> = {
+        PROMISE_TO_PAY: 'وعده پرداخت',
+        NO_ANSWER: 'تماس شد؛ پاسخ نداد',
+        SMS_SENT: 'پیامک ارسال شد',
+        DISCOUNT_REQUEST: 'درخواست تخفیف',
+        PROMISE_TOMORROW: 'قول پرداخت تا فردا',
+        AWAITING_REVIEW: 'در انتظار بررسی',
+      }
+      const resultText = resultLabels[args.result] || args.result
+      finalNote = finalNote ? `${resultText} - ${finalNote}` : resultText
+    }
+
+    // ۳. ثبت رکورد در جدول پیگیری‌ها (DebtFollowUp)
+    await args.tx.debtFollowUp.create({
+      data: {
+        tenantId: args.ctx.tenantId,
+        appointmentId: lastAppointment.id,
+        note: finalNote,
+        nextContactAt: args.nextContactAt,
+        createdById: args.userId,
+      }
+    })
+    
+    // ۴. آپدیت خود نوبت (برای نمایش در پرونده مشتری)
+    await args.tx.appointment.update({
+      where: { id: lastAppointment.id },
+      data: {
+        debtFollowUpAt: args.now,
+        debtFollowUpNote: finalNote,
+        debtNextContactAt: args.nextContactAt,
+      }
+    })
+  }
 }
 
 /**

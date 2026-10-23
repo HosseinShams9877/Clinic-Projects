@@ -24,8 +24,13 @@ import { moduleFailureMessage } from '../_shared/module-failure'
 
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly message: string }
 
+// 👈 اینترفیس رو آپدیت کردیم تا پارامترهای جدید رو بگیره
 export interface ContactResultInput {
   readonly nextContactAt: string
+  readonly promiseDate?: string | null
+  readonly note?: string | null
+  readonly result?: string | null
+  readonly contactMethod?: string | null
 }
 
 export interface AbandonCycleInput {
@@ -60,6 +65,8 @@ function revalidateCycles(): void {
   revalidatePath('/reception/cycles')
   revalidatePath('/admin/cycles')
   revalidatePath('/doctor/cycles')
+  revalidatePath('/admin/customer')
+  revalidatePath('/reception/customers')
 }
 
 export async function recordContactResultAction(
@@ -67,13 +74,19 @@ export async function recordContactResultAction(
   cycleId: string,
   input: ContactResultInput,
 ): Promise<ActionResult> {
-  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId }) => {
+  const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
     await recordContactResult({
       tx,
       ctx,
       cycleId,
       nextContactAt: await asNextContactAt(tx, tenantId, input.nextContactAt),
       now: realClock(),
+      // 👈 پاس دادن پارامترهای جدید به سرویس
+      promiseDate: input.promiseDate ? await asNextContactAt(tx, tenantId, input.promiseDate) : null,
+      note: input.note || null,
+      result: input.result || null,
+      contactMethod: input.contactMethod || null,
+      userId,
     })
     return SUCCESS
   })

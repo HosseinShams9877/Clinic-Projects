@@ -45,13 +45,13 @@ export function DebtsTable({
   showActions,
   paymentOptions,
   followUpsMap,
-  panel, // 👈 پراپ جدید
+  panel,
 }: {
   rows: readonly DebtRow[]
   showActions: boolean
   paymentOptions?: PaymentOptions
   followUpsMap?: Record<string, any>
-  panel: 'admin' | 'reception' | 'doctor' // 👈 پراپ جدید
+  panel: 'admin' | 'reception' | 'doctor'
 }) {
   const [selectedPaymentRow, setSelectedPaymentRow] = useState<DebtRow | null>(null)
   const [selectedFollowUpRow, setSelectedFollowUpRow] = useState<DebtRow | null>(null)
@@ -64,7 +64,6 @@ export function DebtsTable({
     )
   }
 
-  // 👈 انتخاب کامپوننت بر اساس پنل
   const PaymentDialog = panel === 'reception' ? ReceptionPaymentDialog : AdminPaymentDialog
   const FollowUpDialog = panel === 'reception' ? ReceptionFollowUpDialog : AdminFollowUpDialog
 
@@ -119,7 +118,6 @@ export function DebtsTable({
                        {lastFollowUp ? (
                          <div className="flex flex-col gap-1">
                            <span className="font-medium text-ink-2">
-                             {/* 👈 استفاده از تابع ترجمه */}
                              {translateFollowUpNote(lastFollowUp.note)}
                            </span>
                            <span className="text-[10px] opacity-70">
@@ -129,21 +127,42 @@ export function DebtsTable({
                        ) : '—'}
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 flex-nowrap">
                         {showActions && (
                           <>
-                            <button
-                              onClick={() => setSelectedPaymentRow(row)}
-                              className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-ink-inverse hover:bg-brand-600 transition-colors shadow-sm"
-                            >
-                              ثبت پرداخت
-                            </button>
-                            <button
-                              onClick={() => setSelectedFollowUpRow(row)}
-                              className="rounded-lg border border-line-2 bg-surface px-3 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2 transition-colors"
-                            >
-                              پیگیری
-                            </button>
+                            {panel === 'reception' ? (
+                              // 👈 دکمه‌های ظریف مخصوص پنل منشی
+                              <>
+                                <button
+                                  onClick={() => setSelectedFollowUpRow(row)}
+                                  className="rounded-full border border-line-2 bg-surface px-3 py-1.5 text-[11px] font-semibold text-ink-2 hover:bg-surface-2 transition-colors whitespace-nowrap shadow-sm"
+                                >
+                                  پیگیری
+                                </button>
+                                <button
+                                  onClick={() => setSelectedPaymentRow(row)}
+                                  className="rounded-full bg-[#ba6a73] px-3 py-1.5 text-[11px] font-semibold text-white hover:opacity-90 transition-opacity whitespace-nowrap shadow-sm"
+                                >
+                                  ثبت پرداخت
+                                </button>
+                              </>
+                            ) : (
+                              // 👈 دکمه‌های پنل ادمین (بدون تغییر)
+                              <>
+                                <button
+                                  onClick={() => setSelectedPaymentRow(row)}
+                                  className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-ink-inverse hover:bg-brand-600 transition-colors shadow-sm"
+                                >
+                                  ثبت پرداخت
+                                </button>
+                                <button
+                                  onClick={() => setSelectedFollowUpRow(row)}
+                                  className="rounded-lg border border-line-2 bg-surface px-3 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2 transition-colors"
+                                >
+                                  پیگیری
+                                </button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>

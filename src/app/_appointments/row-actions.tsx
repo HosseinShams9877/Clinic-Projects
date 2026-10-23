@@ -19,6 +19,7 @@ import {
   type ActionResult,
 } from './actions'
 
+import { approveAppointmentAction } from '@/app/doctor/actions'
 import { ResultDialog } from './result-dialog'
 
 type ActionPanel = 'reception' | 'doctor' | 'admin'
@@ -44,6 +45,7 @@ export interface RowActionsProps {
   readonly charged?: bigint
   readonly alreadyPaid?: bigint
   readonly isSlotBlock?: boolean
+  readonly isDoctorApproved?: boolean
   readonly edit?: RowEditContext
 }
 
@@ -56,6 +58,7 @@ export function RowActions({
   charged,
   alreadyPaid,
   isSlotBlock = false,
+  isDoctorApproved = false,
   edit,
 }: RowActionsProps) {
   const router = useRouter()
@@ -78,6 +81,17 @@ export function RowActions({
     })
   }
 
+  const handleApprove = () => {
+    startTransition(async () => {
+      const outcome = await approveAppointmentAction(appointmentId)
+      if (outcome.ok) {
+        router.refresh()
+      } else {
+        setMessage(outcome.message)
+      }
+    })
+  }
+
   const canArriveAsBooking =
     !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.Arrived)
   const canCompleteAsBooking = !isSlotBlock && status === AppointmentStatus.Arrived
@@ -91,6 +105,8 @@ export function RowActions({
     !edit.isSlotBlock &&
     edit.serviceId !== null &&
     (canArriveAsBooking || canCancel)
+  
+  const canApprove = panel === 'doctor' && !isSlotBlock && !isDoctorApproved && status !== AppointmentStatus.Cancelled
 
   if (
     !canArriveAsBooking &&
@@ -98,7 +114,8 @@ export function RowActions({
     !canNoShow &&
     !canCancel &&
     !canEdit &&
-    !canCloseBlock
+    !canCloseBlock &&
+    !canApprove
   ) {
     return null
   }
@@ -106,6 +123,18 @@ export function RowActions({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1">
+        {/* 👈 دکمه شیشه‌ای تایید جلسه */}
+        {canApprove ? (
+          <button
+            onClick={handleApprove}
+            disabled={pending}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/40 bg-white/20 px-3 py-1.5 text-xs font-bold text-ink backdrop-blur-sm transition-all hover:bg-white/40 disabled:opacity-50"
+          >
+            <Icon name="confirm" size="compact" />
+            {pending ? 'در حال تایید...' : 'تایید جلسه'}
+          </button>
+        ) : null}
+
         {canArriveAsBooking ? (
           <Button
             size="small"

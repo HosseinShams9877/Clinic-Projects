@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { prisma, runInTenantScope } from '@/core/db'
+import { realClock } from '@/core/lib/clock'
 import {
   asLocalDate,
   asLocalTime,
@@ -18,7 +19,7 @@ import {
   toPersianDigits,
   type LocalDate,
 } from '@/core/localization'
-import { AcquisitionSource, isMember } from '@/core/constants'
+import { AcquisitionSource, isMember, PaymentKind } from '@/core/constants'
 
 import { CUSTOMER_PROFILE_PAGE, CUSTOMERS_PAGE, RECEPTION_CUSTOMERS } from '@/app/catalog'
 import { loadCustomerProfile } from '@/app/_customers/page-data'
@@ -36,7 +37,15 @@ import {
 import { APPOINTMENT_STATUS_LABELS } from '@/modules/appointments'
 import { requireStaffPanel } from '@/app/_shell/session'
 import { customerDebtFollowUps } from '@/modules/debts'
+import { customerCycles } from '@/modules/cycles'
 import { CollapsibleCard } from '@/app/_customers/CollapsibleCard'
+
+// 👈 ایمپورت تب‌های جدید که در ادمین بود
+import { TreatmentHistoryTab, type TreatmentHistoryRow } from '@/app/_customers/treatment-history-tab'
+import { PaymentsTab, type InstallmentRow, type PaymentRow } from '@/app/_customers/payments-tab'
+import { InternalNotesTab } from '@/app/_customers/internal-notes-tab'
+import { ProfileEdit, DoctorNoteForm } from '@/app/_customers/profile-forms'
+import { calculateAge } from '@/core/localization/age'
 
 export const metadata: Metadata = { title: CUSTOMERS_PAGE.reception.title }
 
@@ -57,36 +66,194 @@ export default async function ReceptionCustomerDetailPage({
   const page = pageFromParam(query.page)
   const injectionView = injectionViewFromParam(query.injectionView)
 
+  // ۱. گرفتن لیست نوبت‌ها مستقیماً از دیتابیس همراه با اطلاعات خدمت و پزشک
+  const dbAppts = await runInTenantScope(session.permissions, prisma(), async (tx) => {
+    return tx.appointment.findMany({
+      where: { customerId: id, isSlotBlock: false },
+      include: { service: true, doctor: true },
+      orderBy: { scheduledAt: 'desc' },
+    })
+  })
+
   const data = await runInTenantScope(session.permissions, prisma(), async (tx) => {
     try {
       const base = await loadCustomerProfile({ tx, ctx: session.permissions, customerId: id })
       const followUps = await customerDebtFollowUps({ tx, tenantId: session.tenantId, customerId: id })
-      return { ...base, followUps }
+      const cycles = await customerCycles({ tx, tenantId: session.tenantId, customerId: id })
+      
+      const internalNotes = await tx.internalNote.findMany({
+        where: { customerId: id },
+        include: { 
+          author: { 
+            select: { 
+              firstName: true, 
+              lastName: true, 
+              memberships: { 
+                where: { tenantId: session.tenantId },
+                select: { role: true } 
+              } 
+            } 
+          } 
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      const installments = await tx.installment.findMany({
+        where: {
+          appointment: { customerId: id }
+        },
+        include: {
+          payments: true
+        },
+        orderBy: { dueAt: 'asc' }
+      })
+
+      return { ...base, followUps, cycles, internalNotes, installments }
     } catch {
       return null
     }
   })
+  
   if (data === null) notFound()
 
-  const { profile, primaryDoctorName, primaryClinicName, injections, injectionCounts, followUps } = data
-  const name =
-    profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
-  const appts = paginate(profile.appointments, page)
+  const { profile, primaryDoctorName, primaryClinicName, injections, injectionCounts, followUps, cycles, internalNotes, installments } = data
+  const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
+  
+  const appts = paginate(dbAppts, page)
   const apptsHrefFor = (next: number): string =>
     next > 1 ? `/reception/customers/${id}?page=${String(next)}` : `/reception/customers/${id}`
   const basePath = `/reception/customers/${id}`
+  const customerAge = profile.birthDate ? calculateAge(profile.birthDate) : '—'
+
+  // ─────────────────────────────────────────────
+  // ساخت ردیف‌های سوابق (دقیقاً مثل ادمین)
+  // ─────────────────────────────────────────────
+  const historyRows: TreatmentHistoryRow[] = []
+
+  const injectionsByAppointment = new Map<string, any[]>()
+  injections.forEach((inj: any) => {
+    if (!inj.appointmentId) return
+    const list = injectionsByAppointment.get(inj.appointmentId) ?? []
+    list.push(inj)
+    injectionsByAppointment.set(inj.appointmentId, list)
+  })
+
+  dbAppts.forEach((appt: any) => {
+    const relatedInjections = injectionsByAppointment.get(appt.id) ?? []
+    const first = relatedInjections[0] ?? null
+    const isDoctorApproved = appt.isDoctorApproved === true
+    const finalStatus = isDoctorApproved ? 'COMPLETED' : 'PENDING'
+
+    historyRows.push({
+      id: appt.id,
+      kind: 'appointment',
+      localDate: appt.localDate || '—',
+      localTime: appt.localTime || '—',
+      doctorName: appt.doctor ? `${appt.doctor.firstName} ${appt.doctor.lastName || ''}`.trim() : 'نامشخص',
+      serviceName: appt.service?.name || 'ویزیت',
+      status: finalStatus,
+      note: appt.note || appt.resultNote || null,
+      recommendations: appt.recommendations || null,
+      priceAtBooking: appt.priceAtBooking || 0n,
+      area: first?.area ?? null,
+      material: first?.material ?? null,
+      amount: first?.amount ?? null,
+      amountUnit: first?.amountUnit ?? null,
+      brand: first?.brand ?? null,
+      depth: first?.depth ?? null,
+      technique: first?.technique ?? null,
+      injections: relatedInjections.map((inj: any) => ({
+        id: inj.id,
+        area: inj.area || null,
+        material: inj.material || null,
+        amount: inj.amount ?? null,
+        amountUnit: inj.amountUnit || null,
+        brand: inj.brand || null,
+        depth: inj.depth || null,
+        technique: inj.technique || null,
+        note: inj.note || null,
+      })),
+    })
+  })
+
+  // ─────────────────────────────────────────────
+  // محاسبات مالی اقساط (دقیقاً مثل ادمین)
+  // ─────────────────────────────────────────────
+  let totalCount = 1
+  let totalInstallmentsAmount = 0n
+  
+  installments.forEach((inst: any) => {
+    if (inst.note && inst.note.startsWith('TOTAL:')) {
+      const parts = inst.note.split(':')
+      const count = Number(parts[1] || 1)
+      const totalAmt = parts[3] ? BigInt(parts[3]) : inst.amount
+      
+      if (count > totalCount) totalCount = count 
+      totalInstallmentsAmount += totalAmt
+    } else {
+      totalInstallmentsAmount += inst.amount
+    }
+  })
+
+  const installmentAppointmentIds = new Set(installments.map((inst: any) => inst.appointmentId))
+
+  const totalPaidOnInstallments = profile.payments
+    .filter((p: any) => 
+      (p.kind === 'PARTIAL' || p.kind === PaymentKind.Partial) && 
+      installmentAppointmentIds.has(p.appointmentId)
+    )
+    .reduce((sum: bigint, p: any) => sum + BigInt(p.amount || 0), BigInt(0))
+    
+  const installmentsData: InstallmentRow[] = installments.map((inst: any) => {
+    const instPayments = inst.payments || []
+    const paidAmount = instPayments.reduce((sum: bigint, p: any) => sum + p.amount + (p.discountAmount || 0n), 0n)
+    
+    const firstPayment = instPayments.length > 0 ? instPayments[0] : null
+    const paidAt = firstPayment ? firstPayment.paidAt : null
+    const paymentMethod = firstPayment ? firstPayment.method : null
+    const isOverdue = !paidAt && new Date(inst.dueAt) < new Date()
+
+    return {
+      id: inst.id,
+      appointmentId: inst.appointmentId,
+      sequence: inst.sequence,
+      amount: inst.amount,
+      dueAt: inst.dueAt,
+      note: inst.note,
+      status: paidAmount >= inst.amount ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING', 
+      paidAmount,
+      paidAt,
+      paymentMethod,
+    }
+  })
+  
+  const paymentsData: PaymentRow[] = profile.payments
+    .filter((p: any) => !p.installmentId)
+    .map((p: any) => ({
+      id: p.id,
+      amount: p.amount,
+      paidAt: p.paidAt,
+      method: p.method,
+      kind: p.kind,
+    }))
+
+  const nextInst = installmentsData.find((i) => i.status !== 'PAID')
+  const activeCycles = cycles.filter((row: any) => row.status === 'ACTIVE' || row.status === 'DUE' || row.status === 'AT_RISK')
 
   return (
     <div className="flex flex-col gap-6">
+      {/* هدر صفحه */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <Link
-            href="/reception/customers"
-            className="text-xs font-semibold text-brand-700 no-underline hover:underline"
-          >
-            {RECEPTION_CUSTOMERS.detail.back}
-          </Link>
-          <h1 className="text-2xl font-bold text-ink">{name}</h1>
+        <div className="flex items-center gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-pill bg-brand-50 text-lg font-bold text-brand-700 sm:size-12">
+            {profile.firstName.slice(0, 1)}
+          </span>
+          <div className="flex flex-col gap-1">
+            <Link href="/reception/customers" className="text-xs font-semibold text-brand-700 no-underline hover:underline">
+              {RECEPTION_CUSTOMERS.detail.back}
+            </Link>
+            <h1 className="text-2xl font-bold text-ink">{name}</h1>
+          </div>
         </div>
         <Link
           href="/reception/appointments"
@@ -96,6 +263,7 @@ export default async function ReceptionCustomerDetailPage({
         </Link>
       </div>
 
+      {/* نوار تب‌ها */}
       <CustomerTabs
         basePath={basePath}
         active={tab}
@@ -103,58 +271,103 @@ export default async function ReceptionCustomerDetailPage({
         injectionsLabel={RECEPTION_CUSTOMERS.tabs.injections}
       />
 
-      {tab === 'injections' ? (
-        <InjectionTab
-  rows={injections}
-  counts={injectionCounts}
-  panel="admin"
-  customerId={profile.id}
-  view={injectionView}
-  basePath={`${basePath}?tab=injections`}
-  appointments={profile.appointments} // 👈 این خط رو اضافه کن
-/>
-      ) : (
-        <>
+      {/* محتوای تب‌ها */}
+      {tab === 'injections' && (
+        <div className="w-full min-w-0">
+          <InjectionTab
+            rows={injections}
+            counts={injectionCounts}
+            panel="reception" // 👈 پنل منشی
+            customerId={profile.id}
+            view={injectionView}
+            basePath={`${basePath}?tab=injections`}
+            appointments={dbAppts.map((a: any) => ({
+              id: a.id,
+              localDate: a.localDate,
+              localTime: a.localTime,
+              serviceName: a.service?.name ?? null,
+            }))}
+          />
+        </div>
+      )}
+
+      {tab === 'history' && (
+        <div className="w-full min-w-0">
+          <TreatmentHistoryTab
+            customerName={name}
+            customerAge={customerAge}
+            customerPhone={profile.mobile}
+            visitsCount={dbAppts.length}
+            pendingCount={historyRows.filter((r) => r.status === 'PENDING').length}
+            lastVisitDate={profile.lastVisitAt ? dateToLocalDate(profile.lastVisitAt) : null}
+            historyRows={historyRows}
+          />
+        </div>
+      )}
+
+      {tab === 'payments' && (
+        <div className="w-full min-w-0">
+          <PaymentsTab
+            customerId={profile.id}
+            totalAmount={profile.chargedTotal}
+            totalPaid={profile.paidTotal}
+            totalRemaining={profile.chargedTotal - profile.paidTotal}
+            nextDueDate={nextInst ? nextInst.dueAt : null}
+            nextDueAmount={nextInst ? nextInst.amount : 0n}
+            installments={installmentsData}
+            payments={paymentsData}
+            totalInstallmentsAmount={totalInstallmentsAmount}
+            totalPaidOnInstallments={totalPaidOnInstallments}
+            totalCount={totalCount}
+          />
+        </div>
+      )}
+
+      {tab === 'internal' && (
+        <div className="w-full min-w-0">
+          <InternalNotesTab
+            customerId={profile.id}
+            panel="reception" // 👈 پنل منشی
+            notes={internalNotes.map((n: any) => {
+              const role = n.author.memberships[0]?.role;
+              let roleLabel = 'کادر درمان';
+              if (role === 'MANAGER') roleLabel = 'مدیر';
+              else if (role === 'DOCTOR') roleLabel = 'پزشک';
+              else if (role === 'RECEPTION') roleLabel = 'منشی';
+
+              return {
+                id: n.id,
+                content: n.content,
+                category: n.category,
+                createdAt: n.createdAt,
+                authorName: n.author.lastName ? `${n.author.firstName} ${n.author.lastName}` : n.author.firstName,
+                authorRole: roleLabel,
+              }
+            })}
+          />
+        </div>
+      )}
+
+      {tab === 'summary' && (
+        <div className="flex w-full min-w-0 flex-col gap-5 sm:gap-6">
           <CollapsibleCard title={CUSTOMER_PROFILE_PAGE.sections.details}>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-3 panel:grid-cols-2">
-              <Detail
-                label={CUSTOMER_PROFILE_PAGE.fields.mobile}
-                value={formatPhone(profile.mobile)}
-                ltr
-              />
-              <Detail
-                label={CUSTOMERS_PAGE.columns.lifecycle}
-                value={lifecycleLabel(profile.lifecycle)}
-              />
-              <Detail
-                label={CUSTOMER_PROFILE_PAGE.fields.acquisitionSource}
-                value={sourceLabel(profile.acquisitionSource)}
-              />
+              <Detail label={CUSTOMER_PROFILE_PAGE.fields.mobile} value={formatPhone(profile.mobile)} ltr />
+              <Detail label={CUSTOMERS_PAGE.columns.lifecycle} value={lifecycleLabel(profile.lifecycle)} />
+              <Detail label={CUSTOMER_PROFILE_PAGE.fields.acquisitionSource} value={sourceLabel(profile.acquisitionSource)} />
               <Detail
                 label={CUSTOMER_PROFILE_PAGE.fields.birthDate}
-                value={
-                  profile.birthDate === null
-                    ? null
-                    : formatDate(profile.birthDate as LocalDate, 'long')
-                }
+                value={profile.birthDate === null ? null : formatDate(profile.birthDate as LocalDate, 'long')}
               />
               <Detail label={CUSTOMER_PROFILE_PAGE.fields.primaryDoctor} value={primaryDoctorName} />
               <Detail label={CUSTOMER_PROFILE_PAGE.fields.primaryClinic} value={primaryClinicName} />
               <Detail
                 label={CUSTOMER_PROFILE_PAGE.fields.firstVisit}
-                value={
-                  profile.firstVisitAt === null
-                    ? null
-                    : formatDate(dateToLocalDate(profile.firstVisitAt), 'long')
-                }
+                value={profile.firstVisitAt === null ? null : formatDate(dateToLocalDate(profile.firstVisitAt), 'long')}
               />
               <Detail
                 label={CUSTOMER_PROFILE_PAGE.fields.lastVisit}
-                value={
-                  profile.lastVisitAt === null
-                    ? null
-                    : formatDate(dateToLocalDate(profile.lastVisitAt), 'long')
-                }
+                value={profile.lastVisitAt === null ? null : formatDate(dateToLocalDate(profile.lastVisitAt), 'long')}
               />
               <Detail
                 label={CUSTOMER_PROFILE_PAGE.fields.completedSessions}
@@ -214,11 +427,15 @@ export default async function ReceptionCustomerDetailPage({
           <CollapsibleCard title="پیگیری‌های انجام شده" note={`${toPersianDigits(followUps.length)} مورد`}>
             <FollowUpsList rows={followUps} />
           </CollapsibleCard>
-        </>
+        </div>
       )}
     </div>
   )
 }
+
+// ─────────────────────────────────────────────────────────────
+// توابع کمکی (دقیقاً مثل ادمین)
+// ─────────────────────────────────────────────────────────────
 
 function FollowUpsList({ rows }: { readonly rows: any[] }) {
   if (rows.length === 0) {

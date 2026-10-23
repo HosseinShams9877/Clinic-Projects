@@ -1,41 +1,30 @@
-/**
- * The doctor's own debts — `02-architecture.md` §9's `doctor/debts.html`.
- */
-
 import type { Metadata } from 'next'
 import Link from 'next/link'
-
 import { prisma, runInTenantScope } from '@/core/db'
 import { realClock } from '@/core/lib/clock'
 import { cx } from '@/core/lib'
 import { formatMoney, formatNumber, isValidLocalDate } from '@/core/localization'
 import { isMember } from '@/core/constants'
-
 import { DEBTS_PAGE } from '@/app/catalog'
 import { DebtsTable } from '@/app/_debts/debts-table'
-import { clinicDebts, readDebtSettings, type DebtRow } from '@/modules/debts' // 👈 تغییر به clinicDebts
+import { clinicDebts, readDebtSettings, type DebtRow } from '@/modules/debts'
 import { paymentsThisMonth } from '@/modules/payments'
 import { Pagination, paginate, pageFromParam } from '@/app/_components/Pagination'
 import { requireStaffPanel } from '@/app/_shell/session'
-
 import { DebtsKpi } from '@/app/reception/debts/_components/debts-kpi'
 import { DebtsFollowUpDateField } from '@/app/reception/debts/_components/debts-follow-up-date-field'
 
-export const metadata: Metadata = { title: DEBTS_PAGE.doctor.title }
 
+
+export const metadata: Metadata = { title: DEBTS_PAGE.doctor.title }
 const BASE_PATH = '/doctor/debts'
 
 type DebtsTab = 'everyone' | 'today' | 'all' | 'unfollowed'
 const TAB_VALUES: readonly DebtsTab[] = ['everyone', 'today', 'all', 'unfollowed']
 const DEFAULT_TAB: DebtsTab = 'everyone'
-
 type PageSearchParams = Promise<{ readonly [key: string]: string | string[] | undefined }>
 
-export default async function DoctorDebtsPage({
-  searchParams,
-}: {
-  readonly searchParams: PageSearchParams
-}) {
+export default async function DoctorDebtsPage({ searchParams }: { readonly searchParams: PageSearchParams }) {
   const session = await requireStaffPanel('doctor')
   const params = await searchParams
   const now = realClock()
@@ -49,10 +38,8 @@ export default async function DoctorDebtsPage({
     async (tx) => {
       const settings = await readDebtSettings(tx, session.tenantId)
       
-      // 👈 همه بدهی‌ها رو می‌گیریم
-      const allBuckets = await clinicDebts({ tx, ctx: session.permissions, now })
-      
-      // 👈 اینجا فیلتر می‌کنیم که فقط بدهی‌های خود این دکتر باشه (مثل مکانیزم مشتریان)
+      // 👈 فقط بدهی‌های همین دکتر خونده میشه (دقیقاً مثل صفحه مشتریان)
+      const allBuckets = await clinicDebts({ tx, ctx: session.permissions, now }) // فعلا همه رو میگیریم و فیلتر میکنیم
       const myId = session.permissions.userId
       const myBuckets = {
         overdue30: allBuckets.overdue30.filter(r => r.doctorId === myId),
@@ -62,10 +49,7 @@ export default async function DoctorDebtsPage({
       }
 
       const collectedRial = await paymentsThisMonth(tx, session.tenantId, now, settings.utcOffsetMinutes)
-
-      const appointmentIds = myBuckets.overdue30
-        .concat(myBuckets.overdue7, myBuckets.overdue, myBuckets.dueSoon)
-        .map((row) => row.appointmentId)
+      const appointmentIds = myBuckets.overdue30.concat(myBuckets.overdue7, myBuckets.overdue, myBuckets.dueSoon).map((row) => row.appointmentId)
 
       const allFollowUps = await tx.debtFollowUp.findMany({
         where: { tenantId: session.tenantId, appointmentId: { in: appointmentIds } },
@@ -112,11 +96,7 @@ export default async function DoctorDebtsPage({
         <p className="text-sm text-ink-2">{DEBTS_PAGE.doctor.lead}</p>
       </div>
 
-      <DebtsKpi
-        collectedRial={collectedRial}
-        overdueCount={pastDue.length}
-        totalRial={totalRial}
-      />
+      <DebtsKpi collectedRial={collectedRial} overdueCount={pastDue.length} totalRial={totalRial} />
 
       <nav className="flex items-center gap-2 max-panel:flex-nowrap max-panel:overflow-x-auto panel:flex-wrap">
         {TAB_VALUES.map((t) => {
@@ -145,12 +125,7 @@ export default async function DoctorDebtsPage({
         <button type="submit" className="mt-5 shrink-0 rounded-xs border border-brand-300 bg-brand-50 px-4 py-[6px] text-xs font-semibold text-brand-700 hover:bg-brand-100">{DEBTS_PAGE.search.label}</button>
       </form>
 
-      <DebtsTable
-        rows={slice}
-        showActions={false}
-        followUpsMap={followUpsMap}
-        panel="doctor" 
-      />
+      <DebtsTable rows={slice} showActions={false} followUpsMap={followUpsMap} panel="doctor" />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
         <span className="text-ink-3">{`${DEBTS_PAGE.total.label} (${formatNumber(slice.length)} ${DEBTS_PAGE.total.pageRows})`}</span>
@@ -162,27 +137,21 @@ export default async function DoctorDebtsPage({
   )
 }
 
-/* ── توابع کمکی ────────────────────────────────────────────────────────────── */
-
 function rowsForTab(rows: readonly DebtRow[], tab: DebtsTab, now: Date, utcOffsetMinutes: number): readonly DebtRow[] {
   if (tab === 'everyone') return rows
   if (tab === 'unfollowed') return rows.filter((row) => row.lastFollowUp === null)
   if (tab === 'today') return rows.filter((row) => isToday(row.nextContactAt, now, utcOffsetMinutes))
-  return [...rows]
-    .filter((row) => row.lastFollowUp !== null)
-    .sort((a, b) => compareByNextContact(a, b, now))
+  return [...rows].filter((row) => row.lastFollowUp !== null).sort((a, b) => compareByNextContact(a, b, now))
 }
 
 function isToday(instant: Date | null, now: Date, utcOffsetMinutes: number): boolean {
   if (instant === null) return false
   return dayKey(instant, utcOffsetMinutes) === dayKey(now, utcOffsetMinutes)
 }
-
 function dayKey(instant: Date, utcOffsetMinutes: number): string {
   const shifted = new Date(instant.getTime() + utcOffsetMinutes * 60 * 1000)
   return shifted.toISOString().slice(0, 10)
 }
-
 function compareByNextContact(a: DebtRow, b: DebtRow, now: Date): number {
   if (a.nextContactAt === null && b.nextContactAt === null) return 0
   if (a.nextContactAt === null) return 1
@@ -195,7 +164,6 @@ function compareByNextContact(a: DebtRow, b: DebtRow, now: Date): number {
   if (!aPast && bPast) return 1
   return aTime - bTime
 }
-
 function applyFilters(rows: readonly DebtRow[], search: string, followUpDate: string | null, utcOffsetMinutes: number): readonly DebtRow[] {
   return rows.filter((row) => {
     if (followUpDate !== null) {
@@ -207,16 +175,11 @@ function applyFilters(rows: readonly DebtRow[], search: string, followUpDate: st
     return haystack.toLowerCase().includes(search.toLowerCase())
   })
 }
-
 function tabFromParam(value: string | string[] | undefined): DebtsTab {
   const name = typeof value === 'string' ? value : ''
   return isMember(TAB_VALUES, name) ? name : DEFAULT_TAB
 }
-
-function asString(value: string | string[] | undefined): string {
-  return typeof value === 'string' ? value : ''
-}
-
+function asString(value: string | string[] | undefined): string { return typeof value === 'string' ? value : '' }
 function asLocalDateParam(value: string | string[] | undefined): string | null {
   if (typeof value !== 'string') return null
   if (value === '') return null

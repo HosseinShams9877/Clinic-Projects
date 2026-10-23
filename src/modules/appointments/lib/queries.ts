@@ -1,15 +1,5 @@
 /**
  * The reads the three scheduling pages render.
- *
- * ## The paid total on every row
- *
- * Every row carries `paidTotal`, the sum of the payment ledger's rows for the
- * appointment. The grid does not join the ledger — a day grid of N rows would be N
- * extra joins — so the four queries here read the payments in one pass, keyed by
- * the appointment ids the rows they just read hold, and stamp each row's own total.
- * The row's `priceAtBooking` is `charged`; `paidTotal` is what the desk has
- * already collected; and `charged − paidTotal − discount` is the balance
- * `03-data-model.md` §4.1 names.
  */
 
 import type { Prisma } from '@prisma/client'
@@ -50,6 +40,7 @@ interface AppointmentWithRelations {
   readonly cancelReason: string | null
   readonly resultNote: string | null
   readonly source: string | null
+  readonly isDoctorApproved: boolean // 👈 این خط اضافه شد
 }
 
 const GRID_STATUSES: string[] = [
@@ -82,6 +73,7 @@ export interface AppointmentRow {
   readonly cancelReason: string | null
   readonly resultNote: string | null
   readonly source: string | null
+  readonly isDoctorApproved: boolean // 👈 این خط اضافه شد
 }
 
 function personName(firstName: string, lastName: string | null): string {
@@ -90,10 +82,6 @@ function personName(firstName: string, lastName: string | null): string {
 
 /**
  * The paid total of every appointment named, in one indexed scan.
- *
- * The `payments_tenant_appointment_idx` index the ledger declares is what makes
- * this an index-only read: one `groupBy` over the ids the query just returned,
- * keyed by `appointmentId`.
  */
 async function paidTotalsFor(
   tx: TransactionClient,
@@ -136,6 +124,7 @@ function asRow(raw: AppointmentWithRelations, paidTotal: bigint): AppointmentRow
     cancelReason: raw.cancelReason,
     resultNote: raw.resultNote,
     source: raw.source,
+    isDoctorApproved: raw.isDoctorApproved, // 👈 این خط اضافه شد
   }
 }
 

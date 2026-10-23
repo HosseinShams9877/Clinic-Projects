@@ -94,7 +94,7 @@ export default async function DoctorHomePage({ searchParams }: { readonly search
             services={data.options.services}
             customers={data.options.customers}
             panel="doctor"
-            writable={false}
+            writable={true}
           />
         </div>
       </section>

@@ -219,7 +219,7 @@ export function DayGrid(props: DayGridProps) {
                 {row.resultNote}
               </p>
             ) : null}
-            {props.writable ? (
+                        {props.writable ? (
               <div className="mt-3">
                 <RowActions
                   appointmentId={row.id}
@@ -228,6 +228,7 @@ export function DayGrid(props: DayGridProps) {
                   charged={row.priceAtBooking}
                   alreadyPaid={row.paidTotal}
                   isSlotBlock={row.isSlotBlock}
+                  isDoctorApproved={row.isDoctorApproved} // 👈 اینجا اضافه کن
                   edit={editContext(row, props.services, columns, props.servicesByDoctorId)}
                 />
               </div>
@@ -393,7 +394,7 @@ function Cell({
           {srcIcon === null ? null : <Icon name={srcIcon} size="compact" className="text-ink-3" />}
           {rowDescription(row)}
         </span>
-        <StatusChip status={row.status} />
+        <StatusChip status={row.status} isDoctorApproved={row.isDoctorApproved} />
       </div>
       {row.serviceName === null ? null : (
         <span className="text-xs text-ink-3">{row.serviceName}</span>
@@ -415,7 +416,7 @@ function Cell({
           {row.resultNote}
         </span>
       ) : null}
-      {writable ? (
+           {writable ? (
         <RowActions
           appointmentId={row.id}
           status={row.status}
@@ -423,6 +424,7 @@ function Cell({
           charged={row.priceAtBooking}
           alreadyPaid={row.paidTotal}
           isSlotBlock={row.isSlotBlock}
+          isDoctorApproved={row.isDoctorApproved} // 👈 اینجا اضافه کن
           edit={editContext(row, services, doctorOptions, servicesByDoctorId)}
         />
       ) : null}
@@ -493,15 +495,18 @@ function rowDescription(row: AppointmentRow): string {
   return row.customerName ?? APPOINTMENTS_PAGE.controls.blockHours
 }
 
-function StatusChip({ status }: { readonly status: string }) {
+function StatusChip({ status, isDoctorApproved }: { readonly status: string; readonly isDoctorApproved?: boolean }) {
+  const isApproved = isDoctorApproved && status === 'COMPLETED'
+  const displayStatus = isApproved ? 'APPROVED' : status
+  
   return (
     <span
       className={cx(
         'inline-flex items-center gap-1 rounded-pill px-2 py-[2px] text-[11px] font-semibold',
-        CHIP_CLASSES[status] ?? CHIP_CLASSES.default,
+        CHIP_CLASSES[displayStatus] ?? CHIP_CLASSES.default,
       )}
     >
-      {APPOINTMENT_STATUS_LABELS[status as keyof typeof APPOINTMENT_STATUS_LABELS] ?? status}
+      {isApproved ? 'تایید شد' : (APPOINTMENT_STATUS_LABELS[status as keyof typeof APPOINTMENT_STATUS_LABELS] ?? status)}
     </span>
   )
 }
@@ -516,6 +521,7 @@ const CHIP_CLASSES: Readonly<Record<string, string>> = {
   CANCELLED: 'bg-danger-bg text-danger',
   RESCHEDULED: 'bg-neutral-bg text-ink-3',
   RESULT_NOT_RECORDED: 'bg-danger-bg text-danger',
+  APPROVED: 'bg-brand-100 text-brand-700',
 }
 
 const BORDER_CLASSES: Readonly<Record<string, string>> = {
