@@ -3,6 +3,7 @@ import { Permission } from '@/core/constants'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 import { requirePermission } from '@/modules/roles-permissions'
+import { fromUtcInstant, toUtcInstant, asLocalDate, fromClockParts } from '@/core/localization'
 
 export interface InstallmentInput {
   readonly appointmentId: string
@@ -11,6 +12,19 @@ export interface InstallmentInput {
   readonly firstDueAt: Date
   readonly note: string | null
 }
+
+// 👈 تابع محاسبه دقیق ماه شمسی (روز ثابت می‌مونه)
+function addMonthsJalali(dateString: string, monthsToAdd: number): string {
+  const parts = dateString.split('-')
+  let y = Number(parts[0])
+  let m = Number(parts[1])
+  const d = parts[2]
+  m += monthsToAdd
+  while (m > 12) { m -= 12; y += 1 }
+  return `${y}-${String(m).padStart(2, '0')}-${d}`
+}
+
+const MIDNIGHT = fromClockParts({ hour: 0, minute: 0 })
 
 export async function createInstallmentPlan(args: {
   readonly tx: TransactionClient
@@ -62,7 +76,7 @@ export async function createInstallmentPlan(args: {
 }
 
 export async function listInstallments(tx: TransactionClient, tenantId: string) {
-  return tx.installment.findMany({
+  const rows = await tx.installment.findMany({
     where: { tenantId },
     orderBy: [{ dueAt: 'asc' }, { sequence: 'asc' }],
     take: 500,
@@ -71,15 +85,54 @@ export async function listInstallments(tx: TransactionClient, tenantId: string) 
       appointmentId: true,
       sequence: true,
       amount: true,
+      paidAmount: true,
+      totalPlanAmount: true,
+      totalPlanCount: true,
+      intervalMonths: true,
       dueAt: true,
       note: true,
+      type: true,
       appointment: {
         select: {
           localDate: true,
-          customer: { select: { firstName: true, lastName: true, mobile: true } },
+          customer: { select: { id: true, firstName: true, lastName: true, mobile: true } },
+          doctor: { select: { id: true, firstName: true, lastName: true } },
+          service: { select: { name: true } },
           payments: { select: { amount: true, installmentId: true } },
         },
       },
     },
+  })
+
+  const settings = await tx.tenantSettings.findUnique({
+    where: { tenantId },
+    select: { utcOffsetMinutes: true }
+  })
+  const offset = settings?.utcOffsetMinutes ?? 210
+
+  return rows.map((row) => {
+    const totalInstallments = row.totalPlanCount || 1
+    const paidCount = Math.min(
+      totalInstallments,
+      Math.floor(Number(row.paidAmount) / Number(row.amount > 0n ? row.amount : 1n))
+    )
+
+    let finalDueAt = new Date(row.dueAt)
+
+    if (paidCount > 0 && row.intervalMonths) {
+      const baseLocalDate = fromUtcInstant(new Date(row.dueAt), offset).localDate
+      const nextLocalDate = addMonthsJalali(baseLocalDate, paidCount * row.intervalMonths)
+      
+      finalDueAt = toUtcInstant(asLocalDate(nextLocalDate), MIDNIGHT, offset)
+    }
+
+    return {
+      ...row,
+      dueAt: finalDueAt,
+      appointment: {
+        ...row.appointment,
+        doctorId: row.appointment.doctor?.id,
+      }
+    }
   })
 }

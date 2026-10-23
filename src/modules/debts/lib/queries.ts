@@ -3,7 +3,7 @@
  */
 
 import { AppointmentStatus, DebtBucket, Permission } from '@/core/constants'
-import { fromUtcInstant, type LocalDate } from '@/core/localization'
+import { fromUtcInstant, toUtcInstant, asLocalDate, fromClockParts, type LocalDate } from '@/core/localization'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 import { requirePermission } from '@/modules/roles-permissions'
@@ -13,6 +13,7 @@ import { bucketOf, daysOverdueOf, effectiveDueInstant } from './buckets'
 import { readDebtSettings } from './settings'
 
 const LIST_LIMIT = 10000
+const MIDNIGHT = fromClockParts({ hour: 0, minute: 0 })
 
 const LIVE_STATUSES: string[] = [
   AppointmentStatus.Booked,
@@ -39,7 +40,7 @@ const APPOINTMENT_SELECT = {
   doctor: { select: { firstName: true, lastName: true } },
   service: { select: { name: true } },
   installments: {
-    orderBy: { sequence: 'desc' }, // 👈 مهم: جدیدترین قسط اول بیاد
+    orderBy: { sequence: 'desc' },
     select: {
       id: true,
       sequence: true,
@@ -47,6 +48,7 @@ const APPOINTMENT_SELECT = {
       paidAmount: true,
       totalPlanAmount: true,
       totalPlanCount: true,
+      intervalMonths: true, // 👈 اضافه شد
       type: true,
       note: true,
       dueAt: true,
@@ -84,6 +86,7 @@ type AppointmentRow = {
     readonly paidAmount: bigint
     readonly totalPlanAmount: bigint | null
     readonly totalPlanCount: number | null
+    readonly intervalMonths: number | null
     readonly type: string
     readonly note: string | null
     readonly dueAt: Date
@@ -93,6 +96,22 @@ type AppointmentRow = {
 type PaymentSums = {
   readonly appointmentId: string
   readonly _sum: { readonly amount: bigint | null; readonly discountAmount: bigint | null }
+}
+
+// 👈 تابع محاسبه دقیق ماه شمسی (دقیقاً مثل فرانت‌اند)
+function addMonthsJalali(dateString: string, monthsToAdd: number): string {
+  const parts = dateString.split('-')
+  let y = Number(parts[0])
+  let m = Number(parts[1])
+  const d = parts[2] // روز کاملاً ثابت می‌مونه
+
+  m += monthsToAdd
+  while (m > 12) {
+    m -= 12
+    y += 1
+  }
+
+  return `${y}-${String(m).padStart(2, '0')}-${d}`
 }
 
 async function tenantDebts(
@@ -133,7 +152,6 @@ async function tenantDebts(
     const paid = sumsForRow?._sum.amount ?? 0n
     const discount = sumsForRow?._sum.discountAmount ?? 0n
     
-    // 👈 پیدا کردن جدیدترین قسط (چون قبلاً desc کردیم، ایندکس 0 همیشه آخرین قسطه)
     const latestInstallment = row.installments[0]
 
     let balance = 0n
@@ -145,7 +163,6 @@ async function tenantDebts(
 
     if (latestInstallment) {
       const totalPlan = latestInstallment.totalPlanAmount ?? latestInstallment.amount
-      // 👈 بدهی قسطی بر اساس آخرین رکورد محاسبه میشه
       balance = totalPlan - latestInstallment.paidAmount
       
       totalInstallments = latestInstallment.totalPlanCount ?? 1
@@ -157,17 +174,23 @@ async function tenantDebts(
       installmentAmount = latestInstallment.amount
       installmentId = latestInstallment.id
     } else {
-      // اگه اصلا قسطی نبود
       balance = charged - discount - paid
     }
 
-    // 👈 فقط بدهی‌های مثبت نمایش داده میشن
     if (balance <= 0n) continue
 
-    // ۴. محاسبه تاریخ سررسید
+    // 👈 ۴. محاسبه داینامیک تاریخ سررسید (روش رشته‌ای دقیق)
     let dueAt = row.scheduledAt
     if (latestInstallment) {
-      dueAt = latestInstallment.dueAt
+      const baseDate = new Date(latestInstallment.dueAt)
+      const baseDateString = fromUtcInstant(baseDate, settings.utcOffsetMinutes).localDate
+      
+      if (paidInstallments > 0 && latestInstallment.intervalMonths) {
+        const nextLocalDate = addMonthsJalali(baseDateString, paidInstallments * latestInstallment.intervalMonths)
+        dueAt = toUtcInstant(asLocalDate(nextLocalDate), MIDNIGHT, settings.utcOffsetMinutes)
+      } else {
+        dueAt = baseDate
+      }
     }
 
     const effectiveDue = effectiveDueInstant({
@@ -176,7 +199,6 @@ async function tenantDebts(
       graceDays: settings.debtGraceDays,
     })
 
-    // ۶. اضافه کردن به bucket
     buckets[bucketKey(bucketOf(now, effectiveDue))].push({
       appointmentId: row.id,
       customerId: row.customerId,

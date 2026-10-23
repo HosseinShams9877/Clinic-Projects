@@ -90,7 +90,6 @@ export function PaymentsTab({
     ? 0 
     : Math.min(100, Math.round(Number((totalPaidOnInstallments * 100n) / totalAllInstallmentsAmount)))
     
-  // 👈 اصلاح شد: بررسی undefined بودن
   const firstInst = installments[0]
   const installmentAmount = installments.length > 0 && firstInst ? firstInst.amount : 0n
   
@@ -366,11 +365,12 @@ export function PaymentsTab({
 
       {paymentDialogData?.isOpen && (
         <InstallmentPaymentDialog
-          isOpen={paymentDialogData.isOpen}
+          isOpen={true}
           onClose={() => setPaymentDialogData(null)}
           installmentId={paymentDialogData.installmentId}
-          customerName="بیمار" 
+          customerName="" 
           amountDue={paymentDialogData.amount}
+          maxTotalRemaining={totalRemaining} 
           onSuccess={() => {
             setPaymentDialogData(null)
             router.refresh() 

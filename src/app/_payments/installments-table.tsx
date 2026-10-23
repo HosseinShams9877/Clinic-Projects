@@ -31,6 +31,7 @@ interface InstallmentRow {
   readonly appointmentId: string
   readonly totalPlanAmount: bigint | null
   readonly totalPlanCount: number | null
+  readonly intervalMonths: number | null // 👈 اضافه شد
   readonly appointment: {
     readonly customer: { readonly id?: string; readonly firstName: string; readonly lastName: string | null; readonly mobile: string } | null
     readonly doctor: { readonly firstName: string; readonly lastName: string | null } | null
@@ -127,10 +128,6 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                 const doctorName = row.appointment.doctor ? `${row.appointment.doctor.firstName} ${row.appointment.doctor.lastName ?? ''}`.trim() : '—'
                 const serviceName = row.appointment.service?.name ?? '—'
                 
-                const due = new Date(row.dueAt)
-                const today = realClock()
-                const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24))
-                
                 const totalInstallments = row.totalPlanCount || 1
                 const totalAmount = row.totalPlanAmount || row.amount
                 const currentTempAmount = tempAmounts[row.id]
@@ -139,9 +136,25 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                 const appointmentRows = rows.filter(r => r.appointmentId === row.appointmentId)
                 const totalPaidForAppointment = appointmentRows.reduce((sum, r) => sum + r.paidAmount, 0n)
                 
-                // 👈 محاسبه باقی‌مانده کل بدهی برای این نوبت
                 const remainingForAppointment = totalAmount - totalPaidForAppointment
                 const paidSoFar = totalPaidForAppointment > totalAmount ? totalAmount : totalPaidForAppointment
+
+                // 👈 محاسبه داینامیک سررسید
+                const paidCount = Math.min(
+                  totalInstallments,
+                  Math.floor(Number(paidSoFar) / Number(perInstallmentAmount > 0n ? perInstallmentAmount : 1n))
+                )
+                
+                let dynamicDueAt = new Date(row.dueAt)
+                if (paidCount > 0 && row.intervalMonths) {
+                  const baseDate = new Date(row.dueAt)
+                  baseDate.setMonth(baseDate.getMonth() + (paidCount * row.intervalMonths))
+                  dynamicDueAt = baseDate
+                }
+                const due = dynamicDueAt
+
+                const today = realClock()
+                const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24))
 
                 const displaySequence = Math.min(
                   totalInstallments,
@@ -237,7 +250,7 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                           appointmentId={row.appointmentId}
                           customerId={customer?.id || ''}
                           customerName={customerName}
-                          remainingAmount={remainingForAppointment} // 👈 محدودیت بر اساس باقی‌مانده کل
+                          remainingAmount={remainingForAppointment}
                           sequence={row.sequence}
                           currentDueDate={dateToLocalDate(due)}
                           currentAmount={perInstallmentAmount}
@@ -274,7 +287,6 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
           onClose={() => setSelectedInstallment(null)}
           installmentId={selectedInstallment.id}
           customerName={`${selectedInstallment.appointment.customer?.firstName || ''} ${selectedInstallment.appointment.customer?.lastName || ''}`.trim()}
-          // 👈 پاس دادن کمترین مقدار بین مبلغ قسط و باقی‌مانده کل بدهی
           amountDue={
             (() => {
               const appointmentRows = rows.filter(r => r.appointmentId === selectedInstallment.appointmentId)
@@ -282,6 +294,14 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
               const totalAmount = selectedInstallment.totalPlanAmount || selectedInstallment.amount
               const remaining = totalAmount - totalPaid
               return selectedInstallment.amount > remaining ? remaining : selectedInstallment.amount
+            })()
+          }
+          maxTotalRemaining={
+            (() => {
+              const appointmentRows = rows.filter(r => r.appointmentId === selectedInstallment.appointmentId)
+              const totalPaid = appointmentRows.reduce((sum, r) => sum + r.paidAmount, 0n)
+              const totalAmount = selectedInstallment.totalPlanAmount || selectedInstallment.amount
+              return totalAmount - totalPaid
             })()
           }
           onSuccess={() => {

@@ -318,7 +318,26 @@ export async function recordPaymentWithInstallmentsAction(
         ? Math.max(...allInstallments.map(i => i.sequence))
         : 0
 
-      const baseDate = toUtcInstant(asLocalDate(input.firstDueDate || '1405-01-01'), MIDNIGHT, settings.utcOffsetMinutes)
+            // 👈 محاسبه سررسید جدید: اگر رکورد قبلی وجود داره، به تاریخ اون intervalMonths اضافه میشه
+      let baseDate = toUtcInstant(asLocalDate(input.firstDueDate || '1405-01-01'), MIDNIGHT, settings.utcOffsetMinutes)
+      
+      if (currentInstallment && intervalMonths > 0) {
+        const currentLocalDate = fromUtcInstant(currentInstallment.dueAt, settings.utcOffsetMinutes).localDate
+        const dateParts = currentLocalDate.split('-').map(Number)
+        let y = dateParts[0] ?? 0
+        let m = dateParts[1] ?? 0
+        let d = dateParts[2] ?? 0
+        
+        m += intervalMonths
+        while (m > 12) { m -= 12; y += 1 }
+        
+        const isLeapYear = (y % 33 === 1 || y % 33 === 5 || y % 33 === 9 || y % 33 === 13 || y % 33 === 17 || y % 33 === 22 || y % 33 === 26 || y % 33 === 30)
+        const maxDaysInMonth = m === 12 ? (isLeapYear ? 30 : 29) : (m <= 6 ? 31 : 30)
+        if (d > maxDaysInMonth) d = maxDaysInMonth
+        
+        const nextLocalDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+        baseDate = toUtcInstant(asLocalDate(nextLocalDate), MIDNIGHT, settings.utcOffsetMinutes)
+      }
       const newPerInstallmentAmount = remainingAmount / BigInt(input.installmentCount)
 
       const newInstallment = await tx.installment.create({
