@@ -178,23 +178,62 @@ export async function recordPaymentWithInstallmentsAction(
       : 1
 
     if ((input.method === 'INSTALLMENT' || input.method === 'CHEQUE' || input.forceInstallment) && input.installmentCount > 0) {
+      
+      // ۱. گرفتن رکورد بدهی فعلی (فقط یکی وجود داره)
+      const existingInstallment = await tx.installment.findFirst({
+        where: { appointmentId, tenantId },
+      })
+
+      // ۲. محاسبه کل مبلغ بدهی
+      let totalPlanAmountFromExisting = payableAmount
+      if (existingInstallment) {
+        totalPlanAmountFromExisting = existingInstallment.totalPlanAmount || existingInstallment.amount
+      }
+
+      // ۳. محاسبه کل پرداختی تا الان
+      let totalPaidSoFar = 0n
+      if (existingInstallment) {
+        totalPaidSoFar = existingInstallment.paidAmount
+      }
+
+      // ۴. باقی‌مانده‌ای که باید قسطی بشه
+      const remainingAmount = totalPlanAmountFromExisting - totalPaidSoFar
+
+      if (remainingAmount <= 0n) {
+        return { ok: false, message: 'بدهی به طور کامل پرداخت شده است.' }
+      }
+
+      // 👈 ۵. بستن بدهی قبلی: totalPlanAmount = paidAmount
+      if (existingInstallment) {
+        await tx.installment.update({
+          where: { id: existingInstallment.id },
+          data: { 
+            totalPlanAmount: totalPaidSoFar, 
+            totalPlanCount: existingInstallment.totalPlanCount || 1,
+          }
+        })
+      }
+
+      // 👈 ۶. پیدا کردن بزرگترین sequence فعلی
+      const maxSequence = existingInstallment ? existingInstallment.sequence : 0
+
+      // 👈 ۷. ساخت بدهی جدید (فقط یک رکورد)
       const baseDate = toUtcInstant(asLocalDate(input.firstDueDate || '1405-01-01'), MIDNIGHT, settings.utcOffsetMinutes)
-      const perInstallmentAmount = payableAmount / BigInt(input.installmentCount)
+      const newPerInstallmentAmount = remainingAmount / BigInt(input.installmentCount)
 
-      await tx.installment.deleteMany({ where: { appointmentId, tenantId } })
-
-          await tx.installment.create({
+      await tx.installment.create({
         data: {
           tenantId,
           appointmentId,
-          sequence: 1, 
-          amount: perInstallmentAmount, 
+          sequence: maxSequence + 1,
+          amount: newPerInstallmentAmount, // مبلغ هر قسط
+          paidAmount: 0n,
           dueAt: baseDate,
-          totalPlanAmount: payableAmount,
-          totalPlanCount: input.installmentCount,
+          totalPlanAmount: remainingAmount, // کل بدهی جدید
+          totalPlanCount: input.installmentCount, // تعداد اقساط
           intervalMonths,
-          // 👈 تعیین نوع قسط یا چک
           type: input.method === 'CHEQUE' ? 'CHEQUE' : 'INSTALLMENT',
+          note: input.note || null,
         }
       })
 
@@ -253,7 +292,6 @@ export async function recordPaymentWithInstallmentsAction(
   revalidateDebts()
   return { ok: true }
 }
-
 export async function recordFollowUpWithDetailsAction(
   panel: Panel,
   appointmentId: string,
@@ -365,6 +403,7 @@ export async function rescheduleDueDateAction(
   revalidateDebts()
   return { ok: true }
 }
+
 export async function recordInstallmentPaymentAction(
   panel: Panel,
   installmentId: string,
@@ -372,143 +411,89 @@ export async function recordInstallmentPaymentAction(
 ): Promise<ActionResult> {
   let dbMethod = input.method
   if (input.method === 'POS' || input.method === 'CARD_TO_CARD') dbMethod = 'CARD'
-  const amountBigInt = asAmount(input.amount)
+  const paymentAmount = asAmount(input.amount)
 
   const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
     const now = realClock()
     
-    // 👈 لاگ ۱: ورودی‌ها
-    console.log('🚨 SERVER LOG - PAYMENT ACTION STARTED:', {
-      installmentId,
-      amountBigInt: amountBigInt.toString(),
-      method: dbMethod,
-    })
-
-    const installment = await tx.installment.findUnique({
+    const currentInstallment = await tx.installment.findUnique({
       where: { id: installmentId, tenantId },
       include: { appointment: { select: { customerId: true } } }
     })
     
-    if (!installment || !installment.appointment.customerId) throw new Error('Installment not found')
-    if (!isMember(PaymentMethod, dbMethod)) return { ok: false, message: 'روش پرداخت نامعتبر است' }
+    if (!currentInstallment || !currentInstallment.appointment.customerId) {
+      throw new Error('Installment not found')
+    }
+    if (!isMember(PaymentMethod, dbMethod)) {
+      return { ok: false, message: 'روش پرداخت نامعتبر است' }
+    }
 
-    // 👈 لاگ ۲: وضعیت قسط قبل از پرداخت
-    console.log('🚨 SERVER LOG - INSTALLMENT BEFORE PAYMENT:', {
-      id: installment.id,
-      sequence: installment.sequence,
-      amount: installment.amount.toString(),
-      paidAmount: installment.paidAmount.toString(),
-      totalPlanAmount: installment.totalPlanAmount?.toString(),
+    const customerId = currentInstallment.appointment.customerId
+    const appointmentId = currentInstallment.appointmentId
+
+    // 👈 لاگ برای دیباگ پرداخت قسط
+    console.log('🚨 [RECORD INSTALLMENT PAYMENT] DEBUG:', {
+      installmentId,
+      paymentAmount: paymentAmount.toString(),
+      currentPaidAmount: currentInstallment.paidAmount.toString(),
+      currentAmount: currentInstallment.amount.toString(),
+      totalPlanAmount: currentInstallment.totalPlanAmount?.toString(),
+      totalPlanCount: currentInstallment.totalPlanCount,
     })
 
-    // ۱. ثبت رکورد پرداخت در جدول Payment
     await tx.payment.create({
       data: {
         tenantId,
-        appointmentId: installment.appointmentId,
-        customerId: installment.appointment.customerId,
+        appointmentId,
+        customerId,
         recordedByUserId: userId,
-        amount: amountBigInt,
+        amount: paymentAmount,
         method: dbMethod,
         kind: PaymentKind.Partial,
         discountAmount: 0n,
         discountReason: null,
-        note: `پرداخت قسط ${installment.sequence}`,
+        note: `پرداخت بابت قسط ${currentInstallment.sequence}`,
         paidAt: now,
-        installmentId: installment.id,
+        installmentId: currentInstallment.id,
       }
     })
 
-    const newPaidAmount = installment.paidAmount + amountBigInt
+    // محاسبه کل پرداختی (چون paidAmount تجمعیه، حداکثر مقدار رو می‌گیریم)
+    const existingInstallments = await tx.installment.findMany({
+      where: { appointmentId, tenantId },
+      orderBy: { sequence: 'asc' }
+    })
+
+    let totalPaidBefore = 0n
+    for (const inst of existingInstallments) {
+      if (inst.paidAmount > totalPaidBefore) {
+        totalPaidBefore = inst.paidAmount
+      }
+    }
+
+    let newTotalPaid = totalPaidBefore + paymentAmount
+    const maxTotal = currentInstallment.totalPlanAmount || currentInstallment.amount
     
-    // 👈 لاگ ۳: محاسبه مبلغ جدید
-    console.log('🚨 SERVER LOG - NEW PAID AMOUNT:', {
-      oldPaidAmount: installment.paidAmount.toString(),
-      paymentAmount: amountBigInt.toString(),
-      newPaidAmount: newPaidAmount.toString(),
-      targetAmount: installment.amount.toString(),
-      isFullPayment: newPaidAmount >= installment.amount,
-    })
+    if (newTotalPaid > maxTotal) {
+      newTotalPaid = maxTotal
+    }
 
-    // ۲. آپدیت paidAmount روی خود قسط
-    if (newPaidAmount >= installment.amount) {
-      // پرداخت کامل
+    // آپدیت paidAmount روی همه اقساط
+    for (const inst of existingInstallments) {
       await tx.installment.update({
-        where: { id: installment.id },
-        data: { paidAmount: installment.amount }
-      })
-      
-      // 👈 لاگ ۴: پرداخت کامل شد
-      console.log('🚨 SERVER LOG - FULL PAYMENT COMPLETED FOR SEQUENCE:', installment.sequence)
-
-      // ساخت قسط بعدی
-      const totalCount = installment.totalPlanCount || 1
-      const intervalMonths = installment.intervalMonths || 1
-      const nextSequence = installment.sequence + 1
-
-      if (nextSequence <= totalCount) {
-        const settings = await readDebtSettings(tx, tenantId)
-        const currentLocalDate = fromUtcInstant(installment.dueAt, settings.utcOffsetMinutes).localDate
-        const dateParts = currentLocalDate.split('-').map(Number)
-        let y = dateParts[0] ?? 0, m = dateParts[1] ?? 0, d = dateParts[2] ?? 0
-        m += intervalMonths
-        while (m > 12) { m -= 12; y += 1 }
-        
-        const isLeapYear = (y % 33 === 1 || y % 33 === 5 || y % 33 === 9 || y % 33 === 13 || y % 33 === 17 || y % 33 === 22 || y % 33 === 26 || y % 33 === 30)
-        const maxDaysInMonth = m === 12 ? (isLeapYear ? 30 : 29) : (m <= 6 ? 31 : 30)
-        if (d > maxDaysInMonth) d = maxDaysInMonth
-        
-        const nextLocalDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-        const nextDueDate = toUtcInstant(asLocalDate(nextLocalDate), MIDNIGHT, settings.utcOffsetMinutes)
-        
-        await tx.installment.create({
-          data: {
-            tenantId,
-            appointmentId: installment.appointmentId,
-            sequence: nextSequence,
-            amount: installment.amount,
-            paidAmount: 0n,
-            dueAt: nextDueDate,
-            totalPlanAmount: installment.totalPlanAmount,
-            totalPlanCount: installment.totalPlanCount,
-            intervalMonths: installment.intervalMonths,
-            type: installment.type,
-            note: installment.note,
-          }
-        })
-        
-        // 👈 لاگ ۵: قسط بعدی ساخته شد
-        console.log('🚨 SERVER LOG - NEXT INSTALLMENT CREATED:', nextSequence)
-      } else {
-        // 👈 لاگ: همه اقساط تموم شد
-        console.log('🚨 SERVER LOG - ALL INSTALLMENTS COMPLETED!')
-      }
-    } else {
-      // پرداخت جزئی
-      await tx.installment.update({
-        where: { id: installment.id },
-        data: { paidAmount: newPaidAmount }
-      })
-      
-      // 👈 لاگ ۶: پرداخت جزئی ثبت شد
-      console.log('🚨 SERVER LOG - PARTIAL PAYMENT SAVED:', {
-        newPaidAmount: newPaidAmount.toString(),
-        remaining: (installment.amount - newPaidAmount).toString(),
+        where: { id: inst.id },
+        data: { paidAmount: newTotalPaid }
       })
     }
+    
     return SUCCESS
   })
 
-  if (!('succeeded' in result)) {
-    // 👈 لاگ خطا
-    console.error('🚨 SERVER LOG - ACTION FAILED:', result)
-    return result
-  }
+  if (!('succeeded' in result)) return result
   revalidateDebts()
   return { ok: true }
 }
 
-// 👈 ۲. ویرایش تک قسط (مبلغ و تاریخ)
 export async function updateInstallmentAction(
   panel: Panel,
   installmentId: string,
@@ -530,7 +515,6 @@ export async function updateInstallmentAction(
   return { ok: true }
 }
 
-// 👈 ۳. ویرایش گروهی اقساط آینده
 export async function updateFutureInstallmentsAction(
   panel: Panel,
   appointmentId: string,
@@ -576,7 +560,6 @@ export async function updateFutureInstallmentsAction(
   return { ok: true }
 }
 
-// 👈 ۴. حذف قسط
 export async function deleteInstallmentAction(
   panel: Panel,
   installmentId: string

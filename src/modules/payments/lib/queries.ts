@@ -1,24 +1,9 @@
-/**
- * The module's reads — the customer's own history and the two closed sets it renders.
- *
- * | Read | Surface |
- * |---|---|
- * | `customerPayments` | `account/payments.html`, «پرداخت‌های من» |
- * | `appointmentCharges` | the same page's charge side, beside the history |
- *
- * The customer panel is the one place a customer sees their own money, and it reads
- * the same ledger the desk does — no second query and no second arithmetic.
- */
-
 import type { TransactionClient } from '@/core/db/scope'
-
 import type { BalanceSummary, PaymentRow } from '../types'
 import { customerBalance } from './balance'
 
-/** The most a page reads in one go; a history is scrolled, not paged. */
 const LIST_LIMIT = 200
 
-/** The columns a history row renders. */
 const PAYMENT_SELECT = {
   id: true,
   appointmentId: true,
@@ -32,16 +17,6 @@ const PAYMENT_SELECT = {
   paidAt: true,
 } as const
 
-/**
- * «پرداخت‌های من» — the customer's receipts, newest first.
- *
- * The order is the index's own (`payment_tenant_customer_paid_idx`), so the history a
- * customer opens is the one the planner serves without a sort.
- *
- * Takes no permission: the customer panel is the customer's own scope, and the
- * `where` is what keeps the read inside it. The staff surface that reuses this read
- * holds `view_all_customers` of its own.
- */
 export async function customerPayments(args: {
   readonly tx: TransactionClient
   readonly tenantId: string
@@ -61,12 +36,6 @@ export async function customerPayments(args: {
   }))
 }
 
-/**
- * The customer's charges — the appointments that carry a price, newest first.
- *
- * The balance is the two reads put together, and the page renders it beside them so
- * the number and the rows that make it are one screen.
- */
 export async function customerCharges(args: {
   readonly tx: TransactionClient
   readonly tenantId: string
@@ -87,7 +56,6 @@ export async function customerCharges(args: {
   })
 }
 
-/** The balance and the two lists a payment page renders, in one scope. */
 export async function customerLedger(args: {
   readonly tx: TransactionClient
   readonly tenantId: string
@@ -99,6 +67,7 @@ export async function customerLedger(args: {
   ])
   return { balance, paid }
 }
+
 export async function listInstallments(tx: TransactionClient, tenantId: string) {
   const rows = await tx.installment.findMany({
     where: { tenantId },
@@ -107,14 +76,14 @@ export async function listInstallments(tx: TransactionClient, tenantId: string) 
       appointmentId: true,
       sequence: true,
       amount: true,
-      paidAmount: true, // 👈 این خط اضافه شد تا مبلغ پرداختی از دیتابیس خوانده شود
+      paidAmount: true,
       dueAt: true,
       note: true,
-      type: true, // 👈 این خط هم برای تشخیص چک از قسط
-      totalPlanAmount: true, // 👈 این خط برای مبلغ کل بدهی
-      totalPlanCount: true, // 👈 این خط برای تعداد کل اقساط
+      type: true,
+      totalPlanAmount: true,
+      totalPlanCount: true,
       intervalMonths: true,
-      payments: true, // (برای سازگاری با کدهای قبلی، می‌تونی نگهش داری)
+      payments: true,
       appointment: {
         select: {
           localDate: true,
@@ -141,11 +110,12 @@ export async function listInstallments(tx: TransactionClient, tenantId: string) 
         },
       },
     },
-    orderBy: { dueAt: 'asc' },
+    orderBy: [{ appointmentId: 'asc' }, { sequence: 'asc' }],
   })
 
-  // 👈 فیلتر کردن: فقط اقساطی که هنوز کامل پرداخت نشدن (با استفاده از paidAmount)
+  // 👈 فیلتر کردن: فقط رکوردهایی که هنوز بدهی‌شون بازه (paidAmount < totalPlanAmount)
   return rows.filter((row) => {
-    return row.paidAmount < row.amount
+    const totalAmount = row.totalPlanAmount || row.amount
+    return row.paidAmount < totalAmount
   })
 }

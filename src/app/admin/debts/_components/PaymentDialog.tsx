@@ -34,11 +34,13 @@ function formatNumberWithCommas(value: string) {
 }
 
 export function PaymentDialog({ 
-  isOpen, onClose, customerId, appointmentId, customerName, amountDue, onSuccess, panel = 'admin'
+  isOpen, onClose, customerId, appointmentId, customerName, amountDue, onSuccess, panel = 'admin',
+  mode = 'payment'
 }: { 
   isOpen: boolean, onClose: () => void, customerId: string, appointmentId: string,
   customerName: string, amountDue: bigint | string, onSuccess: () => void,
-  panel?: 'admin' | 'reception' | 'doctor'
+  panel?: 'admin' | 'reception' | 'doctor',
+  mode?: 'payment' | 'edit'
 }) {
   const router = useRouter()
   const isClient = useIsClient()
@@ -50,7 +52,7 @@ export function PaymentDialog({
   const [discount, setDiscount] = useState('')
   const [discountReason, setDiscountReason] = useState('')
   
-  const [method, setMethod] = useState<PaymentMethodType>('CASH')
+  const [method, setMethod] = useState<PaymentMethodType>(mode === 'edit' ? 'INSTALLMENT' : 'CASH')
   const [installmentCount, setInstallmentCount] = useState('4')
   const [intervalMonths, setIntervalMonths] = useState('1') 
   const [firstDueDate, setFirstDueDate] = useState<string>(todayLocalDate(realClock()))
@@ -58,6 +60,7 @@ export function PaymentDialog({
   const [receiveDate, setReceiveDate] = useState<string>('')
   const [receiveTime, setReceiveTime] = useState<string>('')
   const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isClient || !isOpen) return
@@ -79,27 +82,23 @@ export function PaymentDialog({
   const installmentAmountRial = Math.floor(Number(finalAmountRial) / Number(installmentCount || 1))
 
   const handleSubmit = () => {
+    setError(null)
     startTransition(async () => {
       if (amountRialBigInt > baseAmount) {
-        return alert(`مبلغ پرداختی نمی‌تواند بیشتر از کل بدهی (${formatMoney(baseAmount)} تومان) باشد.`)
+        return setError(`مبلغ پرداختی نمی‌تواند بیشتر از کل بدهی (${formatMoney(baseAmount)} تومان) باشد.`)
       }
 
       if (method === 'INSTALLMENT' || method === 'CHEQUE') {
         const totalInstallmentsRial = BigInt(installmentCount) * BigInt(installmentAmountRial)
         if (totalInstallmentsRial > finalAmountRial) {
-          return alert('مجموع مبالغ اقساط نمی‌تواند بیشتر از مبلغ کل بدهی باشد.')
+          return setError('مجموع مبالغ اقساط نمی‌تواند بیشتر از مبلغ کل بدهی باشد.')
         }
-      }
-
-      let dbMethod = method
-      if (method === 'INSTALLMENT' || method === 'CHEQUE') {
-        dbMethod = 'CASH'
       }
 
       const submitAmount = amountRialBigInt.toString()
       const submitDiscount = discountRialBigInt.toString()
 
-      if (method === 'INSTALLMENT' || method === 'CHEQUE') {
+      if (mode === 'edit') {
         const res = await recordPaymentWithInstallmentsAction(
           panel,
           appointmentId,
@@ -119,16 +118,38 @@ export function PaymentDialog({
           onSuccess()
           router.refresh()
         } else {
-          alert(res.message)
+          setError(res.message)
         }
       } else {
-        if (submitDiscount && submitDiscount !== '0') {
+        if (method === 'INSTALLMENT' || method === 'CHEQUE') {
+          const res = await recordPaymentWithInstallmentsAction(
+            panel,
+            appointmentId,
+            customerId,
+            {
+              amount: submitAmount,
+              method: method,
+              installmentCount: Number(installmentCount),
+              firstDueDate: firstDueDate || todayLocalDate(realClock()),
+              installmentInterval: `${intervalMonths}_MONTH`,
+              discountAmount: submitDiscount,
+              discountReason: discountReason || null,
+              forceInstallment: true,
+            }
+          )
+          if (res.ok) {
+            onSuccess()
+            router.refresh()
+          } else {
+            setError(res.message)
+          }
+        } else {
           const res = await recordPaymentAction(
             panel,
             appointmentId,
             {
               amount: submitAmount,
-              method: dbMethod,
+              method: method,
               kind: 'FINAL',
               discountAmount: submitDiscount,
               discountReason: discountReason || null,
@@ -139,26 +160,7 @@ export function PaymentDialog({
             onSuccess()
             router.refresh()
           } else {
-            alert(res.message)
-          }
-        } else {
-          const res = await recordPaymentWithInstallmentsAction(
-            panel,
-            appointmentId,
-            customerId,
-            {
-              amount: finalAmountRial.toString(),
-              method: dbMethod,
-              installmentCount: 1,
-              firstDueDate: firstDueDate || todayLocalDate(realClock()),
-              installmentInterval: '1_MONTH',
-            }
-          )
-          if (res.ok) {
-            onSuccess()
-            router.refresh()
-          } else {
-            alert(res.message)
+            setError(res.message)
           }
         }
       }
@@ -171,7 +173,7 @@ export function PaymentDialog({
         <div className="flex items-center justify-between border-b border-line px-6 py-4 shrink-0">
           <div className="flex items-center gap-2 font-bold text-lg text-ink">
              <Icon name="payment" size="card" />
-             {ADMIN_DEBTS.paymentDialog.title}
+             {mode === 'edit' ? 'ویرایش اقساط' : ADMIN_DEBTS.paymentDialog.title}
           </div>
           <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors">
             <Icon name="close" size="card" />
@@ -248,16 +250,25 @@ export function PaymentDialog({
               </div>
            </div>
 
+           {/* 👈 انتخاب روش پرداخت: در حالت ویرایش فقط قسط و چک */}
            <div className="flex flex-col gap-3">
              <label className="text-sm font-semibold text-ink-2">{ADMIN_DEBTS.paymentDialog.methodLabel}</label>
-             <div className="grid grid-cols-3 gap-3">
-                <MethodBtn active={method === 'CASH'} onClick={() => setMethod('CASH')} icon="cash" label={ADMIN_DEBTS.paymentDialog.methods.CASH} />
-                <MethodBtn active={method === 'POS'} onClick={() => setMethod('POS')} icon="payment" label={ADMIN_DEBTS.paymentDialog.methods.POS} />
-                <MethodBtn active={method === 'CARD_TO_CARD'} onClick={() => setMethod('CARD_TO_CARD')} icon="debt" label={ADMIN_DEBTS.paymentDialog.methods.CARD_TO_CARD} />
-                <MethodBtn active={method === 'ONLINE'} onClick={() => setMethod('ONLINE')} icon="externalLink" label={ADMIN_DEBTS.paymentDialog.methods.ONLINE} />
-                <MethodBtn active={method === 'CHEQUE'} onClick={() => setMethod('CHEQUE')} icon="invoice" label={ADMIN_DEBTS.paymentDialog.methods.CHEQUE} />
-                <MethodBtn active={method === 'INSTALLMENT'} onClick={() => setMethod('INSTALLMENT')} icon="calendar" label={ADMIN_DEBTS.paymentDialog.methods.INSTALLMENT} />
-             </div>
+             
+             {mode === 'edit' ? (
+               <div className="grid grid-cols-2 gap-3">
+                  <MethodBtn active={method === 'INSTALLMENT'} onClick={() => setMethod('INSTALLMENT')} icon="calendar" label={ADMIN_DEBTS.paymentDialog.methods.INSTALLMENT} />
+                  <MethodBtn active={method === 'CHEQUE'} onClick={() => setMethod('CHEQUE')} icon="invoice" label={ADMIN_DEBTS.paymentDialog.methods.CHEQUE} />
+               </div>
+             ) : (
+               <div className="grid grid-cols-3 gap-3">
+                  <MethodBtn active={method === 'CASH'} onClick={() => setMethod('CASH')} icon="cash" label={ADMIN_DEBTS.paymentDialog.methods.CASH} />
+                  <MethodBtn active={method === 'POS'} onClick={() => setMethod('POS')} icon="payment" label={ADMIN_DEBTS.paymentDialog.methods.POS} />
+                  <MethodBtn active={method === 'CARD_TO_CARD'} onClick={() => setMethod('CARD_TO_CARD')} icon="debt" label={ADMIN_DEBTS.paymentDialog.methods.CARD_TO_CARD} />
+                  <MethodBtn active={method === 'ONLINE'} onClick={() => setMethod('ONLINE')} icon="externalLink" label={ADMIN_DEBTS.paymentDialog.methods.ONLINE} />
+                  <MethodBtn active={method === 'CHEQUE'} onClick={() => setMethod('CHEQUE')} icon="invoice" label={ADMIN_DEBTS.paymentDialog.methods.CHEQUE} />
+                  <MethodBtn active={method === 'INSTALLMENT'} onClick={() => setMethod('INSTALLMENT')} icon="calendar" label={ADMIN_DEBTS.paymentDialog.methods.INSTALLMENT} />
+               </div>
+             )}
            </div>
 
            {(method === 'CHEQUE' || method === 'INSTALLMENT') && (
@@ -328,6 +339,12 @@ export function PaymentDialog({
              <label className="text-sm font-semibold text-ink-2">{ADMIN_DEBTS.paymentDialog.note}</label>
              <textarea className="w-full rounded-xl border border-line-2 p-3 text-sm min-h-[60px] focus:border-brand focus:outline-none" placeholder={ADMIN_DEBTS.paymentDialog.notePlaceholder}></textarea>
            </div>
+
+           {error && (
+             <div className="rounded-lg bg-danger-bg p-3 text-sm font-semibold text-danger border border-danger/20">
+               {error}
+             </div>
+           )}
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-line px-6 py-4 bg-surface-2 rounded-b-2xl shrink-0">
@@ -335,7 +352,12 @@ export function PaymentDialog({
              {ADMIN_DEBTS.paymentDialog.cancel}
            </button>
            <button onClick={handleSubmit} disabled={isPending} className="rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-ink-inverse flex items-center gap-2 hover:bg-brand-600 transition-colors shadow-sm disabled:opacity-50">
-              {isPending ? ADMIN_DEBTS.paymentDialog.saving : (<><Icon name="confirm" size="compact" />{ADMIN_DEBTS.paymentDialog.submit}</>)}
+              {isPending ? 'در حال ذخیره...' : (
+                <>
+                  <Icon name="confirm" size="compact" />
+                  {mode === 'edit' ? 'ذخیره تغییرات' : ADMIN_DEBTS.paymentDialog.submit}
+                </>
+              )}
            </button>
         </div>
       </div>

@@ -37,6 +37,7 @@ export function InstallmentPaymentDialog({
   installmentId,
   customerName, 
   amountDue, 
+  maxTotalRemaining, // 👈 پراپ جدید
   onSuccess 
 }: { 
   isOpen: boolean, 
@@ -44,6 +45,7 @@ export function InstallmentPaymentDialog({
   installmentId: string,
   customerName: string, 
   amountDue: bigint | string, 
+  maxTotalRemaining: bigint, // 👈 باقی‌مانده کل بدهی
   onSuccess: () => void 
 }) {
   const router = useRouter()
@@ -51,6 +53,7 @@ export function InstallmentPaymentDialog({
   
   const amountDueToman = Math.floor(Number(amountDue) / 10).toString()
   const [amount, setAmount] = useState(formatNumberWithCommas(amountDueToman))
+  const [error, setError] = useState<string | null>(null)
   
   const [method, setMethod] = useState<PaymentMethodType>('CASH')
   const [receiveDate, setReceiveDate] = useState<string>('')
@@ -65,23 +68,29 @@ export function InstallmentPaymentDialog({
 
   if (!isOpen || !isClient) return null
 
+  // 👈 محاسبه لحظه‌ای برای قرمز کردن اینپوت
+  const rawDigits = amount.replace(/[^\d۰-۹]/g, '')
+  const persianNumbers = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹']
+  const englishDigits = rawDigits.replace(/[۰-۹]/g, (d) => String(persianNumbers.indexOf(d)))
+  const enteredAmountRial = englishDigits ? BigInt(englishDigits) * 10n : 0n
+  
+  const maxAllowed = BigInt(amountDue)
+  const maxTotal = maxTotalRemaining > 0n ? BigInt(maxTotalRemaining) : 0n
+  
+  // شرط AND: مبلغ نباید بیشتر از مبلغ قسط و نه بیشتر از باقی‌مانده کل باشه
+  const isOverLimit = enteredAmountRial > maxAllowed || (maxTotal > 0n && enteredAmountRial > maxTotal)
+
   const handleSubmit = () => {
+    setError(null)
+    if (isOverLimit) {
+      return setError(`مبلغ وارد شده نمی‌تواند بیشتر از سقف مجاز باشد.`)
+    }
+    
     startTransition(async () => {
-      const rawDigits = amount.replace(/[^\d۰-۹]/g, '')
-      const persianNumbers = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹']
-      const englishDigits = rawDigits.replace(/[۰-۹]/g, (d) => String(persianNumbers.indexOf(d)))
-      
-      if (!englishDigits) return alert('مبلغ را وارد کنید')
-      
-      // 👈 تبدیل مبلغ وارد شده به ریال برای مقایسه با مانده قسط
-      const enteredAmountRial = BigInt(englishDigits) * 10n
-      const maxAllowedAmount = BigInt(amountDue)
-
-      // 👈 چک کردن اینکه مبلغ وارد شده بیشتر از مانده نباشه
-      if (enteredAmountRial > maxAllowedAmount) {
-        return alert(`مبلغ وارد شده نمی‌تواند بیشتر از مانده قسط (${formatMoney(maxAllowedAmount)} تومان) باشد.`)
+      if (!englishDigits) {
+        return setError('مبلغ را وارد کنید')
       }
-
+      
       const amountRial = enteredAmountRial.toString()
 
       const res = await recordInstallmentPaymentAction(
@@ -99,7 +108,7 @@ export function InstallmentPaymentDialog({
         onSuccess()
         router.refresh()
       } else {
-        alert(res.message)
+        setError(res.message)
       }
     })
   }
@@ -137,11 +146,19 @@ export function InstallmentPaymentDialog({
                   type="text" 
                   value={amount}
                   onChange={e => setAmount(formatNumberWithCommas(e.target.value))}
-                  className="w-full rounded-lg border border-line-2 p-2 pl-16 text-left font-bold text-lg text-ink focus:border-brand focus:outline-none" 
+                  // 👈 قرمز شدن لحظه‌ای در صورت عبور از سقف
+                  className={`w-full rounded-lg border p-2 pl-16 text-left font-bold text-lg text-ink focus:outline-none transition-colors ${
+                    isOverLimit ? 'border-danger text-danger focus:border-danger' : 'border-line-2 focus:border-brand'
+                  }`} 
                   dir="ltr"
                 />
                 <span className="absolute left-4 top-3 text-sm text-ink-3">{ADMIN_INSTALLMENTS.payment.toman}</span>
              </div>
+             {isOverLimit && (
+               <p className="text-xs font-semibold text-danger mt-1">
+                 مبلغ وارد شده بیشتر از سقف مجاز است.
+               </p>
+             )}
            </div>
 
            <div className="flex flex-col gap-1.5">
@@ -187,6 +204,12 @@ export function InstallmentPaymentDialog({
              <label className="text-xs font-semibold text-ink-3">{ADMIN_INSTALLMENTS.payment.note}</label>
              <textarea className="w-full rounded-lg border border-line-2 p-2 text-sm min-h-[60px] focus:border-brand focus:outline-none" placeholder={ADMIN_INSTALLMENTS.payment.notePlaceholder}></textarea>
            </div>
+
+           {error && (
+             <div className="rounded-lg bg-danger-bg p-3 text-sm font-semibold text-danger border border-danger/20">
+               {error}
+             </div>
+           )}
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3 bg-surface-2 rounded-b-2xl shrink-0">
@@ -195,7 +218,8 @@ export function InstallmentPaymentDialog({
            </button>
            <button 
              onClick={handleSubmit} 
-             disabled={isPending}
+             // 👈 غیرفعال شدن دکمه در صورت وجود خطا
+             disabled={isPending || isOverLimit}
              className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-ink-inverse flex items-center gap-2 hover:bg-brand-600 transition-colors shadow-sm disabled:opacity-50"
            >
               {isPending ? ADMIN_INSTALLMENTS.payment.saving : (

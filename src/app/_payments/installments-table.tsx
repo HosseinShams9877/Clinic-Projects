@@ -10,7 +10,7 @@ import { EditInstallmentDialog } from '@/app/_payments/EditInstallmentDialog'
 import { FollowUpDialog } from '@/app/admin/debts/_components/FollowUpDialog'
 import { deleteInstallmentAction } from '@/app/_debts/actions'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Pagination } from '@/app/_components/Pagination' // 👈 ایمپورت کامپوننت صفحه‌بندی
+import { Pagination } from '@/app/_components/Pagination'
 
 function formatToman(value: bigint | number | string) {
   const str = value.toString().replace(/[^\d]/g, '')
@@ -38,23 +38,35 @@ interface InstallmentRow {
   }
 }
 
-const PAGE_SIZE = 10 // 👈 تعداد رکورد در هر صفحه
+const PAGE_SIZE = 10
 
 export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<InstallmentRow> }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const currentPage = Number(searchParams.get('page')) || 1 // 👈 صفحه فعلی
+  const currentPage = Number(searchParams.get('page')) || 1
 
+  const [tempAmounts, setTempAmounts] = useState<Record<string, bigint>>({})
   const [selectedInstallment, setSelectedInstallment] = useState<InstallmentRow | null>(null)
   const [followUpRow, setFollowUpRow] = useState<InstallmentRow | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  // 👈 محاسبه رکوردهای صفحه جاری
   const totalPages = Math.ceil(rows.length / PAGE_SIZE)
   const paginatedRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   if (rows.length === 0) {
     return <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">{ADMIN_INSTALLMENTS.table.empty}</p>
+  }
+
+  const handleTempAmountChange = (id: string, amount: bigint | null) => {
+    if (amount === null) {
+      setTempAmounts(prev => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+    } else {
+      setTempAmounts(prev => ({ ...prev, [id]: amount }))
+    }
   }
 
   const handleDelete = (id: string) => {
@@ -69,7 +81,6 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
     })
   }
 
-  // 👈 تابع ساخت لینک برای صفحه‌بندی
   const hrefFor = (page: number) => {
     const params = new URLSearchParams(searchParams.toString())
     if (page > 1) {
@@ -95,7 +106,7 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1150px] table-fixed border-collapse text-sm text-right">
+          <table className="w-full min-w-[1250px] table-fixed border-collapse text-sm text-right">
             <thead>
               <tr className="border-b border-line-2 bg-surface-2/50 text-ink-3">
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.customer}</th>
@@ -103,6 +114,7 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.service}</th>
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.dueDate}</th>
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.daysRemaining}</th>
+                <th className="px-4 py-3 font-semibold text-start">مبلغ کل بدهی</th>
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.amount}</th>
                 <th className="px-4 py-3 font-semibold text-start w-[8%]">{ADMIN_INSTALLMENTS.table.columns.stage}</th>
                 <th className="px-4 py-3 font-semibold text-start">{ADMIN_INSTALLMENTS.table.columns.progress}</th>
@@ -110,7 +122,6 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
               </tr>
             </thead>
             <tbody>
-              {/* 👈 استفاده از رکوردهای صفحه‌بندی شده */}
               {paginatedRows.map((row) => {
                 const customer = row.appointment.customer
                 const doctorName = row.appointment.doctor ? `${row.appointment.doctor.firstName} ${row.appointment.doctor.lastName ?? ''}`.trim() : '—'
@@ -122,9 +133,21 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                 
                 const totalInstallments = row.totalPlanCount || 1
                 const totalAmount = row.totalPlanAmount || row.amount
-                const perInstallmentAmount = row.amount
+                const currentTempAmount = tempAmounts[row.id]
+                const perInstallmentAmount = currentTempAmount !== undefined ? currentTempAmount : row.amount
 
-                const paidSoFar = totalAmount - (perInstallmentAmount - row.paidAmount)
+                const appointmentRows = rows.filter(r => r.appointmentId === row.appointmentId)
+                const totalPaidForAppointment = appointmentRows.reduce((sum, r) => sum + r.paidAmount, 0n)
+                
+                // 👈 محاسبه باقی‌مانده کل بدهی برای این نوبت
+                const remainingForAppointment = totalAmount - totalPaidForAppointment
+                const paidSoFar = totalPaidForAppointment > totalAmount ? totalAmount : totalPaidForAppointment
+
+                const displaySequence = Math.min(
+                  totalInstallments,
+                  Math.floor(Number(paidSoFar) / Number(perInstallmentAmount)) + 1
+                )
+
                 const progressPercent = totalAmount > 0n 
                   ? Math.min(100, Math.round(Number((paidSoFar * 100n) / totalAmount))) 
                   : 0
@@ -160,12 +183,16 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                       )}
                     </td>
                     
+                    <td className="px-4 py-4 font-semibold text-brand tabular-nums">
+                      {formatToman(totalAmount)}
+                    </td>
+
                     <td className="px-4 py-4 font-bold text-ink tabular-nums">{formatToman(perInstallmentAmount)}</td>
                     
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1">
                         <span className="font-semibold text-ink-2 whitespace-nowrap text-xs">
-                          {row.type === 'CHEQUE' ? 'چک' : 'قسط'} {toPersianDigits(row.sequence)} {ADMIN_INSTALLMENTS.table.of} {toPersianDigits(totalInstallments)}
+                          {row.type === 'CHEQUE' ? 'چک' : 'قسط'} {toPersianDigits(displaySequence)} {ADMIN_INSTALLMENTS.table.of} {toPersianDigits(totalInstallments)}
                         </span>
                       </div>
                     </td>
@@ -185,7 +212,12 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-1.5">
                         <button 
-                          onClick={() => setSelectedInstallment(row)} 
+                          onClick={() => {
+                            setSelectedInstallment({
+                              ...row,
+                              amount: perInstallmentAmount,
+                            })
+                          }} 
                           className="rounded-lg bg-brand px-2.5 py-1 text-[11px] font-semibold text-ink-inverse hover:bg-brand-600 transition-colors whitespace-nowrap shadow-sm"
                         >
                           {ADMIN_INSTALLMENTS.table.payButton}
@@ -205,11 +237,12 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                           appointmentId={row.appointmentId}
                           customerId={customer?.id || ''}
                           customerName={customerName}
-                          remainingAmount={(row.totalPlanAmount || row.amount) - row.paidAmount}
+                          remainingAmount={remainingForAppointment} // 👈 محدودیت بر اساس باقی‌مانده کل
                           sequence={row.sequence}
                           currentDueDate={dateToLocalDate(due)}
                           currentAmount={perInstallmentAmount}
                           panel="admin"
+                          onTempAmountChange={handleTempAmountChange}
                         />
 
                         <button 
@@ -230,7 +263,6 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
           </table>
         </div>
         
-        {/* 👈 اضافه شدن صفحه‌بندی */}
         <div className="border-t border-line px-4 py-3">
           <Pagination page={currentPage} totalPages={totalPages} hrefFor={hrefFor} />
         </div>
@@ -242,8 +274,22 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
           onClose={() => setSelectedInstallment(null)}
           installmentId={selectedInstallment.id}
           customerName={`${selectedInstallment.appointment.customer?.firstName || ''} ${selectedInstallment.appointment.customer?.lastName || ''}`.trim()}
-          amountDue={selectedInstallment.amount - selectedInstallment.paidAmount}
-          onSuccess={() => setSelectedInstallment(null)}
+          // 👈 پاس دادن کمترین مقدار بین مبلغ قسط و باقی‌مانده کل بدهی
+          amountDue={
+            (() => {
+              const appointmentRows = rows.filter(r => r.appointmentId === selectedInstallment.appointmentId)
+              const totalPaid = appointmentRows.reduce((sum, r) => sum + r.paidAmount, 0n)
+              const totalAmount = selectedInstallment.totalPlanAmount || selectedInstallment.amount
+              const remaining = totalAmount - totalPaid
+              return selectedInstallment.amount > remaining ? remaining : selectedInstallment.amount
+            })()
+          }
+          onSuccess={() => {
+            if (selectedInstallment) {
+              handleTempAmountChange(selectedInstallment.id, null)
+            }
+            setSelectedInstallment(null)
+          }}
         />
       )}
 
