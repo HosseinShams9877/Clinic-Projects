@@ -77,24 +77,23 @@ export function PaymentDialog({
   const finalAmountRial = baseAmount - discountRialBigInt
   const installmentAmountRial = Math.floor(Number(finalAmountRial) / Number(installmentCount || 1))
 
-  const handleSubmit = () => {
+   const handleSubmit = () => {
     startTransition(async () => {
-      let dbMethod = method
-      if (method === 'INSTALLMENT' || method === 'CHEQUE') {
-        dbMethod = 'CASH'
-      }
+      const isInstallment = method === 'INSTALLMENT' || method === 'CHEQUE'
+      const finalMethod = isInstallment ? method : method // 👈 دیگه CASH نمیشه
 
       const submitAmount = amountRialBigInt.toString()
       const submitDiscount = discountRialBigInt.toString()
 
-      if (method === 'INSTALLMENT' || method === 'CHEQUE') {
+      if (isInstallment) {
+        // اگر قسطی انتخاب شده بود
         const res = await recordPaymentWithInstallmentsAction(
           'reception',
           appointmentId,
           customerId,
           {
             amount: submitAmount,
-            method: dbMethod,
+            method: finalMethod,
             installmentCount: Number(installmentCount),
             firstDueDate: firstDueDate || todayLocalDate(realClock()),
             installmentInterval: `${intervalMonths}_MONTH`,
@@ -110,44 +109,24 @@ export function PaymentDialog({
           alert(res.message)
         }
       } else {
-        if (submitDiscount && submitDiscount !== '0') {
-          const res = await recordPaymentAction(
-            'reception',
-            appointmentId,
-            {
-              amount: submitAmount,
-              method: dbMethod,
-              kind: 'FINAL',
-              discountAmount: submitDiscount,
-              discountReason: discountReason || null,
-              note: null,
-            }
-          )
-          if (res.ok) {
-            onSuccess()
-            router.refresh()
-          } else {
-            alert(res.message)
+        // اگر نقدی/کارت بود، دیگه از اکشن اقساط استفاده نمیکنه! دقیقا مثل ادمین
+        const res = await recordPaymentAction(
+          'reception',
+          appointmentId,
+          {
+            amount: submitAmount,
+            method: finalMethod,
+            kind: 'FINAL',
+            discountAmount: submitDiscount,
+            discountReason: discountReason || null,
+            note: null,
           }
+        )
+        if (res.ok) {
+          onSuccess()
+          router.refresh()
         } else {
-          const res = await recordPaymentWithInstallmentsAction(
-            'reception',
-            appointmentId,
-            customerId,
-            {
-              amount: finalAmountRial.toString(),
-              method: dbMethod,
-              installmentCount: 1,
-              firstDueDate: firstDueDate || todayLocalDate(realClock()),
-              installmentInterval: '1_MONTH',
-            }
-          )
-          if (res.ok) {
-            onSuccess()
-            router.refresh()
-          } else {
-            alert(res.message)
-          }
+          alert(res.message)
         }
       }
     })

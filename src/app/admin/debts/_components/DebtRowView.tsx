@@ -143,7 +143,7 @@ export function DebtRowView({ row, today, serviceName, doctorName }: DebtRowView
           customerId={row.customerId}
           appointmentId={row.appointmentId}
           customerName={name}
-          amountDue={row.balance}
+          amountDue={row.installmentAmount > 0n ? row.installmentAmount : row.balance}
           installmentId={row.installmentId} // 👈 اضافه شد
           onSuccess={() => setIsPaymentOpen(false)}
         />
