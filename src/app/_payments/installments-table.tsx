@@ -7,10 +7,13 @@ import { ADMIN_INSTALLMENTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
 import { InstallmentPaymentDialog } from '@/app/admin/installments/_components/InstallmentPaymentDialog'
 import { EditInstallmentDialog } from '@/app/_payments/EditInstallmentDialog'
-import { FollowUpDialog } from '@/app/admin/debts/_components/FollowUpDialog'
 import { deleteInstallmentAction } from '@/app/_debts/actions'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Pagination } from '@/app/_components/Pagination'
+
+// 👈 ۱. ایمپورت کردن هر دو دیالوگ پیگیری
+import { FollowUpDialog as AdminFollowUpDialog } from '@/app/admin/debts/_components/FollowUpDialog'
+import { FollowUpDialog as ReceptionFollowUpDialog } from '@/app/reception/debts/_components/FollowUpDialog'
 
 function formatToman(value: bigint | number | string) {
   const str = value.toString().replace(/[^\d]/g, '')
@@ -41,7 +44,6 @@ interface InstallmentRow {
 
 const PAGE_SIZE = 10
 
-// 👈 اضافه شدن پراپ panel
 export function InstallmentsTable({ 
   rows, 
   panel = 'admin' 
@@ -57,6 +59,9 @@ export function InstallmentsTable({
   const [selectedInstallment, setSelectedInstallment] = useState<InstallmentRow | null>(null)
   const [followUpRow, setFollowUpRow] = useState<InstallmentRow | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  // 👈 ۲. انتخاب دیالوگ مناسب بر اساس پنل
+  const FollowUpDialog = panel === 'reception' ? ReceptionFollowUpDialog : AdminFollowUpDialog
 
   const totalPages = Math.ceil(rows.length / PAGE_SIZE)
   const paginatedRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
@@ -260,7 +265,7 @@ export function InstallmentsTable({
                           sequence={row.sequence}
                           currentDueDate={dateToLocalDate(due)}
                           currentAmount={perInstallmentAmount}
-                          panel={panel} // 👈 پاس دادن panel
+                          panel={panel}
                           onTempAmountChange={handleTempAmountChange}
                         />
 
@@ -292,7 +297,7 @@ export function InstallmentsTable({
           isOpen={!!selectedInstallment}
           onClose={() => setSelectedInstallment(null)}
           installmentId={selectedInstallment.id}
-          panel={panel} // 👈 این خط برای رفع خطای TenantResolutionError اضافه شد
+          panel={panel}
           customerName={`${selectedInstallment.appointment.customer?.firstName || ''} ${selectedInstallment.appointment.customer?.lastName || ''}`.trim()}
           amountDue={
             (() => {
@@ -327,6 +332,7 @@ export function InstallmentsTable({
           appointmentId={followUpRow.appointmentId}
           customerName={`${followUpRow.appointment.customer?.firstName || ''} ${followUpRow.appointment.customer?.lastName || ''}`.trim()}
           amountDue={followUpRow.amount.toString()}
+          panel={panel} // 👈 ۳. پاس دادن panel به دیالوگ پیگیری
           onSuccess={() => {
             setFollowUpRow(null)
             window.location.reload()

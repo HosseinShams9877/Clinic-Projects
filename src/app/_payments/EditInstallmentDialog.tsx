@@ -102,7 +102,7 @@ export function EditInstallmentDialog({
           e.stopPropagation()
           setIsOpen(true)
         }} 
-        className="grid size-8 place-items-center rounded-lg border border-line-2 text-ink-3 hover:bg-surface-2 hover:text-brand transition-colors"
+        className="grid size-8 place-items-center rounded-lg border border-line-2 text-ink-3 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors"
         title="ویرایش قسط"
       >
         <Icon name="edit" size="compact" />
@@ -112,84 +112,93 @@ export function EditInstallmentDialog({
 
   return createPortal(
     <>
-      {/* 👈 مودال ویرایش فقط زمانی نمایش داده میشه که isOpen true باشه و مودال پرداخت باز نباشه */}
+      {/* 👈 مودال ویرایش */}
       {isOpen && !isPaymentDialogOpen && (
         <div 
-          className="fixed inset-0 z-[50] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 text-right" 
+          className="fixed inset-0 z-[50] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4 text-right" 
           dir="rtl"
           onClick={() => setIsOpen(false)}
         >
+          {/* کانتینر اصلی با استایل گردی و overflow */}
           <div 
-            className="w-full max-w-[380px] rounded-2xl bg-surface p-5 shadow-2xl border border-line flex flex-col gap-4 relative"
+            className="w-full max-w-[380px] bg-surface shadow-3 border border-line/50 flex flex-col relative"
+            style={{ borderRadius: '24px', overflow: 'hidden' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-line pb-3">
+            
+            {/* هدر پررنگ مودال ویرایش */}
+            <div 
+              className="flex items-center justify-between border-b border-line/40 bg-brand-100 px-5 py-4 shrink-0 !rounded-t-[24px]"
+            >
               <div className="flex items-center gap-2">
-                <div className="grid size-8 place-items-center rounded-full bg-brand-50 text-brand">
+                <span className="grid size-8 place-items-center rounded-full bg-brand-200 text-brand-800">
                   <Icon name="edit" size="compact" />
-                </div>
+                </span>
                 <div>
-                  <h3 className="font-bold text-sm text-ink">ویرایش قسط {toPersianDigits(sequence)}</h3>
+                  <h3 className="font-bold text-sm text-brand-900">ویرایش قسط {toPersianDigits(sequence)}</h3>
                 </div>
               </div>
               <button 
                 onClick={handleDelete} 
-                className="text-danger text-xs font-semibold hover:underline flex items-center gap-1"
+                className="text-danger text-xs font-bold hover:underline flex items-center gap-1 bg-surface/50 px-2 py-1 rounded-lg transition-all"
               >
                 <Icon name="remove" size="compact" /> حذف قسط
               </button>
             </div>
 
-            {/* 👈 دکمه بازتعریف کل بدهی */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsPaymentDialogOpen(true) // 👈 فقط مودال پرداخت رو باز کن
-              }}
-              className="w-full rounded-xl border border-brand-200 bg-brand-50 py-2.5 text-xs font-bold text-brand-700 hover:bg-brand-100 transition-colors flex items-center justify-center gap-2"
-            >
-              <Icon name="retry" size="compact" />
-              بازتعریف کل بدهی باقی‌مانده ({formatNumberWithCommas(Math.floor(Number(remainingAmount) / 10))} تومان)
-            </button>
+            <div className="p-5 flex flex-col gap-4">
+              {/* 👈 دکمه بازتعریف کل بدهی */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPaymentDialogOpen(true) // 👈 فقط مودال پرداخت رو باز کن
+                }}
+                className="w-full rounded-xl border border-brand-200 bg-brand-50 py-2.5 text-xs font-bold text-brand-700 hover:bg-brand-100 hover:border-brand-300 transition-colors flex items-center justify-center gap-2"
+              >
+                <Icon name="retry" size="compact" />
+                بازتعریف کل بدهی باقی‌مانده ({formatNumberWithCommas(Math.floor(Number(remainingAmount) / 10))} تومان)
+              </button>
 
-            <div className="flex flex-col gap-3 relative z-10">
-              <Field label="مبلغ قسط (تومان)">
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    value={amount} 
-                    onChange={e => setAmount(formatNumberWithCommas(e.target.value))} 
-                    className={`w-full rounded-lg border py-2 pl-12 text-left font-bold text-sm text-ink focus:outline-none transition-colors ${
-                      isOverLimit ? 'border-danger focus:border-danger' : 'border-line-2 focus:border-brand'
-                    }`} 
-                    dir="ltr" 
-                  />
-                  <span className="absolute left-3 top-2.5 text-[10px] text-ink-3">تومان</span>
-                </div>
-                {isOverLimit && (
-                  <p className="mt-1 text-xs font-semibold text-danger">
-                    مبلغ نمی‌تواند بیشتر از باقی‌مانده کل بدهی ({formatMoney(remainingAmount)} تومان) باشد.
-                  </p>
-                )}
-              </Field>
-              
-              <Field label="تاریخ سررسید این قسط">
-                <JalaliDatePicker value={dueDate} onChange={setDueDate} />
-              </Field>
+              <div className="flex flex-col gap-3 relative z-10">
+                <Field label="مبلغ قسط (تومان)">
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={amount} 
+                      onChange={e => setAmount(formatNumberWithCommas(e.target.value))} 
+                      className={`w-full rounded-xl border py-2.5 pl-12 text-left font-bold text-sm text-ink bg-surface focus:outline-none transition-all ${
+                        isOverLimit ? 'border-danger focus:border-danger focus:ring-1 focus:ring-danger/20' : 'border-line-2 focus:border-brand focus:ring-1 focus:ring-brand/20'
+                      }`} 
+                      dir="ltr" 
+                    />
+                    <span className="absolute left-3 top-3 text-[10px] text-ink-3">تومان</span>
+                  </div>
+                  {isOverLimit && (
+                    <p className="mt-1 text-xs font-semibold text-danger">
+                      مبلغ نمی‌تواند بیشتر از باقی‌مانده کل بدهی ({formatMoney(remainingAmount)} تومان) باشد.
+                    </p>
+                  )}
+                </Field>
+                
+                <Field label="تاریخ سررسید این قسط">
+                  <JalaliDatePicker value={dueDate} onChange={setDueDate} />
+                </Field>
+              </div>
             </div>
 
-            <div className="flex items-center justify-center gap-2 mt-2 border-t border-line pt-3">
+            {/* فوتر مودال ویرایش */}
+            <div className="flex items-center justify-center gap-2 border-t border-line/40 bg-surface-2 px-5 py-3 !rounded-b-[24px]">
               <button 
                 onClick={() => setIsOpen(false)} 
                 disabled={isPending} 
-                className="flex-1 rounded-lg border border-line-2 py-2 text-xs font-semibold text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+                className="flex-1 rounded-xl border border-line-2 py-2 text-xs font-semibold text-ink-2 bg-surface hover:bg-surface-3 hover:text-ink disabled:opacity-50 transition-colors"
               >
                 انصراف
               </button>
               <button 
                 onClick={handleSave} 
                 disabled={isPending || isOverLimit} 
-                className="flex-1 rounded-lg bg-brand py-2 text-xs font-semibold text-ink-inverse hover:bg-brand-600 disabled:opacity-50 flex items-center justify-center gap-1"
+                className="flex-1 rounded-xl bg-brand py-2 text-xs font-semibold text-ink-inverse flex items-center justify-center gap-1 hover:bg-brand-700 shadow-brand ring-1 ring-brand-300 ring-offset-2 disabled:opacity-50 transition-all"
               >
                 {isPending ? 'در حال ذخیره...' : (<><Icon name="confirm" size="compact" />ذخیره</>)}
               </button>
@@ -200,22 +209,22 @@ export function EditInstallmentDialog({
 
       {/* 👈 مودال پرداخت: مستقل از isOpen */}
      {isPaymentDialogOpen && (
-  <PaymentDialog
-    isOpen={true}
-    onClose={() => setIsPaymentDialogOpen(false)}
-    customerId={customerId}
-    appointmentId={appointmentId}
-    customerName={customerName}
-    amountDue={remainingAmount}
-    panel={panel}
-    mode="edit" // 👈 این خط اضافه بشه
-    onSuccess={() => {
-      setIsPaymentDialogOpen(false)
-      setIsOpen(false)
-      router.refresh()
-    }}
-  />
-)}
+      <PaymentDialog
+        isOpen={true}
+        onClose={() => setIsPaymentDialogOpen(false)}
+        customerId={customerId}
+        appointmentId={appointmentId}
+        customerName={customerName}
+        amountDue={remainingAmount}
+        panel={panel}
+        mode="edit" // 👈 این خط اضافه بشه
+        onSuccess={() => {
+          setIsPaymentDialogOpen(false)
+          setIsOpen(false)
+          router.refresh()
+        }}
+      />
+    )}
     </>
   , document.body)
 }

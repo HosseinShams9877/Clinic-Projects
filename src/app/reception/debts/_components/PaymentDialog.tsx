@@ -43,8 +43,6 @@ export function PaymentDialog({
   const isClient = useIsClient()
   
   const initialAmount = typeof amountDue === 'bigint' ? amountDue.toString() : amountDue
-  
-  // 👈 اصلاح ۱: تبدیل ریال به تومان برای نمایش در اینپوت
   const initialAmountInToman = Math.floor(Number(initialAmount) / 10).toString()
 
   const [amount, setAmount] = useState(formatNumberWithCommas(initialAmountInToman))
@@ -73,7 +71,6 @@ export function PaymentDialog({
   
   const baseAmount = BigInt(initialAmount)
   
-  // 👈 اصلاح ۲: تبدیل مقادیر تومانِ اینپوت به ریال برای محاسبات دیتابیس
   const amountRialBigInt = rawAmountToman ? BigInt(rawAmountToman) * 10n : 0n
   const discountRialBigInt = rawDiscountToman ? BigInt(rawDiscountToman) * 10n : 0n
   
@@ -87,7 +84,6 @@ export function PaymentDialog({
         dbMethod = 'CASH'
       }
 
-      // 👈 اصلاح ۳: ارسال مقادیر ریالی به اکشن‌ها
       const submitAmount = amountRialBigInt.toString()
       const submitDiscount = discountRialBigInt.toString()
 
@@ -158,21 +154,32 @@ export function PaymentDialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 text-right" dir="rtl">
-      <div className="w-full max-w-[600px] rounded-2xl bg-surface shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between border-b border-line px-6 py-4 shrink-0">
-          <div className="flex items-center gap-2 font-bold text-lg text-ink">
-             <Icon name="payment" size="card" />
+    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4 text-right" dir="rtl">
+      
+      {/* کانتینر اصلی با استایل گردی و overflow */}
+      <div 
+        className="w-full max-w-[600px] bg-surface shadow-3 border border-line/50 flex flex-col max-h-[90vh]"
+        style={{ borderRadius: '24px', overflow: 'hidden' }}
+      >
+        
+        {/* هدر پررنگ با گردی بالایی */}
+        <div 
+          className="flex items-center justify-between border-b border-line/40 bg-brand-100 px-6 py-4 shrink-0 !rounded-t-[24px]"
+        >
+          <div className="flex items-center gap-2 font-bold text-lg text-brand-900">
+             <span className="grid size-8 place-items-center rounded-full bg-brand-200 text-brand-800">
+               <Icon name="payment" size="card" />
+             </span>
              {ADMIN_DEBTS.paymentDialog.title}
           </div>
-          <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors">
+          <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-brand-200 text-brand-800 hover:text-brand-900 transition-colors">
             <Icon name="close" size="card" />
           </button>
         </div>
 
         <div className="p-6 flex flex-col gap-5 overflow-y-auto overflow-x-visible relative">
            
-           <div className="flex flex-col gap-1.5 rounded-xl bg-info-bg/30 p-4 border border-info/10">
+           <div className="flex flex-col gap-1.5 rounded-2xl bg-info-bg/10 p-4 border border-info/20">
              <div className="flex items-center justify-between">
                <span className="font-bold text-ink text-lg">{customerName}</span>
                <Icon name="customers" size="card" className="text-info" />
@@ -191,7 +198,7 @@ export function PaymentDialog({
                  </div>
                  <div className="flex items-center justify-between border-t border-info/20 pt-1 mt-1">
                    <span className="text-sm font-bold text-ink">مانده نهایی:</span>
-                   <span className="text-sm font-bold text-brand tabular-nums">{formatMoney(finalAmountRial)} تومان</span>
+                   <span className="text-sm font-bold text-brand-700 tabular-nums">{formatMoney(finalAmountRial)} تومان</span>
                  </div>
                </>
              )}
@@ -204,16 +211,15 @@ export function PaymentDialog({
                   type="text" 
                   value={amount} 
                   onChange={e => setAmount(formatNumberWithCommas(e.target.value))} 
-                  className="w-full rounded-xl border border-line-2 p-3 pl-16 text-left font-bold text-lg text-ink focus:border-brand focus:outline-none" 
+                  className="w-full rounded-xl border border-line-2 p-3 pl-16 text-left font-bold text-lg text-ink bg-surface focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all" 
                   dir="ltr" 
                 />
                 <span className="absolute left-4 top-3.5 text-sm text-ink-3">{ADMIN_DEBTS.followUp.toman}</span>
              </div>
              <div className="flex gap-2 justify-end mt-1">
-                <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount1Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount1Label}</button>
-                <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount2Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount2Label}</button>
-                {/* 👈 اصلاح ۴: دکمه "همه مبلغ" هم باید تومان را بفرستد */}
-                <button type="button" onClick={() => setAmount(formatNumberWithCommas(initialAmountInToman))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
+                <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount1Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors">{ADMIN_DEBTS.paymentDialog.quickAmount1Label}</button>
+                <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount2Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors">{ADMIN_DEBTS.paymentDialog.quickAmount2Label}</button>
+                <button type="button" onClick={() => setAmount(formatNumberWithCommas(initialAmountInToman))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100 transition-colors">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
              </div>
            </div>
 
@@ -225,7 +231,7 @@ export function PaymentDialog({
                   value={discount}
                   onChange={e => setDiscount(formatNumberWithCommas(e.target.value))}
                   placeholder="۰"
-                  className="w-full rounded-xl border border-line-2 p-3 text-left text-sm text-ink focus:border-brand focus:outline-none" 
+                  className="w-full rounded-xl border border-line-2 p-3 text-left text-sm text-ink bg-surface focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all" 
                   dir="ltr"
                 />
               </div>
@@ -236,7 +242,7 @@ export function PaymentDialog({
                   value={discountReason}
                   onChange={e => setDiscountReason(e.target.value)}
                   placeholder="مثلا: تخفیف وفاداری"
-                  className="w-full rounded-xl border border-line-2 p-3 text-sm text-ink focus:border-brand focus:outline-none" 
+                  className="w-full rounded-xl border border-line-2 p-3 text-sm text-ink bg-surface focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all" 
                 />
               </div>
            </div>
@@ -258,7 +264,7 @@ export function PaymentDialog({
                 <div className="grid grid-cols-3 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs text-ink-3">{method === 'CHEQUE' ? ADMIN_DEBTS.paymentDialog.chequeCount : ADMIN_DEBTS.paymentDialog.installmentCount}</label>
-                    <select value={installmentCount} onChange={e => setInstallmentCount(e.target.value)} className="rounded-lg border border-line-2 bg-surface p-2 text-sm text-ink outline-none">
+                    <select value={installmentCount} onChange={e => setInstallmentCount(e.target.value)} className="rounded-lg border border-line-2 bg-surface p-2 text-sm text-ink outline-none focus:border-brand">
                       {[2,3,4,5,6,12].map(n => <option key={n} value={n}>{toPersianDigits(n)} {ADMIN_DEBTS.paymentDialog.countUnit}</option>)}
                     </select>
                   </div>
@@ -267,7 +273,7 @@ export function PaymentDialog({
                     <select 
                       value={intervalMonths} 
                       onChange={e => setIntervalMonths(e.target.value)} 
-                      className="rounded-lg border border-line-2 bg-surface p-2 text-sm text-ink outline-none"
+                      className="rounded-lg border border-line-2 bg-surface p-2 text-sm text-ink outline-none focus:border-brand"
                     >
                       <option value="1">هر ۱ ماه</option>
                       <option value="2">هر ۲ ماه</option>
@@ -279,9 +285,9 @@ export function PaymentDialog({
                     <Field label={ADMIN_DEBTS.paymentDialog.firstDueDate}><JalaliDatePicker value={firstDueDate} onChange={setFirstDueDate} /></Field>
                   </div>
                 </div>
-                <div className="mt-2 overflow-hidden rounded-lg border border-line">
+                <div className="mt-2 overflow-hidden rounded-lg border border-line bg-surface">
                   <table className="w-full text-sm text-center">
-                    <thead className="bg-surface-3 text-xs text-ink-3">
+                    <thead className="bg-surface-2 text-xs text-ink-3">
                       <tr><th className="py-2">{ADMIN_DEBTS.paymentDialog.preview.step}</th><th className="py-2">{ADMIN_DEBTS.paymentDialog.preview.dueDate}</th><th className="py-2">{ADMIN_DEBTS.paymentDialog.preview.amount}</th></tr>
                     </thead>
                     <tbody className="divide-y divide-line text-ink-2">
@@ -312,22 +318,25 @@ export function PaymentDialog({
            )}
 
            <div className="grid grid-cols-3 gap-4 mt-2 items-end">
-              <div className="flex flex-col gap-2"><label className="text-xs text-ink-3">{ADMIN_DEBTS.paymentDialog.trackingNumber}</label><input type="text" placeholder={ADMIN_DEBTS.paymentDialog.trackingPlaceholder} className="w-full h-[42px] rounded-xl border border-line-2 px-3 text-sm text-ink focus:border-brand focus:outline-none" dir="ltr" /></div>
+              <div className="flex flex-col gap-2"><label className="text-xs text-ink-3">{ADMIN_DEBTS.paymentDialog.trackingNumber}</label><input type="text" placeholder={ADMIN_DEBTS.paymentDialog.trackingPlaceholder} className="w-full h-[42px] rounded-xl border border-line-2 px-3 text-sm text-ink bg-surface focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all" dir="ltr" /></div>
               <div className="flex flex-col gap-2"><Field label={ADMIN_DEBTS.paymentDialog.receiveDate}><JalaliDatePicker value={receiveDate} onChange={setReceiveDate} /></Field></div>
               <div className="flex flex-col gap-2"><Field label={ADMIN_DEBTS.paymentDialog.receiveTime}><TimePicker value={receiveTime} onChange={setReceiveTime} /></Field></div>
            </div>
 
            <div className="flex flex-col gap-2 mt-2">
              <label className="text-sm font-semibold text-ink-2">{ADMIN_DEBTS.paymentDialog.note}</label>
-             <textarea className="w-full rounded-xl border border-line-2 p-3 text-sm min-h-[60px] focus:border-brand focus:outline-none" placeholder={ADMIN_DEBTS.paymentDialog.notePlaceholder}></textarea>
+             <textarea className="w-full rounded-xl border border-line-2 p-3 text-sm min-h-[60px] bg-surface text-ink focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all resize-none" placeholder={ADMIN_DEBTS.paymentDialog.notePlaceholder}></textarea>
            </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-line px-6 py-4 bg-surface-2 rounded-b-2xl shrink-0">
-           <button onClick={onClose} disabled={isPending} className="rounded-xl border border-line-2 px-6 py-2.5 text-sm font-semibold text-ink-2 hover:bg-surface hover:text-ink transition-colors">
+        {/* فوتر با گردی پایینی */}
+        <div 
+          className="flex items-center justify-end gap-3 border-t border-line/40 px-6 py-4 bg-surface-2 shrink-0 !rounded-b-[24px]"
+        >
+           <button onClick={onClose} disabled={isPending} className="rounded-xl border border-line-2 px-6 py-2.5 text-sm font-semibold text-ink-2 bg-surface hover:bg-surface-3 hover:text-ink transition-colors">
              {ADMIN_DEBTS.paymentDialog.cancel}
            </button>
-           <button onClick={handleSubmit} disabled={isPending} className="rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-ink-inverse flex items-center gap-2 hover:bg-brand-600 transition-colors shadow-sm disabled:opacity-50">
+           <button onClick={handleSubmit} disabled={isPending} className="rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-ink-inverse flex items-center gap-2 hover:bg-brand-700 transition-all shadow-brand ring-1 ring-brand-300 ring-offset-2 disabled:opacity-50">
               {isPending ? ADMIN_DEBTS.paymentDialog.saving : (<><Icon name="confirm" size="compact" />{ADMIN_DEBTS.paymentDialog.submit}</>)}
            </button>
         </div>
@@ -339,7 +348,7 @@ export function PaymentDialog({
 
 function MethodBtn({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: IconName, label: string }) {
   return (
-    <button type="button" onClick={onClick} className={cx("flex flex-col items-center justify-center gap-2 rounded-xl border p-3 transition-colors", active ? "border-brand bg-brand-50 text-brand-700 shadow-sm" : "border-line-2 bg-surface text-ink-2 hover:bg-surface-2")}>
+    <button type="button" onClick={onClick} className={cx("flex flex-col items-center justify-center gap-2 rounded-xl border p-3 transition-all", active ? "border-brand bg-brand-50 text-brand-700 shadow-brand" : "border-line-2 bg-surface text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700")}>
        <Icon name={icon} size="card" />
        <span className="text-xs font-semibold">{label}</span>
     </button>

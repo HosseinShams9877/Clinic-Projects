@@ -46,7 +46,7 @@ export function InstallmentPaymentDialog({
   installmentId: string,
   customerName: string, 
   amountDue: bigint | string, 
-  maxTotalRemaining: bigint, // 👈 باقی‌مانده کل بدهی
+  maxTotalRemaining: bigint, 
   panel?: 'admin' | 'reception' | 'doctor'
   onSuccess: () => void 
 }) {
@@ -70,7 +70,6 @@ export function InstallmentPaymentDialog({
 
   if (!isOpen || !isClient) return null
 
-  // 👈 محاسبه لحظه‌ای برای قرمز کردن اینپوت
   const rawDigits = amount.replace(/[^\d۰-۹]/g, '')
   const persianNumbers = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹']
   const englishDigits = rawDigits.replace(/[۰-۹]/g, (d) => String(persianNumbers.indexOf(d)))
@@ -79,7 +78,6 @@ export function InstallmentPaymentDialog({
   const maxAllowed = BigInt(amountDue)
   const maxTotal = maxTotalRemaining > 0n ? BigInt(maxTotalRemaining) : 0n
   
-  // شرط AND: مبلغ نباید بیشتر از مبلغ قسط و نه بیشتر از باقی‌مانده کل باشه
   const isOverLimit = enteredAmountRial > maxAllowed || (maxTotal > 0n && enteredAmountRial > maxTotal)
 
   const handleSubmit = () => {
@@ -116,27 +114,36 @@ export function InstallmentPaymentDialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 text-right" dir="rtl">
-      <div className="w-full max-w-[500px] rounded-2xl bg-surface shadow-2xl flex flex-col max-h-[95vh]">
+    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4 text-right" dir="rtl">
+      {/* کانتینر اصلی با استایل گردی و overflow */}
+      <div 
+        className="w-full max-w-[500px] bg-surface shadow-3 border border-line/50 flex flex-col max-h-[95vh]"
+        style={{ borderRadius: '24px', overflow: 'hidden' }}
+      >
         
-        <div className="flex items-center justify-between border-b border-line px-5 py-3 shrink-0">
-          <div className="flex items-center gap-2 font-bold text-base text-ink">
-             <Icon name="payment" size="compact" />
+        {/* هدر پررنگ با گردی بالایی */}
+        <div 
+          className="flex items-center justify-between border-b border-line/40 bg-brand-100 px-5 py-4 shrink-0 !rounded-t-[24px]"
+        >
+          <div className="flex items-center gap-2 font-bold text-base text-brand-900">
+             <span className="grid size-8 place-items-center rounded-full bg-brand-200 text-brand-800">
+               <Icon name="payment" size="compact" />
+             </span>
              {ADMIN_INSTALLMENTS.payment.title}
           </div>
-          <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors">
+          <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-brand-200 text-brand-800 hover:text-brand-900 transition-colors">
             <Icon name="close" size="compact" />
           </button>
         </div>
 
         <div className="p-5 flex flex-col gap-4 overflow-y-auto">
            
-           <div className="flex items-center justify-between rounded-xl bg-info-bg/30 p-3 border border-info/10">
-             <div className="flex flex-col gap-0.5">
+           <div className="flex items-center justify-between rounded-2xl bg-info-bg/10 p-4 border border-info/20">
+             <div className="flex flex-col gap-1">
                 <span className="font-bold text-ink text-sm">{customerName}</span>
-                <span className="text-xs text-ink-2">{ADMIN_INSTALLMENTS.payment.amountDue} {formatMoney(BigInt(amountDue))} {ADMIN_INSTALLMENTS.payment.toman}</span>
+                <span className="text-xs text-ink-2">{ADMIN_INSTALLMENTS.payment.amountDue} <span className="font-semibold text-ink tabular-nums">{formatMoney(BigInt(amountDue))}</span> {ADMIN_INSTALLMENTS.payment.toman}</span>
              </div>
-             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-info-bg text-info">
+             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-info/10 text-info">
                 <Icon name="customers" size="compact" />
              </span>
            </div>
@@ -148,9 +155,10 @@ export function InstallmentPaymentDialog({
                   type="text" 
                   value={amount}
                   onChange={e => setAmount(formatNumberWithCommas(e.target.value))}
-                  // 👈 قرمز شدن لحظه‌ای در صورت عبور از سقف
-                  className={`w-full rounded-lg border p-2 pl-16 text-left font-bold text-lg text-ink focus:outline-none transition-colors ${
-                    isOverLimit ? 'border-danger text-danger focus:border-danger' : 'border-line-2 focus:border-brand'
+                  className={`w-full rounded-xl border p-2.5 pl-16 text-left font-bold text-lg bg-surface text-ink focus:outline-none transition-all ${
+                    isOverLimit 
+                      ? 'border-danger text-danger focus:border-danger focus:ring-1 focus:ring-danger/20' 
+                      : 'border-line-2 focus:border-brand focus:ring-1 focus:ring-brand/20'
                   }`} 
                   dir="ltr"
                 />
@@ -166,19 +174,19 @@ export function InstallmentPaymentDialog({
            <div className="flex flex-col gap-1.5">
              <label className="text-xs font-semibold text-ink-3">{ADMIN_INSTALLMENTS.payment.method}</label>
              <div className="grid grid-cols-4 gap-2">
-                <button type="button" onClick={() => setMethod('CASH')} className={cx("flex flex-col items-center justify-center gap-1 rounded-lg border p-2", method === 'CASH' ? "border-brand bg-brand-50 text-brand-700" : "border-line-2 bg-surface text-ink-2")}>
+                <button type="button" onClick={() => setMethod('CASH')} className={cx("flex flex-col items-center justify-center gap-1 rounded-xl border p-2.5 transition-all", method === 'CASH' ? "border-brand bg-brand-50 text-brand-700 shadow-brand" : "border-line-2 bg-surface text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700")}>
                    <Icon name="cash" size="compact" />
                    <span className="text-[10px] font-semibold">{ADMIN_INSTALLMENTS.payment.cash}</span>
                 </button>
-                <button type="button" onClick={() => setMethod('POS')} className={cx("flex flex-col items-center justify-center gap-1 rounded-lg border p-2", method === 'POS' ? "border-brand bg-brand-50 text-brand-700" : "border-line-2 bg-surface text-ink-2")}>
+                <button type="button" onClick={() => setMethod('POS')} className={cx("flex flex-col items-center justify-center gap-1 rounded-xl border p-2.5 transition-all", method === 'POS' ? "border-brand bg-brand-50 text-brand-700 shadow-brand" : "border-line-2 bg-surface text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700")}>
                    <Icon name="payment" size="compact" />
                    <span className="text-[10px] font-semibold">{ADMIN_INSTALLMENTS.payment.pos}</span>
                 </button>
-                <button type="button" onClick={() => setMethod('CARD_TO_CARD')} className={cx("flex flex-col items-center justify-center gap-1 rounded-lg border p-2", method === 'CARD_TO_CARD' ? "border-brand bg-brand-50 text-brand-700" : "border-line-2 bg-surface text-ink-2")}>
+                <button type="button" onClick={() => setMethod('CARD_TO_CARD')} className={cx("flex flex-col items-center justify-center gap-1 rounded-xl border p-2.5 transition-all", method === 'CARD_TO_CARD' ? "border-brand bg-brand-50 text-brand-700 shadow-brand" : "border-line-2 bg-surface text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700")}>
                    <Icon name="debt" size="compact" />
                    <span className="text-[10px] font-semibold">{ADMIN_INSTALLMENTS.payment.cardToCard}</span>
                 </button>
-                <button type="button" onClick={() => setMethod('ONLINE')} className={cx("flex flex-col items-center justify-center gap-1 rounded-lg border p-2", method === 'ONLINE' ? "border-brand bg-brand-50 text-brand-700" : "border-line-2 bg-surface text-ink-2")}>
+                <button type="button" onClick={() => setMethod('ONLINE')} className={cx("flex flex-col items-center justify-center gap-1 rounded-xl border p-2.5 transition-all", method === 'ONLINE' ? "border-brand bg-brand-50 text-brand-700 shadow-brand" : "border-line-2 bg-surface text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700")}>
                    <Icon name="externalLink" size="compact" />
                    <span className="text-[10px] font-semibold">{ADMIN_INSTALLMENTS.payment.online}</span>
                 </button>
@@ -188,7 +196,7 @@ export function InstallmentPaymentDialog({
            <div className="grid grid-cols-3 gap-3 mt-1">
               <div className="flex flex-col gap-1.5 col-span-3">
                 <label className="text-xs text-ink-3">{ADMIN_INSTALLMENTS.payment.trackingNumber}</label>
-                <input type="text" placeholder={ADMIN_INSTALLMENTS.payment.trackingPlaceholder} className="rounded-lg border border-line-2 p-2 text-sm" dir="ltr" />
+                <input type="text" placeholder={ADMIN_INSTALLMENTS.payment.trackingPlaceholder} className="rounded-xl border border-line-2 p-2.5 text-sm bg-surface text-ink focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all" dir="ltr" />
               </div>
               <div className="flex flex-col gap-1.5 col-span-2">
                 <Field label={ADMIN_INSTALLMENTS.payment.receiveDate}>
@@ -204,25 +212,27 @@ export function InstallmentPaymentDialog({
 
            <div className="flex flex-col gap-1.5 mt-1">
              <label className="text-xs font-semibold text-ink-3">{ADMIN_INSTALLMENTS.payment.note}</label>
-             <textarea className="w-full rounded-lg border border-line-2 p-2 text-sm min-h-[60px] focus:border-brand focus:outline-none" placeholder={ADMIN_INSTALLMENTS.payment.notePlaceholder}></textarea>
+             <textarea className="w-full rounded-xl border border-line-2 p-2.5 text-sm min-h-[60px] bg-surface text-ink focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all resize-none" placeholder={ADMIN_INSTALLMENTS.payment.notePlaceholder}></textarea>
            </div>
 
            {error && (
-             <div className="rounded-lg bg-danger-bg p-3 text-sm font-semibold text-danger border border-danger/20">
+             <div className="rounded-xl bg-danger-bg p-3 text-sm font-semibold text-danger border border-danger/20">
                {error}
              </div>
            )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3 bg-surface-2 rounded-b-2xl shrink-0">
-           <button onClick={onClose} disabled={isPending} className="rounded-lg border border-line-2 px-4 py-2 text-sm font-semibold text-ink-2 hover:bg-surface hover:text-ink transition-colors">
+        {/* فوتر با گردی پایینی */}
+        <div 
+          className="flex items-center justify-end gap-2 border-t border-line/40 px-5 py-4 bg-surface-2 shrink-0 !rounded-b-[24px]"
+        >
+           <button onClick={onClose} disabled={isPending} className="rounded-xl border border-line-2 px-4 py-2 text-sm font-semibold text-ink-2 bg-surface hover:bg-surface-3 hover:text-ink transition-colors">
              {ADMIN_INSTALLMENTS.payment.cancel}
            </button>
            <button 
              onClick={handleSubmit} 
-             // 👈 غیرفعال شدن دکمه در صورت وجود خطا
              disabled={isPending || isOverLimit}
-             className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-ink-inverse flex items-center gap-2 hover:bg-brand-600 transition-colors shadow-sm disabled:opacity-50"
+             className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-ink-inverse flex items-center gap-2 hover:bg-brand-700 transition-all shadow-brand ring-1 ring-brand-300 ring-offset-2 disabled:opacity-50"
            >
               {isPending ? ADMIN_INSTALLMENTS.payment.saving : (
                 <>

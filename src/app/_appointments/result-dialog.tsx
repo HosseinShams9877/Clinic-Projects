@@ -11,7 +11,7 @@ import { cx } from '@/core/lib'
 import { JalaliDatePicker } from '@/core/components/date-picker'
 import { TimePicker } from '@/core/components/date-picker/TimePicker'
 import { Field } from '@/core/components/form'
-import { recordResultAction } from './actions' // 👈 ایمپورت شد
+import { recordResultAction } from './actions'
 import { recordPaymentAction, recordPaymentWithInstallmentsAction } from '@/app/_debts/actions'
 import { ADMIN_DEBTS } from '@/app/admin/catalog'
 
@@ -66,7 +66,7 @@ export function ResultDialog({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-ink-inverse hover:bg-brand-600 transition-colors shadow-sm"
+        className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-ink-inverse hover:bg-brand-700 transition-colors shadow-brand"
       >
         {triggerLabel || 'ثبت نتیجه'}
       </button>
@@ -136,7 +136,6 @@ function ResultDialogContent({
   const handleSubmit = () => {
     setError(null)
     startTransition(async () => {
-      // ۱. ثبت نتیجه (تغییر وضعیت به COMPLETED و جلو بردن چرخه)
       const resultOutcome = await recordResultAction(panel, {
         appointmentId,
         note: note || undefined,
@@ -147,12 +146,11 @@ function ResultDialogContent({
         return
       }
 
-          const isInstallmentMode = method === 'INSTALLMENT' || method === 'CHEQUE'
+      const isInstallmentMode = method === 'INSTALLMENT' || method === 'CHEQUE'
 
       if (paidBigInt > 0n || discountBigInt > 0n || isInstallmentMode) {
         let paymentOutcome
         if (isInstallmentMode) {
-          // 👈 اگه کاربر مبلغ وارد نکرده، کل بدهی رو قسطی کن
           const amountForAction = paidBigInt > 0n ? paidBigInt : remaining
           paymentOutcome = await recordPaymentWithInstallmentsAction(
             panel,
@@ -197,21 +195,26 @@ function ResultDialogContent({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 text-right" dir="rtl">
-      <div className="w-full max-w-[600px] rounded-2xl bg-surface shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between border-b border-line px-6 py-4 shrink-0">
-          <div className="flex items-center gap-2 font-bold text-lg text-ink">
-             <Icon name="confirm" size="card" />
+    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4 text-right" dir="rtl">
+      {/* ۱. گرد کردن شدید گوشه‌های کارت اصلی (rounded-[32px]) */}
+      <div className="w-full max-w-[600px] rounded-[32px] bg-surface shadow-3 flex flex-col max-h-[90vh] border border-line/50">
+        
+        {/* ۲. هدر پررنگ‌تر (bg-brand-100) و خط جداکننده بسیار کم‌رنگ (border-line/40) */}
+        <div className="flex items-center justify-between border-b border-line/40 bg-brand-100 px-6 py-4 shrink-0 rounded-t-[32px]">
+          <div className="flex items-center gap-2 font-bold text-lg text-brand-900">
+             <span className="grid size-8 place-items-center rounded-pill bg-brand-200 text-brand-800">
+               <Icon name="confirm" size="card" />
+             </span>
              ثبت نتیجه نوبت
           </div>
-          <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors">
+          <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-brand-200 text-brand-800/70 hover:text-brand-900 transition-colors">
             <Icon name="close" size="card" />
           </button>
         </div>
 
         <div className="p-6 flex flex-col gap-5 overflow-y-auto overflow-x-visible relative">
            
-           <div className="flex flex-col gap-1.5 rounded-xl bg-info-bg/30 p-4 border border-info/10">
+           <div className="flex flex-col gap-1.5 rounded-xl bg-info-bg/10 p-4 border border-info/20">
              <div className="flex items-center justify-between">
                <span className="font-bold text-ink text-lg">{customerName}</span>
                <Icon name="customers" size="card" className="text-info" />
@@ -238,7 +241,7 @@ function ResultDialogContent({
                  )}
                  <div className="flex items-center justify-between border-t border-info/20 pt-1 mt-1">
                    <span className="text-sm font-bold text-ink">مانده نهایی:</span>
-                   <span className="text-sm font-bold text-brand tabular-nums">{formatMoney(finalAmount)} تومان</span>
+                   <span className="text-sm font-bold text-brand-700 tabular-nums">{formatMoney(finalAmount)} تومان</span>
                  </div>
                </div>
              )}
@@ -249,7 +252,7 @@ function ResultDialogContent({
              <textarea 
                value={note}
                onChange={e => setNote(e.target.value)}
-               className="w-full rounded-xl border border-line-2 p-3 text-sm min-h-[60px] focus:border-brand focus:outline-none" 
+               className="w-full rounded-xl border border-line-2 p-3 text-sm min-h-[60px] bg-surface text-ink focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all" 
                placeholder="مثلا: جلسه چهارم، پوست واکنش خوبی نشان داد."
              ></textarea>
            </div>
@@ -262,15 +265,15 @@ function ResultDialogContent({
                   value={amount} 
                   onChange={e => setAmount(formatNumberWithCommas(e.target.value))} 
                   placeholder="در صورت خالی گذاشتن، به عنوان بدهی ثبت می‌شود"
-                  className="w-full rounded-xl border border-line-2 p-3 pl-16 text-left font-bold text-lg text-ink focus:border-brand focus:outline-none" 
+                  className="w-full rounded-xl border border-line-2 p-3 pl-16 text-left font-bold text-lg text-ink bg-surface focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all" 
                   dir="ltr" 
                 />
                 <span className="absolute left-4 top-3.5 text-sm text-ink-3">{ADMIN_DEBTS.followUp.toman}</span>
              </div>
              <div className="flex gap-2 justify-end mt-1">
-                <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount1Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount1Label}</button>
-                <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount2Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:bg-surface-2">{ADMIN_DEBTS.paymentDialog.quickAmount2Label}</button>
-                <button type="button" onClick={() => setAmount(formatNumberWithCommas(Math.floor(Number(remaining) / 10).toString()))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
+                <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount1Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors">{ADMIN_DEBTS.paymentDialog.quickAmount1Label}</button>
+                <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount2Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors">{ADMIN_DEBTS.paymentDialog.quickAmount2Label}</button>
+                <button type="button" onClick={() => setAmount(formatNumberWithCommas(Math.floor(Number(remaining) / 10).toString()))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100 transition-colors">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
              </div>
            </div>
 
@@ -282,7 +285,7 @@ function ResultDialogContent({
                   value={discount}
                   onChange={e => setDiscount(formatNumberWithCommas(e.target.value))}
                   placeholder="۰"
-                  className="w-full rounded-xl border border-line-2 p-3 text-left text-sm text-ink focus:border-brand focus:outline-none" 
+                  className="w-full rounded-xl border border-line-2 p-3 text-left text-sm text-ink bg-surface focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all" 
                   dir="ltr"
                 />
               </div>
@@ -293,7 +296,7 @@ function ResultDialogContent({
                   value={discountReason}
                   onChange={e => setDiscountReason(e.target.value)}
                   placeholder="مثلا: تخفیف وفاداری"
-                  className="w-full rounded-xl border border-line-2 p-3 text-sm text-ink focus:border-brand focus:outline-none" 
+                  className="w-full rounded-xl border border-line-2 p-3 text-sm text-ink bg-surface focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all" 
                 />
               </div>
            </div>
@@ -315,7 +318,7 @@ function ResultDialogContent({
                 <div className="grid grid-cols-3 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs text-ink-3">{method === 'CHEQUE' ? ADMIN_DEBTS.paymentDialog.chequeCount : ADMIN_DEBTS.paymentDialog.installmentCount}</label>
-                    <select value={installmentCount} onChange={e => setInstallmentCount(e.target.value)} className="rounded-lg border border-line-2 bg-surface p-2 text-sm text-ink outline-none">
+                    <select value={installmentCount} onChange={e => setInstallmentCount(e.target.value)} className="rounded-lg border border-line-2 bg-surface p-2 text-sm text-ink outline-none focus:border-brand">
                       {[2,3,4,5,6,12].map(n => <option key={n} value={n}>{toPersianDigits(n)} {ADMIN_DEBTS.paymentDialog.countUnit}</option>)}
                     </select>
                   </div>
@@ -324,7 +327,7 @@ function ResultDialogContent({
                     <select 
                       value={intervalMonths} 
                       onChange={e => setIntervalMonths(e.target.value)} 
-                      className="rounded-lg border border-line-2 bg-surface p-2 text-sm text-ink outline-none"
+                      className="rounded-lg border border-line-2 bg-surface p-2 text-sm text-ink outline-none focus:border-brand"
                     >
                       <option value="1">هر ۱ ماه</option>
                       <option value="2">هر ۲ ماه</option>
@@ -336,9 +339,9 @@ function ResultDialogContent({
                     <Field label={ADMIN_DEBTS.paymentDialog.firstDueDate}><JalaliDatePicker value={firstDueDate} onChange={setFirstDueDate} /></Field>
                   </div>
                 </div>
-                <div className="mt-2 overflow-hidden rounded-lg border border-line">
+                <div className="mt-2 overflow-hidden rounded-lg border border-line bg-surface">
                   <table className="w-full text-sm text-center">
-                    <thead className="bg-surface-3 text-xs text-ink-3">
+                    <thead className="bg-surface-2 text-xs text-ink-3">
                       <tr><th className="py-2">{ADMIN_DEBTS.paymentDialog.preview.step}</th><th className="py-2">{ADMIN_DEBTS.paymentDialog.preview.dueDate}</th><th className="py-2">{ADMIN_DEBTS.paymentDialog.preview.amount}</th></tr>
                     </thead>
                     <tbody className="divide-y divide-line text-ink-2">
@@ -369,7 +372,7 @@ function ResultDialogContent({
            )}
 
            <div className="grid grid-cols-3 gap-4 mt-2 items-end">
-              <div className="flex flex-col gap-2"><label className="text-xs text-ink-3">{ADMIN_DEBTS.paymentDialog.trackingNumber}</label><input type="text" placeholder={ADMIN_DEBTS.paymentDialog.trackingPlaceholder} className="w-full h-[42px] rounded-xl border border-line-2 px-3 text-sm text-ink focus:border-brand focus:outline-none" dir="ltr" /></div>
+              <div className="flex flex-col gap-2"><label className="text-xs text-ink-3">{ADMIN_DEBTS.paymentDialog.trackingNumber}</label><input type="text" placeholder={ADMIN_DEBTS.paymentDialog.trackingPlaceholder} className="w-full h-[42px] rounded-xl border border-line-2 px-3 text-sm text-ink bg-surface focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all" dir="ltr" /></div>
               <div className="flex flex-col gap-2"><Field label={ADMIN_DEBTS.paymentDialog.receiveDate}><JalaliDatePicker value={receiveDate} onChange={setReceiveDate} /></Field></div>
               <div className="flex flex-col gap-2"><Field label={ADMIN_DEBTS.paymentDialog.receiveTime}><TimePicker value={receiveTime} onChange={setReceiveTime} /></Field></div>
            </div>
@@ -381,11 +384,14 @@ function ResultDialogContent({
            )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-line px-6 py-4 bg-surface-2 rounded-b-2xl shrink-0">
-           <button onClick={onClose} disabled={isPending} className="rounded-xl border border-line-2 px-6 py-2.5 text-sm font-semibold text-ink-2 hover:bg-surface hover:text-ink transition-colors">
+        {/* ۳. فوتر با گوشه‌های پایینی کاملاً گرد و خط جداکننده بسیار کم‌رنگ */}
+        <div className="flex items-center justify-between border-t border-line/40 px-6 py-4 bg-surface-2 rounded-b-[32px] shrink-0">
+           
+           <button onClick={onClose} disabled={isPending} className="rounded-xl border border-line-2 px-6 py-2.5 text-sm font-semibold text-ink-2 bg-surface hover:bg-surface-3 hover:text-ink transition-colors">
              انصراف
            </button>
-           <button onClick={handleSubmit} disabled={isPending} className="rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-ink-inverse flex items-center gap-2 hover:bg-brand-600 transition-colors shadow-sm disabled:opacity-50">
+           
+           <button onClick={handleSubmit} disabled={isPending} className="rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-ink-inverse flex items-center gap-2 hover:bg-brand-700 transition-all shadow-brand ring-1 ring-brand-300 ring-offset-2 disabled:opacity-50">
               {isPending ? 'در حال ثبت...' : (<><Icon name="confirm" size="compact" />ثبت نتیجه</>)}
            </button>
         </div>
@@ -397,7 +403,7 @@ function ResultDialogContent({
 
 function MethodBtn({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: IconName, label: string }) {
   return (
-    <button type="button" onClick={onClick} className={cx("flex flex-col items-center justify-center gap-2 rounded-xl border p-3 transition-colors", active ? "border-brand bg-brand-50 text-brand-700 shadow-sm" : "border-line-2 bg-surface text-ink-2 hover:bg-surface-2")}>
+    <button type="button" onClick={onClick} className={cx("flex flex-col items-center justify-center gap-2 rounded-xl border p-3 transition-all", active ? "border-brand bg-brand-50 text-brand-700 shadow-sm" : "border-line-2 bg-surface text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700")}>
        <Icon name={icon} size="card" />
        <span className="text-xs font-semibold">{label}</span>
     </button>

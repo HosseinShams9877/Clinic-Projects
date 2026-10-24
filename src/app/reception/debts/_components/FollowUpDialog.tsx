@@ -43,7 +43,7 @@ export function FollowUpDialog({
   const handleSubmit = () => {
     startTransition(async () => {
       const res = await recordFollowUpWithDetailsAction(
-        'reception', // 👈 اینجا دقیقاً reception شد
+        'reception',
         appointmentId,
         {
           contactMethod, result, note, promiseDate, promiseTime,
@@ -60,32 +60,44 @@ export function FollowUpDialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 text-right" dir="rtl">
-      <div className="w-full max-w-[500px] rounded-2xl bg-surface shadow-2xl flex flex-col max-h-[95vh]">
-        <div className="flex items-center justify-between border-b border-line px-5 py-3 shrink-0">
-          <div className="flex items-center gap-2 font-bold text-base text-ink">
-             <Icon name="phone" size="compact" />
+    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4 text-right" dir="rtl">
+      
+      {/* کانتینر اصلی با استایل مستقیم برای گردی و پنهان کردن مازاد */}
+      <div 
+        className="w-full max-w-[500px] bg-surface shadow-3 border border-line/50 flex flex-col max-h-[95vh]"
+        style={{ borderRadius: '24px', overflow: 'hidden' }}
+      >
+        
+        {/* هدر با استایل مستقیم و !important برای گردی */}
+        <div 
+          className="flex items-center justify-between border-b border-line/40 bg-brand-50 px-5 py-4 shrink-0 !rounded-t-[24px]"
+        >
+          <div className="flex items-center gap-2 font-bold text-base text-brand-900">
+             <span className="grid size-8 place-items-center rounded-full bg-brand-100 text-brand-700">
+               <Icon name="phone" size="compact" />
+             </span>
              {ADMIN_DEBTS.followUp.title}
           </div>
-          <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors">
+          <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-brand-100 text-brand-800 hover:text-brand-900 transition-colors">
             <Icon name="close" size="compact" />
           </button>
         </div>
 
+        {/* بخش محتوا */}
         <div className="p-5 flex flex-col gap-4 overflow-y-auto">
-           <div className="flex items-center justify-between rounded-xl bg-info-bg/30 p-3 border border-info/10">
-             <div className="flex flex-col gap-0.5">
+           <div className="flex items-center justify-between rounded-2xl bg-info-bg/10 p-4 border border-info/20">
+             <div className="flex flex-col gap-1">
                 <span className="font-bold text-ink text-sm">{customerName}</span>
-                <span className="text-xs text-ink-2">{ADMIN_DEBTS.followUp.amountDue} {formatMoney(BigInt(amountDue))} {ADMIN_DEBTS.followUp.toman}</span>
+                <span className="text-xs text-ink-2">{ADMIN_DEBTS.followUp.amountDue} <span className="font-semibold text-ink tabular-nums">{formatMoney(BigInt(amountDue))}</span> {ADMIN_DEBTS.followUp.toman}</span>
              </div>
-             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-info-bg text-info">
+             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-info/10 text-info">
                 <Icon name="customers" size="compact" />
              </span>
            </div>
 
            <div className="flex flex-col gap-1.5">
              <label className="text-xs font-semibold text-ink-3">{ADMIN_DEBTS.followUp.resultLabel}</label>
-             <select value={result} onChange={e => setResult(e.target.value)} className="w-full rounded-lg border border-line-2 px-3 py-2 text-sm text-ink-2 outline-none focus:border-brand">
+             <select value={result} onChange={e => setResult(e.target.value)} className="w-full rounded-xl border border-line-2 px-3 py-2.5 text-sm text-ink-2 outline-none focus:border-brand focus:ring-1 focus:ring-brand/20 bg-surface transition-all">
                 <option value="PROMISE_TO_PAY">{ADMIN_DEBTS.followUp.result.PROMISE_TO_PAY}</option>
                 <option value="NO_ANSWER">{ADMIN_DEBTS.followUp.result.NO_ANSWER}</option>
                 <option value="SMS_SENT">{ADMIN_DEBTS.followUp.result.SMS_SENT}</option>
@@ -97,10 +109,10 @@ export function FollowUpDialog({
 
            <div className="flex flex-col gap-1.5">
              <label className="text-xs font-semibold text-ink-3">{ADMIN_DEBTS.followUp.note}</label>
-             <textarea value={note} onChange={e => setNote(e.target.value)} className="w-full rounded-lg border border-line-2 p-2 text-sm min-h-[60px] focus:border-brand focus:outline-none" placeholder={ADMIN_DEBTS.followUp.notePlaceholder}></textarea>
+             <textarea value={note} onChange={e => setNote(e.target.value)} className="w-full rounded-xl border border-line-2 p-3 text-sm min-h-[60px] bg-surface text-ink focus:border-brand focus:ring-1 focus:ring-brand/20 focus:outline-none transition-all resize-none" placeholder={ADMIN_DEBTS.followUp.notePlaceholder}></textarea>
            </div>
 
-           <div className="grid grid-cols-1 gap-4 border-t border-line pt-3">
+           <div className="grid grid-cols-1 gap-4 border-t border-line/40 pt-4">
              <div className="flex flex-col gap-1.5">
                <label className="text-xs font-semibold text-ink-3">{ADMIN_DEBTS.followUp.promiseDate}</label>
                <div className="grid grid-cols-2 gap-3">
@@ -119,16 +131,19 @@ export function FollowUpDialog({
            </div>
 
            <label className="flex items-center gap-2 mt-1 cursor-pointer">
-             <input type="checkbox" checked={createReminder} onChange={(e) => setCreateReminder(e.target.checked)} className="size-4 rounded border-line-2 text-brand focus:ring-brand" />
+             <input type="checkbox" checked={createReminder} onChange={(e) => setCreateReminder(e.target.checked)} className="size-4 rounded border-line-2 text-brand focus:ring-brand accent-brand" />
              <span className="text-xs text-ink-2">{ADMIN_DEBTS.followUp.reminder}</span>
            </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3 bg-surface-2 rounded-b-2xl shrink-0">
-           <button onClick={onClose} disabled={isPending} className="rounded-lg border border-line-2 px-4 py-2 text-sm font-semibold text-ink-2 hover:bg-surface hover:text-ink transition-colors">
+        {/* فوتر با استایل مستقیم و !important */}
+        <div 
+          className="flex items-center justify-end gap-2 border-t border-line/40 px-5 py-4 bg-surface-2 shrink-0 !rounded-b-[24px]"
+        >
+           <button onClick={onClose} disabled={isPending} className="rounded-xl border border-line-2 px-4 py-2 text-sm font-semibold text-ink-2 bg-surface hover:bg-surface-3 hover:text-ink transition-colors">
              {ADMIN_DEBTS.followUp.cancel}
            </button>
-           <button onClick={handleSubmit} disabled={isPending} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-ink-inverse flex items-center gap-2 hover:bg-brand-600 transition-colors shadow-sm disabled:opacity-50">
+           <button onClick={handleSubmit} disabled={isPending} className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-ink-inverse flex items-center gap-2 hover:bg-brand-700 transition-all shadow-brand ring-1 ring-brand-300 ring-offset-2 disabled:opacity-50">
               {isPending ? ADMIN_DEBTS.followUp.saving : (<><Icon name="confirm" size="compact" />{ADMIN_DEBTS.followUp.submit}</>)}
            </button>
         </div>
