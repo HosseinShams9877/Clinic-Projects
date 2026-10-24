@@ -292,6 +292,7 @@ export default async function DoctorCustomerDetailPage({
             customerId={profile.id}
             totalAmount={profile.chargedTotal}
             totalPaid={profile.paidTotal}
+            panel="doctor"
             totalRemaining={profile.chargedTotal - profile.paidTotal}
             nextDueDate={nextInst ? nextInst.dueAt : null}
             nextDueAmount={nextInst ? nextInst.amount : 0n}

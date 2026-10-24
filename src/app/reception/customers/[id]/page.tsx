@@ -195,32 +195,32 @@ export default async function ReceptionCustomerDetailPage({
     }
   })
 
-  const installmentAppointmentIds = new Set(installments.map((inst: any) => inst.appointmentId))
-
-  const totalPaidOnInstallments = profile.payments
-    .filter((p: any) => 
-      (p.kind === 'PARTIAL' || p.kind === PaymentKind.Partial) && 
-      installmentAppointmentIds.has(p.appointmentId)
-    )
-    .reduce((sum: bigint, p: any) => sum + BigInt(p.amount || 0), BigInt(0))
+  // 👈 دقیقاً مثل ادمین: مجموع paidAmount تمام اقساط
+  const totalPaidOnInstallments = installments.reduce(
+    (sum: bigint, inst: any) => sum + (inst.paidAmount || 0n), 
+    0n
+  )
     
   const installmentsData: InstallmentRow[] = installments.map((inst: any) => {
-    const instPayments = inst.payments || []
-    const paidAmount = instPayments.reduce((sum: bigint, p: any) => sum + p.amount + (p.discountAmount || 0n), 0n)
+    // 👈 دقیقاً مثل ادمین: استفاده از paidAmount خود دیتابیس
+    const paidAmount = inst.paidAmount || 0n
+    const totalPlan = inst.totalPlanAmount || inst.amount
     
+    const instPayments = inst.payments || []
     const firstPayment = instPayments.length > 0 ? instPayments[0] : null
     const paidAt = firstPayment ? firstPayment.paidAt : null
     const paymentMethod = firstPayment ? firstPayment.method : null
-    const isOverdue = !paidAt && new Date(inst.dueAt) < new Date()
+    const isOverdue = paidAmount < totalPlan && !paidAt && new Date(inst.dueAt) < new Date()
 
     return {
       id: inst.id,
       appointmentId: inst.appointmentId,
       sequence: inst.sequence,
       amount: inst.amount,
+      totalPlanAmount: inst.totalPlanAmount, // 👈 اضافه شد
       dueAt: inst.dueAt,
       note: inst.note,
-      status: paidAmount >= inst.amount ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING', 
+      status: paidAmount >= totalPlan ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING', 
       paidAmount,
       paidAt,
       paymentMethod,
@@ -311,6 +311,7 @@ export default async function ReceptionCustomerDetailPage({
             customerId={profile.id}
             totalAmount={profile.chargedTotal}
             totalPaid={profile.paidTotal}
+            panel="reception"
             totalRemaining={profile.chargedTotal - profile.paidTotal}
             nextDueDate={nextInst ? nextInst.dueAt : null}
             nextDueAmount={nextInst ? nextInst.amount : 0n}
@@ -403,7 +404,6 @@ export default async function ReceptionCustomerDetailPage({
                           {formatDate(asLocalDate(row.localDate), 'short')}{' '}
                           {formatTime(asLocalTime(row.localTime))}
                         </td>
-                        {/* 👈 اصلاح شد */}
                         <td className="px-4 py-3 text-ink-2">{row.service?.name ?? '—'}</td>
                         <td className="px-4 py-3 text-ink-2">
                           {row.doctor ? `${row.doctor.firstName} ${row.doctor.lastName ?? ''}`.trim() : '—'}

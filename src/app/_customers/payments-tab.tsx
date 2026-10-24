@@ -8,6 +8,7 @@ import { Icon } from '@/core/components/icons'
 import type { IconName } from '@/core/components/icons'
 
 import { InstallmentPaymentDialog } from '@/app/admin/installments/_components/InstallmentPaymentDialog'
+import { EditInstallmentDialog } from '@/app/_payments/EditInstallmentDialog'
 
 const PAYMENT_KIND_LABELS: Record<string, string> = {
   PAYMENT: 'پرداخت',
@@ -40,6 +41,7 @@ export type InstallmentRow = {
   paidAmount: bigint
   paidAt: Date | null
   paymentMethod: string | null
+  totalPlanAmount?: bigint | null
 }
 
 export type PaymentRow = {
@@ -54,6 +56,7 @@ interface PaymentsTabProps {
   customerId: string
   totalAmount: bigint
   totalPaid: bigint
+  panel: 'admin' | 'reception' | 'doctor'
   totalRemaining: bigint
   nextDueDate: Date | null
   nextDueAmount: bigint
@@ -68,6 +71,7 @@ export function PaymentsTab({
   customerId,
   totalAmount,
   totalPaid,
+  panel,
   totalRemaining,
   nextDueDate,
   nextDueAmount,
@@ -82,52 +86,46 @@ export function PaymentsTab({
   const [activeSubTab, setActiveSubTab] = useState<'schedule' | 'open' | 'received' | 'invoices'>('schedule')
   const [isHistoryOpen, setIsHistoryOpen] = useState(true)
 
-  const [paymentDialogData, setPaymentDialogData] = useState<{ isOpen: boolean; installmentId: string; amount: bigint } | null>(null)
+  const [paymentDialogData, setPaymentDialogData] = useState<{ isOpen: boolean; installmentId: string; amount: bigint; customerName: string; maxTotal: bigint } | null>(null)
+  const [tempAmounts, setTempAmounts] = useState<Record<string, bigint>>({})
 
-  const totalAllInstallmentsAmount = totalInstallmentsAmount
+  const activeInstallments = installments.filter(
+    (inst) => inst.paidAmount < (inst.totalPlanAmount ?? inst.amount)
+  )
+
+  const totalAllInstallmentsAmount = activeInstallments.reduce((sum, inst) => {
+    return sum + (inst.totalPlanAmount ?? inst.amount)
+  }, 0n)
   
+  const totalPaidSoFar = activeInstallments.reduce((sum, inst) => sum + inst.paidAmount, 0n)
+
   const progressPercent = totalAllInstallmentsAmount === 0n 
     ? 0 
-    : Math.min(100, Math.round(Number((totalPaidOnInstallments * 100n) / totalAllInstallmentsAmount)))
-    
-  const firstInst = installments[0]
-  const installmentAmount = installments.length > 0 && firstInst ? firstInst.amount : 0n
-  
-  const paidCount = installmentAmount > 0n 
-    ? Math.min(totalCount, Number(totalPaidOnInstallments / installmentAmount)) 
-    : 0
+    : Math.min(100, Math.round(Number((totalPaidSoFar * 100n) / totalAllInstallmentsAmount)))
 
+  const paidCount = installments.filter(i => i.status === 'PAID').length
   const recentPayments = payments.slice(0, 20)
+
+  const handleTempAmountChange = (id: string, amount: bigint | null) => {
+    if (amount === null) {
+      setTempAmounts(prev => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+    } else {
+      setTempAmounts(prev => ({ ...prev, [id]: amount }))
+    }
+  }
 
   return (
     <div className="flex w-full flex-col gap-5 sm:gap-6">
       {/* ۱. کارت‌های آماری */}
       <div className="grid w-full grid-cols-2 gap-2.5 sm:gap-3 panel:grid-cols-4">
-        <StatCard
-          title="هزینه کل خدمات"
-          value={formatMoney(totalAmount)}
-          tone="bg-brand-50 text-brand"
-          icon="payment"
-        />
-        <StatCard
-          title="کل دریافتی"
-          value={formatMoney(totalPaid)}
-          tone="bg-ok-bg text-ok"
-          icon="treatment"
-        />
-        <StatCard
-          title="مانده بدهی"
-          value={formatMoney(totalRemaining)}
-          tone={totalRemaining > 0n ? "bg-danger-bg text-danger" : "bg-surface-2 text-ink-3"}
-          icon="debt"
-        />
-        <StatCard
-          title="سررسید بعدی"
-          value={nextDueDate ? formatDate(dateToLocalDate(nextDueDate), 'short') : '—'}
-          subtitle={nextDueAmount > 0n ? formatMoney(nextDueAmount) : undefined}
-          tone="bg-warn-bg text-warn"
-          icon="calendar"
-        />
+        <StatCard title="هزینه کل خدمات" value={formatMoney(totalAmount)} tone="bg-brand-50 text-brand" icon="payment" />
+        <StatCard title="کل دریافتی" value={formatMoney(totalPaid)} tone="bg-ok-bg text-ok" icon="treatment" />
+        <StatCard title="مانده بدهی" value={formatMoney(totalRemaining)} tone={totalRemaining > 0n ? "bg-danger-bg text-danger" : "bg-surface-2 text-ink-3"} icon="debt" />
+        <StatCard title="سررسید بعدی" value={nextDueDate ? formatDate(dateToLocalDate(nextDueDate), 'short') : '—'} subtitle={nextDueAmount > 0n ? formatMoney(nextDueAmount) : undefined} tone="bg-warn-bg text-warn" icon="calendar" />
       </div>
 
       {/* ۲. نوار تب‌های داخلی */}
@@ -163,13 +161,13 @@ export function PaymentsTab({
           {/* بخش اقساط و چک‌ها */}
           <div className="w-full rounded-xl border border-line bg-surface p-4 shadow-sm sm:p-5">
             
-            {totalCount === 0 || installments.length === 0 ? (
+            {activeInstallments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <span className="mb-3 grid size-12 place-items-center rounded-full bg-surface-2 text-ink-3">
                   <Icon name="payment" size="card" />
                 </span>
-                <h3 className="text-sm font-bold text-ink sm:text-base">برنامه اقساطی ثبت نشده است</h3>
-                <p className="mt-1 text-xs text-ink-3">برای این بیمار هیچ چک یا قسطی تعریف نشده و تمام تسویه‌ها نقدی بوده است.</p>
+                <h3 className="text-sm font-bold text-ink sm:text-base">هیچ قسط فعالی وجود ندارد</h3>
+                <p className="mt-1 text-xs text-ink-3">تمام اقساط این بیمار پرداخت شده‌اند یا هنوز برنامه‌ای ثبت نشده است.</p>
               </div>
             ) : (
               <>
@@ -194,16 +192,13 @@ export function PaymentsTab({
                     </div>
                     <div className="min-w-0 flex-1">
                       <h3 className="text-sm font-bold text-ink sm:text-base">
-                        {formatMoney(totalPaidOnInstallments)} از {formatMoney(totalAllInstallmentsAmount)} پرداخت شده
+                        {formatMoney(totalPaidSoFar)} از {formatMoney(totalAllInstallmentsAmount)} پرداخت شده
                       </h3>
                       <p className="mt-0.5 text-xs text-ink-2 sm:text-sm">
-                        {toPersianDigits(paidCount)} از {toPersianDigits(totalCount)} قسط/چک تسویه شده
+                        {toPersianDigits(paidCount)} از {toPersianDigits(installments.length)} قسط/چک تسویه شده
                       </p>
                     </div>
                   </div>
-                  <button className="self-start text-sm font-semibold text-brand-700 hover:underline sm:self-auto">
-                    جزئیات اقساط
-                  </button>
                 </div>
 
                 {/* جدول اقساط */}
@@ -220,74 +215,89 @@ export function PaymentsTab({
                       </tr>
                     </thead>
                     <tbody>
-                      {installments.map((inst) => (
-                        <tr
-                          key={inst.id}
-                          className={cx(
-                            'border-b border-line last:border-b-0',
-                            inst.status === 'PAID' && 'bg-ok-bg/20',
-                            inst.status === 'OVERDUE' && 'bg-danger-bg/20',
-                            inst.status === 'PARTIAL' && 'bg-warn-bg/20'
-                          )}
-                        >
-                          <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-ink sm:px-4">
-                            قسط {toPersianDigits(inst.sequence)} از {toPersianDigits(totalCount)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-ink-2 sm:px-4">
-                            {formatDate(dateToLocalDate(inst.dueAt), 'short')}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-ink-2 sm:px-4">
-                            {inst.status === 'PAID' ? (
-                              '—'
-                            ) : inst.paidAmount > 0n ? (
-                              <span className="font-semibold text-warn">مانده: {formatMoney(inst.amount - inst.paidAmount)}</span>
-                            ) : inst.status === 'OVERDUE' ? (
-                              <span className="font-semibold text-danger">گذشته</span>
-                            ) : (
-                              <span className="font-semibold text-warn">در انتظار</span>
+                      {activeInstallments.map((inst) => {
+                        const planAmount = inst.totalPlanAmount ?? inst.amount
+                        const remaining = planAmount - inst.paidAmount
+                        const currentTempAmount = tempAmounts[inst.id]
+                        const perInstallmentAmount = currentTempAmount !== undefined ? currentTempAmount : inst.amount
+                        
+                        const appointmentRows = installments.filter(r => r.appointmentId === inst.appointmentId)
+                        const totalPaidForAppointment = appointmentRows.reduce((sum, r) => sum + r.paidAmount, 0n)
+                        const remainingForAppointment = planAmount - totalPaidForAppointment
+
+                        return (
+                          <tr
+                            key={inst.id}
+                            className={cx(
+                              'border-b border-line last:border-b-0',
+                              inst.status === 'PAID' && 'bg-ok-bg/20',
+                              inst.status === 'OVERDUE' && 'bg-danger-bg/20',
+                              inst.status === 'PARTIAL' && 'bg-warn-bg/20'
                             )}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2.5 font-semibold tabular-nums text-ink sm:px-4">
-                            {formatMoney(inst.amount)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2.5 sm:px-4">
-                            <StatusBadge status={inst.status} />
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-center sm:px-4">
-                            {inst.status === 'PAID' ? (
-                              <button className="inline-flex items-center gap-1 rounded-md border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2">
-                                رسید
-                              </button>
-                            ) : (
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button 
-                                  onClick={() => setPaymentDialogData({
-                                    isOpen: true,
-                                    installmentId: inst.id,
-                                    amount: inst.amount - inst.paidAmount
-                                  })}
-                                  className="inline-flex items-center gap-1 rounded-md bg-[#ba6a73] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity shadow-sm"
-                                >
-                                  ثبت پرداخت
-                                </button>
-                                <button className="rounded-md border border-line bg-white p-1.5 text-ink-3 hover:bg-surface-2">
-                                  تماس
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                          >
+                            <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-ink sm:px-4">
+                              قسط {toPersianDigits(inst.sequence)}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-ink-2 sm:px-4">
+                              {formatDate(dateToLocalDate(inst.dueAt), 'short')}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-ink-2 sm:px-4">
+                              {inst.status === 'PAID' ? (
+                                '—'
+                              ) : remaining > 0n ? (
+                                <span className="font-semibold text-warn">مانده: {formatMoney(remaining)}</span>
+                              ) : (
+                                <span className="font-semibold text-ok">تسویه شده</span>
+                              )}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2.5 font-semibold tabular-nums text-ink sm:px-4">
+                              {formatMoney(perInstallmentAmount)}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2.5 sm:px-4">
+                              <StatusBadge status={inst.status} />
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2.5 text-center sm:px-4">
+                              {/* 👈 دکمه‌های عملیات: فقط برای ادمین و منشی */}
+                              {panel !== 'doctor' ? (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button 
+                                    onClick={() => setPaymentDialogData({
+                                      isOpen: true,
+                                      installmentId: inst.id,
+                                      amount: perInstallmentAmount, // 👈 فقط مبلغ خود قسط
+                                      customerName: 'مشتری', 
+                                      maxTotal: totalRemaining
+                                    })}
+                                    className="inline-flex items-center gap-1 rounded-md bg-[#ba6a73] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity shadow-sm"
+                                  >
+                                    ثبت پرداخت
+                                  </button>
+
+                                  {/* 👈 دکمه مداد: دیالوگ ویرایش رو باز می‌کنه */}
+                                  <EditInstallmentDialog 
+                                    installmentId={inst.id}
+                                    appointmentId={inst.appointmentId}
+                                    customerId={customerId}
+                                    customerName="مشتری"
+                                    remainingAmount={remainingForAppointment}
+                                    sequence={inst.sequence}
+                                    currentDueDate={dateToLocalDate(inst.dueAt)}
+                                    currentAmount={perInstallmentAmount}
+                                    panel={panel}
+                                    onTempAmountChange={handleTempAmountChange}
+                                  />
+                                </div>
+                              ) : (
+                                <span className="text-xs text-ink-3">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
               </>
-            )}
-
-            {totalCount > 0 && installments.length > 0 && (
-              <p className="mt-3 text-xs leading-relaxed text-ink-3 sm:mt-4">
-                سررسید پرداخت‌نشده قرمز و پرداخت‌شده سبز است. هر سررسیدی که بیش از یک روز بگذرد، خودکار به «بدهکاری‌ها» می‌رود.
-              </p>
             )}
           </div>
 
@@ -363,14 +373,16 @@ export function PaymentsTab({
         </div>
       )}
 
+      {/* دیالوگ پرداخت */}
       {paymentDialogData?.isOpen && (
         <InstallmentPaymentDialog
           isOpen={true}
           onClose={() => setPaymentDialogData(null)}
           installmentId={paymentDialogData.installmentId}
-          customerName="" 
+          customerName={paymentDialogData.customerName} 
           amountDue={paymentDialogData.amount}
-          maxTotalRemaining={totalRemaining} 
+          maxTotalRemaining={paymentDialogData.maxTotal} 
+          panel={panel} 
           onSuccess={() => {
             setPaymentDialogData(null)
             router.refresh() 

@@ -345,6 +345,7 @@ export default async function CustomerProfilePage({
         <div className="w-full min-w-0">
           <PaymentsTab
             customerId={profile.id}
+            panel="admin"
             totalAmount={profile.chargedTotal}
             totalPaid={profile.paidTotal}
             totalRemaining={profile.chargedTotal - profile.paidTotal}

@@ -147,22 +147,20 @@ function ResultDialogContent({
         return
       }
 
-      // ۲. ثبت پرداخت (اگر مبلغی وارد شده بود)
-      if (paidBigInt > 0n || discountBigInt > 0n) {
-        let dbMethod = method
-        if (method === 'INSTALLMENT' || method === 'CHEQUE') {
-          dbMethod = 'CASH'
-        }
+          const isInstallmentMode = method === 'INSTALLMENT' || method === 'CHEQUE'
 
+      if (paidBigInt > 0n || discountBigInt > 0n || isInstallmentMode) {
         let paymentOutcome
-        if (method === 'INSTALLMENT' || method === 'CHEQUE') {
+        if (isInstallmentMode) {
+          // 👈 اگه کاربر مبلغ وارد نکرده، کل بدهی رو قسطی کن
+          const amountForAction = paidBigInt > 0n ? paidBigInt : remaining
           paymentOutcome = await recordPaymentWithInstallmentsAction(
             panel,
             appointmentId,
             customerId,
             {
-              amount: paidBigInt.toString(),
-              method: dbMethod,
+              amount: amountForAction.toString(),
+              method: method,
               installmentCount: Number(installmentCount),
               firstDueDate: firstDueDate || todayLocalDate(realClock()),
               installmentInterval: `${intervalMonths}_MONTH`,
@@ -178,7 +176,7 @@ function ResultDialogContent({
             appointmentId,
             {
               amount: paidBigInt.toString(),
-              method: dbMethod,
+              method: method,
               kind: 'FINAL',
               discountAmount: discountBigInt.toString(),
               discountReason: discountReason || null,

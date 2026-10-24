@@ -3,13 +3,15 @@ import { prisma, runInTenantScope } from '@/core/db'
 import { requireStaffPanel } from '@/app/_shell/session'
 import { listInstallments } from '@/modules/payments'
 import { ADMIN_INSTALLMENTS } from '@/app/catalog'
+import { InstallmentsTable } from '@/app/_payments/installments-table'
 import { Icon } from '@/core/components/icons'
 import { formatMoney, formatNumber } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 
-import { ReceptionInstallmentsClient } from './_components/ReceptionInstallmentsClient'
-
 export const metadata: Metadata = { title: ADMIN_INSTALLMENTS.title }
+
+// 👈 اضافه شد تا دیتا کش نشه و مبالغ همیشه تازه باشن
+export const dynamic = 'force-dynamic'
 
 export default async function ReceptionInstallmentsPage({ 
   searchParams 
@@ -40,23 +42,32 @@ export default async function ReceptionInstallmentsPage({
         return false
       }
     }
-    if (doctorId && row.appointment.doctorId !== doctorId) return false
+
+    if (doctorId && row.appointment.doctorId !== doctorId) {
+      return false
+    }
+
     if (type !== 'ALL') {
       if (type === 'INSTALLMENT' && row.note === 'CHEQUE') return false
       if (type === 'CHEQUE' && row.note !== 'CHEQUE') return false
     }
+
     if (bucket) {
       const dueTime = new Date(row.dueAt).getTime()
       const diffDays = Math.ceil((dueTime - todayTime) / (1000 * 3600 * 24))
+      
       if (bucket === 'today' && diffDays !== 0) return false
       if (bucket === 'tomorrow' && diffDays !== 1) return false
       if (bucket === 'this_week' && (diffDays < 0 || diffDays > 7)) return false
       if (bucket === 'this_month' && (diffDays < 0 || diffDays > 30)) return false
     }
+
     return true
   })
 
-  const totalAmount = rows.reduce((sum, r) => sum + r.amount, 0n)
+  // 👈 دقیقاً مثل ادمین: فقط مبلغ باقی‌مانده رو جمع می‌زنیم
+  const totalAmount = rows.reduce((sum, r) => sum + (r.amount - r.paidAmount), 0n)
+  
   const todayCount = rows.filter(r => Math.ceil((new Date(r.dueAt).getTime() - todayTime) / (1000 * 3600 * 24)) === 0).length
   const tomorrowCount = rows.filter(r => Math.ceil((new Date(r.dueAt).getTime() - todayTime) / (1000 * 3600 * 24)) === 1).length
 
@@ -130,7 +141,8 @@ export default async function ReceptionInstallmentsPage({
         </div>
       </form>
 
-      <ReceptionInstallmentsClient rows={rows} />
+      {/* 👈 استفاده از همون کامپوننت ادمین همراه با پاس دادن پنل منشی */}
+      <InstallmentsTable rows={rows} panel="reception" />
     </div>
   )
 }

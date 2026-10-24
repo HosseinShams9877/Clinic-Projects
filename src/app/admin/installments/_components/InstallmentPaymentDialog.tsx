@@ -37,7 +37,8 @@ export function InstallmentPaymentDialog({
   installmentId,
   customerName, 
   amountDue, 
-  maxTotalRemaining, // 👈 پراپ جدید
+  maxTotalRemaining, 
+  panel,
   onSuccess 
 }: { 
   isOpen: boolean, 
@@ -46,6 +47,7 @@ export function InstallmentPaymentDialog({
   customerName: string, 
   amountDue: bigint | string, 
   maxTotalRemaining: bigint, // 👈 باقی‌مانده کل بدهی
+  panel?: 'admin' | 'reception' | 'doctor'
   onSuccess: () => void 
 }) {
   const router = useRouter()
@@ -94,7 +96,7 @@ export function InstallmentPaymentDialog({
       const amountRial = enteredAmountRial.toString()
 
       const res = await recordInstallmentPaymentAction(
-        'admin',
+         panel ?? 'admin',
         installmentId,
         {
           amount: amountRial,

@@ -31,7 +31,7 @@ interface InstallmentRow {
   readonly appointmentId: string
   readonly totalPlanAmount: bigint | null
   readonly totalPlanCount: number | null
-  readonly intervalMonths: number | null // 👈 اضافه شد
+  readonly intervalMonths: number | null
   readonly appointment: {
     readonly customer: { readonly id?: string; readonly firstName: string; readonly lastName: string | null; readonly mobile: string } | null
     readonly doctor: { readonly firstName: string; readonly lastName: string | null } | null
@@ -41,7 +41,14 @@ interface InstallmentRow {
 
 const PAGE_SIZE = 10
 
-export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<InstallmentRow> }) {
+// 👈 اضافه شدن پراپ panel
+export function InstallmentsTable({ 
+  rows, 
+  panel = 'admin' 
+}: { 
+  readonly rows: ReadonlyArray<InstallmentRow>
+  readonly panel?: 'admin' | 'reception' | 'doctor'
+}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const currentPage = Number(searchParams.get('page')) || 1
@@ -73,7 +80,7 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
   const handleDelete = (id: string) => {
     if (!confirm('آیا از حذف این قسط مطمئن هستید؟')) return
     startTransition(async () => {
-      const res = await deleteInstallmentAction('admin', id)
+      const res = await deleteInstallmentAction(panel, id) // 👈 استفاده از panel
       if (res.ok) {
         router.refresh()
       } else {
@@ -139,7 +146,6 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                 const remainingForAppointment = totalAmount - totalPaidForAppointment
                 const paidSoFar = totalPaidForAppointment > totalAmount ? totalAmount : totalPaidForAppointment
 
-                // 👈 محاسبه داینامیک سررسید
                 const paidCount = Math.min(
                   totalInstallments,
                   Math.floor(Number(paidSoFar) / Number(perInstallmentAmount > 0n ? perInstallmentAmount : 1n))
@@ -254,7 +260,7 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
                           sequence={row.sequence}
                           currentDueDate={dateToLocalDate(due)}
                           currentAmount={perInstallmentAmount}
-                          panel="admin"
+                          panel={panel} // 👈 پاس دادن panel
                           onTempAmountChange={handleTempAmountChange}
                         />
 
@@ -286,6 +292,7 @@ export function InstallmentsTable({ rows }: { readonly rows: ReadonlyArray<Insta
           isOpen={!!selectedInstallment}
           onClose={() => setSelectedInstallment(null)}
           installmentId={selectedInstallment.id}
+          panel={panel} // 👈 این خط برای رفع خطای TenantResolutionError اضافه شد
           customerName={`${selectedInstallment.appointment.customer?.firstName || ''} ${selectedInstallment.appointment.customer?.lastName || ''}`.trim()}
           amountDue={
             (() => {
