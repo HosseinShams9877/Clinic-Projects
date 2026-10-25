@@ -165,18 +165,20 @@ export function DebtsTable({
       </section>
 
       {selectedPaymentRow && (
-        <PaymentDialog
-          isOpen={!!selectedPaymentRow}
-          onClose={() => setSelectedPaymentRow(null)}
-          customerId={selectedPaymentRow.customerId}
-          appointmentId={selectedPaymentRow.appointmentId}
-          customerName={`${selectedPaymentRow.customerFirstName} ${selectedPaymentRow.customerLastName ?? ''}`.trim()}
-          amountDue={selectedPaymentRow.installmentAmount > 0n ? selectedPaymentRow.installmentAmount : selectedPaymentRow.balance}
-          installmentId={selectedPaymentRow.installmentId} 
-          panel={panel}
-          onSuccess={() => setSelectedPaymentRow(null)}
-        />
-      )}
+  <PaymentDialog
+    isOpen={!!selectedPaymentRow}
+    onClose={() => setSelectedPaymentRow(null)}
+    customerId={selectedPaymentRow.customerId}
+    appointmentId={selectedPaymentRow.appointmentId}
+    customerName={`${selectedPaymentRow.customerFirstName} ${selectedPaymentRow.customerLastName ?? ''}`.trim()}
+    amountDue={selectedPaymentRow.installmentAmount > 0n ? selectedPaymentRow.installmentAmount : selectedPaymentRow.balance}
+    installmentId={selectedPaymentRow.installmentId} 
+    totalAmountDue={selectedPaymentRow.balance}
+    remainingAmount={selectedPaymentRow.balance}   // 👈 فقط این خط اضافه شد
+    panel={panel}
+    onSuccess={() => setSelectedPaymentRow(null)}
+  />
+)}
 
       {selectedFollowUpRow && (
         <FollowUpDialog

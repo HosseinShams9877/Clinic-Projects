@@ -218,6 +218,10 @@ export async function recordPaymentWithInstallmentsAction(
     installmentId?: string | null
   }
 ): Promise<ActionResult> {
+  // 🚀 لاگ ۱: ورودی‌هایی که از سمت فرانت‌اند میاد
+  console.log('\n🚀 [Backend - recordPaymentWithInstallments] STARTED')
+  console.log('📥 Input:', { appointmentId, customerId, input })
+
   let dbMethod = input.method
   if (input.method === 'POS' || input.method === 'CARD_TO_CARD') {
     dbMethod = 'CARD'
@@ -271,38 +275,49 @@ export async function recordPaymentWithInstallmentsAction(
 
     const isInstallmentMode = input.method === 'INSTALLMENT' || input.method === 'CHEQUE' || input.forceInstallment
     
-    // 👈 چک سقف فقط برای پرداخت‌های نقدی باشه، نه برای قسطی کردن مجدد
-    if (!isInstallmentMode && amountBigInt + discountBigInt > totalDebt - paidSoFar) {
+    // 🚀 لاگ ۲: وضعیت پرداخت و بدهی
+    console.log('📊 Status:', { 
+      isInstallmentMode, 
+      amountBigInt: amountBigInt.toString(), 
+      totalDebt: totalDebt.toString(), 
+      paidSoFar: paidSoFar.toString() 
+    })
+    const currentInstallmentTotal = currentInstallment 
+      ? (currentInstallment.totalPlanAmount ?? currentInstallment.amount) 
+      : appointment.priceAtBooking
+      
+    const limitCheck = currentInstallment 
+      ? (currentInstallmentTotal - currentInstallment.paidAmount) 
+      : (appointment.priceAtBooking - paidSoFar)
+
+    if (!isInstallmentMode && amountBigInt + discountBigInt > limitCheck) {
+      console.log('❌ Limit reached: amount + discount > limitCheck')
       return {
         ok: false as const,
-        message: 'مبلغ پرداختی نمی‌تواند بیشتر از باقی‌مانده بدهی باشد.',
+        message: 'مبلغ پرداختی نمی‌تواند بیشتر از باقی‌مانده این قسط باشد.',
       }
     }
 
     if (isInstallmentMode && input.installmentCount > 0) {
+      // 🚀 لاگ ۳: وارد حالت قسطی شد
+      console.log('🔄 Entering Installment Mode (Creating/Updating)...')
       
       const allInstallments = await tx.installment.findMany({
         where: { appointmentId, tenantId },
         orderBy: { sequence: 'desc' },
       })
 
-      let totalPlanAmountFromExisting = payableAmount
-      if (currentInstallment) {
-        totalPlanAmountFromExisting = currentInstallment.totalPlanAmount || currentInstallment.amount
-      }
+           const remainingAmount = payableAmount
 
-      let totalPaidSoFar = 0n
-      if (currentInstallment) {
-        totalPaidSoFar = currentInstallment.paidAmount
-      }
-
-      const remainingAmount = totalPlanAmountFromExisting - totalPaidSoFar
+      console.log('💰 RemainingAmount for installment:', remainingAmount.toString())
 
       if (remainingAmount <= 0n) {
+        console.log('❌ Error: RemainingAmount <= 0')
         return { ok: false, message: 'بدهی به طور کامل پرداخت شده است.' }
       }
 
       // 👈 ۵. بستن همه‌ی اقساط قبلی (تسویه کامل)
+      console.log('🔒 Closing previous installments...')
       for (const inst of allInstallments) {
         await tx.installment.update({
           where: { id: inst.id },
@@ -318,7 +333,6 @@ export async function recordPaymentWithInstallmentsAction(
         ? Math.max(...allInstallments.map(i => i.sequence))
         : 0
 
-            // 👈 محاسبه سررسید جدید: اگر رکورد قبلی وجود داره، به تاریخ اون intervalMonths اضافه میشه
       let baseDate = toUtcInstant(asLocalDate(input.firstDueDate || '1405-01-01'), MIDNIGHT, settings.utcOffsetMinutes)
       
       if (currentInstallment && intervalMonths > 0) {
@@ -338,7 +352,9 @@ export async function recordPaymentWithInstallmentsAction(
         const nextLocalDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
         baseDate = toUtcInstant(asLocalDate(nextLocalDate), MIDNIGHT, settings.utcOffsetMinutes)
       }
+      
       const newPerInstallmentAmount = remainingAmount / BigInt(input.installmentCount)
+      console.log('📝 Creating new installment record...', { newPerInstallmentAmount: newPerInstallmentAmount.toString(), maxSequence: maxSequence + 1 })
 
       const newInstallment = await tx.installment.create({
         data: {
@@ -355,6 +371,7 @@ export async function recordPaymentWithInstallmentsAction(
           note: input.note || null,
         }
       })
+      console.log('✅ New installment created:', newInstallment.id)
 
       if (discountBigInt > 0n) {
         await tx.payment.create({
@@ -375,7 +392,11 @@ export async function recordPaymentWithInstallmentsAction(
         })
       }
     } else if (amountBigInt > 0n || discountBigInt > 0n) {
+      // 🚀 لاگ ۴: وارد حالت پرداخت عادی (نقدی/آنلاین) شد
+      console.log('🔄 Entering Normal Payment Mode (CASH/ONLINE)...')
+      
       if (!isMember(PaymentMethod, dbMethod)) {
+        console.log('❌ Invalid method:', dbMethod)
         return { ok: false, message: moduleFailureMessage(new Error('invalid method')) }
       }
 
@@ -395,6 +416,7 @@ export async function recordPaymentWithInstallmentsAction(
           installmentId: currentInstallment?.id ?? null,
         }
       })
+      console.log('✅ Normal payment created')
 
       if (currentInstallment && amountBigInt > 0n) {
         const openInstallments = await tx.installment.findMany({
@@ -421,11 +443,17 @@ export async function recordPaymentWithInstallmentsAction(
       }
     })
 
+    console.log('🎉 [Backend] Successfully finished transaction.')
     return SUCCESS
   })
 
-  if (!('succeeded' in result)) return result
+  if (!('succeeded' in result)) {
+    console.log('🚨 [Backend] Action failed and returned error:', result)
+    return result
+  }
+  
   revalidateDebts()
+  console.log('🚀 [Backend] ENDED SUCCESSFULLY\n')
   return { ok: true }
 }
 

@@ -36,13 +36,17 @@ function formatNumberWithCommas(value: string) {
 export function PaymentDialog({ 
   isOpen, onClose, customerId, appointmentId, customerName, amountDue, onSuccess, panel = 'admin',
   mode = 'payment',
-  installmentId // 👈 پراپ جدید
+  installmentId ,
+  totalAmountDue,
+  remainingAmount,   // 👈 اضافه شد
 }: { 
   isOpen: boolean, onClose: () => void, customerId: string, appointmentId: string,
   customerName: string, amountDue: bigint | string, onSuccess: () => void,
   panel?: 'admin' | 'reception' | 'doctor',
   mode?: 'payment' | 'edit',
-  installmentId?: string | null // 👈 تایپ جدید
+  installmentId?: string | null
+  totalAmountDue?: bigint | string
+  remainingAmount?: bigint | string   // 👈 اضافه شد
 }) {
   const router = useRouter()
   const isClient = useIsClient()
@@ -75,24 +79,64 @@ export function PaymentDialog({
   const rawAmountToman = toEnglishDigits(amount.replace(/,/g, ''))
   const rawDiscountToman = toEnglishDigits(discount.replace(/,/g, ''))
   
-  const baseAmount = BigInt(initialAmount)
+  // 👈 مبلغ پایه برای پرداخت عادی (مبلغ یک قسط)
+  const paymentBaseAmount = BigInt(initialAmount)
+
+  // 👈 مبلغ پایه برای بازقسط‌بندی (باقی‌مانده کل بدهی)
+  const installmentBaseAmount = remainingAmount
+    ? BigInt(typeof remainingAmount === 'bigint' ? remainingAmount.toString() : remainingAmount)
+    : (totalAmountDue
+        ? BigInt(typeof totalAmountDue === 'bigint' ? totalAmountDue.toString() : totalAmountDue)
+        : BigInt(initialAmount))
+
+  // 👈 مبلغ پایه فعال بر اساس متد انتخابی
+  const activeBaseAmount = (method === 'INSTALLMENT' || method === 'CHEQUE')
+    ? installmentBaseAmount
+    : paymentBaseAmount
+
+  console.log('🔍 [PaymentDialog] render:', {
+    amountDue: initialAmount,
+    totalAmountDue: totalAmountDue?.toString(),
+    remainingAmount: remainingAmount?.toString(),
+    paymentBaseAmount: paymentBaseAmount.toString(),
+    installmentBaseAmount: installmentBaseAmount.toString(),
+    activeBaseAmount: activeBaseAmount.toString(),
+    method,
+    mode,
+  })
   
   const amountRialBigInt = rawAmountToman ? BigInt(rawAmountToman) * 10n : 0n
   const discountRialBigInt = rawDiscountToman ? BigInt(rawDiscountToman) * 10n : 0n
   
-  const finalAmountRial = baseAmount - discountRialBigInt
+  const finalAmountRial = activeBaseAmount - discountRialBigInt
   const installmentAmountRial = Math.floor(Number(finalAmountRial) / Number(installmentCount || 1))
 
   const handleSubmit = () => {
     setError(null)
     startTransition(async () => {
-      if (amountRialBigInt > baseAmount) {
-        return setError(`مبلغ پرداختی نمی‌تواند بیشتر از کل بدهی (${formatMoney(baseAmount)} تومان) باشد.`)
+      console.log('🚀 [1] handleSubmit شروع شد', {
+        method,
+        amount: amountRialBigInt.toString(),
+        paymentBaseAmount: paymentBaseAmount.toString(),
+        installmentBaseAmount: installmentBaseAmount.toString(),
+        activeBaseAmount: activeBaseAmount.toString(),
+        finalAmountRial: finalAmountRial.toString(),
+        mode,
+        installmentId,
+      })
+
+      // 👈 سقف مجاز بر اساس متد انتخابی
+      const maxAllowed = (method === 'INSTALLMENT' || method === 'CHEQUE')
+        ? installmentBaseAmount
+        : paymentBaseAmount
+
+      if (amountRialBigInt > maxAllowed) {
+        return setError(`مبلغ نمی‌تواند بیشتر از ${formatMoney(maxAllowed)} تومان باشد.`)
       }
 
       if (method === 'INSTALLMENT' || method === 'CHEQUE') {
         const totalInstallmentsRial = BigInt(installmentCount) * BigInt(installmentAmountRial)
-        if (totalInstallmentsRial > finalAmountRial) {
+        if (totalInstallmentsRial > installmentBaseAmount) {
           return setError('مجموع مبالغ اقساط نمی‌تواند بیشتر از مبلغ کل بدهی باشد.')
         }
       }
@@ -100,73 +144,61 @@ export function PaymentDialog({
       const submitAmount = amountRialBigInt.toString()
       const submitDiscount = discountRialBigInt.toString()
 
-      if (mode === 'edit') {
+      console.log('🚀 [1.5] مقادیر ارسالی به بک‌اند:', {
+        submitAmount,
+        submitDiscount,
+        maxAllowed: maxAllowed.toString(),
+      })
+
+      const isEditingInstallment = mode === 'edit' && (method === 'INSTALLMENT' || method === 'CHEQUE')
+
+      if (isEditingInstallment) {
+        console.log('🚀 [2] در حال ارسال ویرایش اقساط به بک‌اند...')
         const res = await recordPaymentWithInstallmentsAction(
-          panel,
-          appointmentId,
-          customerId,
+          panel, appointmentId, customerId,
           {
-            amount: submitAmount,
-            method: method,
-            installmentCount: Number(installmentCount),
+            amount: submitAmount, method: method, installmentCount: Number(installmentCount),
             firstDueDate: firstDueDate || todayLocalDate(realClock()),
             installmentInterval: `${intervalMonths}_MONTH`,
-            discountAmount: submitDiscount,
-            discountReason: discountReason || null,
-            forceInstallment: true,
-            installmentId: installmentId ?? undefined, // 👈 اضافه شد
+            discountAmount: submitDiscount, discountReason: discountReason || null,
+            forceInstallment: true, installmentId: installmentId ?? undefined,
           }
         )
-        if (res.ok) {
-          onSuccess()
-          router.refresh()
-        } else {
-          setError(res.message)
-        }
+        console.log('🚀 [3] پاسخ بک‌اند (ویرایش اقساط):', res)
+        if (res.ok) { onSuccess(); router.refresh() } else { setError(res.message) }
       } else {
         if (method === 'INSTALLMENT' || method === 'CHEQUE') {
+          console.log('🚀 [4] در حال ارسال ساخت اقساط جدید به بک‌اند...')
           const res = await recordPaymentWithInstallmentsAction(
-            panel,
-            appointmentId,
-            customerId,
+            panel, appointmentId, customerId,
             {
-              amount: submitAmount,
-              method: method,
-              installmentCount: Number(installmentCount),
+              amount: submitAmount, method: method, installmentCount: Number(installmentCount),
               firstDueDate: firstDueDate || todayLocalDate(realClock()),
               installmentInterval: `${intervalMonths}_MONTH`,
-              discountAmount: submitDiscount,
-              discountReason: discountReason || null,
-              forceInstallment: true,
-              installmentId: installmentId ?? undefined, // 👈 اضافه شد
+              discountAmount: submitDiscount, discountReason: discountReason || null,
+              forceInstallment: true, installmentId: installmentId ?? undefined,
             }
           )
-          if (res.ok) {
-            onSuccess()
-            router.refresh()
-          } else {
-            setError(res.message)
-          }
+          console.log('🚀 [5] پاسخ بک‌اند (ساخت اقساط):', res)
+          if (res.ok) { onSuccess(); router.refresh() } else { setError(res.message) }
         } else {
-          const res = await recordPaymentAction(
-            panel,
-            appointmentId,
+          console.log('🚀 [6] در حال ارسال پرداخت عادی به بک‌اند...')
+          const res = await recordPaymentWithInstallmentsAction(
+            panel, appointmentId, customerId,
             {
               amount: submitAmount,
               method: method,
-              kind: 'FINAL',
+              installmentCount: 1,
+              firstDueDate: todayLocalDate(realClock()),
+              installmentInterval: '1_MONTH',
               discountAmount: submitDiscount,
               discountReason: discountReason || null,
-              note: null,
-              installmentId: installmentId ?? undefined, // 👈 اضافه شد
+              forceInstallment: false,
+              installmentId: installmentId ?? undefined,
             }
           )
-          if (res.ok) {
-            onSuccess()
-            router.refresh()
-          } else {
-            setError(res.message)
-          }
+          console.log('🚀 [7] پاسخ بک‌اند (پرداخت عادی):', res)
+          if (res.ok) { onSuccess(); router.refresh() } else { setError(res.message) }
         }
       }
     })
@@ -174,13 +206,10 @@ export function PaymentDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-[50] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4 text-right" dir="rtl">
-      {/* کانتینر اصلی با استایل گردی و overflow */}
       <div 
         className="w-full max-w-[600px] bg-surface shadow-3 border border-line/50 flex flex-col max-h-[90vh]"
         style={{ borderRadius: '24px', overflow: 'hidden' }}
       >
-        
-        {/* هدر پررنگ با گردی بالایی */}
         <div 
           className="flex items-center justify-between border-b border-line/40 bg-brand-100 px-6 py-4 shrink-0 !rounded-t-[24px]"
         >
@@ -205,7 +234,7 @@ export function PaymentDialog({
              
              <div className="flex items-center justify-between mt-1">
                 <span className="text-sm text-ink-2">مبلغ بدهی:</span>
-                <span className="text-sm font-semibold text-ink tabular-nums">{formatMoney(baseAmount)} تومان</span>
+                <span className="text-sm font-semibold text-ink tabular-nums">{formatMoney(activeBaseAmount)} تومان</span>
              </div>
              
              {discountRialBigInt > 0n && (
@@ -237,7 +266,7 @@ export function PaymentDialog({
              <div className="flex gap-2 justify-end mt-1">
                 <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount1Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors">{ADMIN_DEBTS.paymentDialog.quickAmount1Label}</button>
                 <button type="button" onClick={() => setAmount(ADMIN_DEBTS.paymentDialog.quickAmount2Label)} className="rounded-full border border-line-2 px-3 py-1 text-xs text-ink-2 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors">{ADMIN_DEBTS.paymentDialog.quickAmount2Label}</button>
-                <button type="button" onClick={() => setAmount(formatNumberWithCommas(initialAmountInToman))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100 transition-colors">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
+                <button type="button" onClick={() => setAmount(formatNumberWithCommas(Math.floor(Number(activeBaseAmount) / 10).toString()))} className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-700 font-semibold hover:bg-brand-100 transition-colors">{ADMIN_DEBTS.paymentDialog.allAmount}</button>
              </div>
            </div>
 
@@ -270,17 +299,61 @@ export function PaymentDialog({
              
              {mode === 'edit' ? (
                <div className="grid grid-cols-2 gap-3">
-                  <MethodBtn active={method === 'INSTALLMENT'} onClick={() => setMethod('INSTALLMENT')} icon="calendar" label={ADMIN_DEBTS.paymentDialog.methods.INSTALLMENT} />
-                  <MethodBtn active={method === 'CHEQUE'} onClick={() => setMethod('CHEQUE')} icon="invoice" label={ADMIN_DEBTS.paymentDialog.methods.CHEQUE} />
+                  <MethodBtn 
+                    active={method === 'CHEQUE'} 
+                    onClick={() => {
+                      console.log('🟡 انتخاب متد CHEQUE | مبلغ پایه =', installmentBaseAmount.toString())
+                      setMethod('CHEQUE')
+                      // 👈 مبلغ رو به باقی‌مانده کل بدهی تغییر بده
+                      setAmount(formatNumberWithCommas(Math.floor(Number(installmentBaseAmount) / 10).toString()))
+                    }} 
+                    icon="invoice" 
+                    label={ADMIN_DEBTS.paymentDialog.methods.CHEQUE} 
+                  />
+                  <MethodBtn 
+                    active={method === 'INSTALLMENT'} 
+                    onClick={() => {
+                      console.log('🟡 انتخاب متد INSTALLMENT | مبلغ پایه =', installmentBaseAmount.toString())
+                      setMethod('INSTALLMENT')
+                      // 👈 مبلغ رو به باقی‌مانده کل بدهی تغییر بده
+                      setAmount(formatNumberWithCommas(Math.floor(Number(installmentBaseAmount) / 10).toString()))
+                    }} 
+                    icon="calendar" 
+                    label={ADMIN_DEBTS.paymentDialog.methods.INSTALLMENT} 
+                  />
                </div>
              ) : (
                <div className="grid grid-cols-3 gap-3">
-                  <MethodBtn active={method === 'CASH'} onClick={() => setMethod('CASH')} icon="cash" label={ADMIN_DEBTS.paymentDialog.methods.CASH} />
-                  <MethodBtn active={method === 'POS'} onClick={() => setMethod('POS')} icon="payment" label={ADMIN_DEBTS.paymentDialog.methods.POS} />
-                  <MethodBtn active={method === 'CARD_TO_CARD'} onClick={() => setMethod('CARD_TO_CARD')} icon="debt" label={ADMIN_DEBTS.paymentDialog.methods.CARD_TO_CARD} />
-                  <MethodBtn active={method === 'ONLINE'} onClick={() => setMethod('ONLINE')} icon="externalLink" label={ADMIN_DEBTS.paymentDialog.methods.ONLINE} />
-                  <MethodBtn active={method === 'CHEQUE'} onClick={() => setMethod('CHEQUE')} icon="invoice" label={ADMIN_DEBTS.paymentDialog.methods.CHEQUE} />
-                  <MethodBtn active={method === 'INSTALLMENT'} onClick={() => setMethod('INSTALLMENT')} icon="calendar" label={ADMIN_DEBTS.paymentDialog.methods.INSTALLMENT} />
+                  <MethodBtn active={method === 'CASH'} onClick={() => {
+                    console.log('🟢 انتخاب متد CASH | مبلغ پایه =', paymentBaseAmount.toString())
+                    setMethod('CASH')
+                    setAmount(formatNumberWithCommas(Math.floor(Number(paymentBaseAmount) / 10).toString()))
+                  }} icon="cash" label={ADMIN_DEBTS.paymentDialog.methods.CASH} />
+                  <MethodBtn active={method === 'POS'} onClick={() => {
+                    console.log('🟢 انتخاب متد POS | مبلغ پایه =', paymentBaseAmount.toString())
+                    setMethod('POS')
+                    setAmount(formatNumberWithCommas(Math.floor(Number(paymentBaseAmount) / 10).toString()))
+                  }} icon="payment" label={ADMIN_DEBTS.paymentDialog.methods.POS} />
+                  <MethodBtn active={method === 'CARD_TO_CARD'} onClick={() => {
+                    console.log('🟢 انتخاب متد CARD_TO_CARD | مبلغ پایه =', paymentBaseAmount.toString())
+                    setMethod('CARD_TO_CARD')
+                    setAmount(formatNumberWithCommas(Math.floor(Number(paymentBaseAmount) / 10).toString()))
+                  }} icon="debt" label={ADMIN_DEBTS.paymentDialog.methods.CARD_TO_CARD} />
+                  <MethodBtn active={method === 'ONLINE'} onClick={() => {
+                    console.log('🟢 انتخاب متد ONLINE | مبلغ پایه =', paymentBaseAmount.toString())
+                    setMethod('ONLINE')
+                    setAmount(formatNumberWithCommas(Math.floor(Number(paymentBaseAmount) / 10).toString()))
+                  }} icon="externalLink" label={ADMIN_DEBTS.paymentDialog.methods.ONLINE} />
+                  <MethodBtn active={method === 'CHEQUE'} onClick={() => {
+                    console.log('🟡 انتخاب متد CHEQUE | مبلغ پایه =', installmentBaseAmount.toString())
+                    setMethod('CHEQUE')
+                    setAmount(formatNumberWithCommas(Math.floor(Number(installmentBaseAmount) / 10).toString()))
+                  }} icon="invoice" label={ADMIN_DEBTS.paymentDialog.methods.CHEQUE} />
+                  <MethodBtn active={method === 'INSTALLMENT'} onClick={() => {
+                    console.log('🟡 انتخاب متد INSTALLMENT | مبلغ پایه =', installmentBaseAmount.toString())
+                    setMethod('INSTALLMENT')
+                    setAmount(formatNumberWithCommas(Math.floor(Number(installmentBaseAmount) / 10).toString()))
+                  }} icon="calendar" label={ADMIN_DEBTS.paymentDialog.methods.INSTALLMENT} />
                </div>
              )}
            </div>
@@ -361,7 +434,6 @@ export function PaymentDialog({
            )}
         </div>
 
-        {/* فوتر با گردی پایینی */}
         <div 
           className="flex items-center justify-end gap-3 border-t border-line/40 px-6 py-4 bg-surface-2 shrink-0 !rounded-b-[24px]"
         >
