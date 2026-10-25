@@ -34,7 +34,7 @@ export function DebtsTable({
   paymentOptions?: any
   followUpsMap?: any
   panel: 'admin' | 'reception' | 'doctor'
-  today: string 
+  today?: string 
 }) {
   const [selectedPaymentRow, setSelectedPaymentRow] = useState<DebtRow | null>(null)
   const [selectedFollowUpRow, setSelectedFollowUpRow] = useState<DebtRow | null>(null)
@@ -65,7 +65,7 @@ export function DebtsTable({
                     scope="col"
                     className={cx(
                       'whitespace-nowrap px-3 py-3 align-middle text-xs font-semibold bg-surface-2/50',
-                      column.align === 'end' ? 'text-end' : 'text-start'
+                      'text-start'
                     )}
                   >
                     {column.key === 'customer' && 'مشتری'}
