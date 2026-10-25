@@ -3,7 +3,12 @@ import { Permission } from '@/core/constants'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
 import { requirePermission } from '@/modules/roles-permissions'
-import { fromUtcInstant, toUtcInstant, asLocalDate, fromClockParts } from '@/core/localization'
+import {
+  fromUtcInstant,
+  toUtcInstant,
+  fromClockParts,
+  addLocalMonths,
+} from '@/core/localization'
 
 export interface InstallmentInput {
   readonly appointmentId: string
@@ -11,17 +16,6 @@ export interface InstallmentInput {
   readonly count: number
   readonly firstDueAt: Date
   readonly note: string | null
-}
-
-// 👈 تابع محاسبه دقیق ماه شمسی (روز ثابت می‌مونه)
-function addMonthsJalali(dateString: string, monthsToAdd: number): string {
-  const parts = dateString.split('-')
-  let y = Number(parts[0])
-  let m = Number(parts[1])
-  const d = parts[2]
-  m += monthsToAdd
-  while (m > 12) { m -= 12; y += 1 }
-  return `${y}-${String(m).padStart(2, '0')}-${d}`
 }
 
 const MIDNIGHT = fromClockParts({ hour: 0, minute: 0 })
@@ -54,11 +48,21 @@ export async function createInstallmentPlan(args: {
     })
   }
 
+  // خواندن offset برای تبدیل درست UTC به شمسی
+  const settings = await args.tx.tenantSettings.findUnique({
+    where: { tenantId: args.ctx.tenantId },
+    select: { utcOffsetMinutes: true },
+  })
+  const offset = settings?.utcOffsetMinutes ?? 210
+
+  const firstDueLocalDate = fromUtcInstant(firstDueAt, offset).localDate
+
   const base = totalAmount / BigInt(count)
   const remainder = totalAmount % BigInt(count)
   const rows = Array.from({ length: count }, (_, index) => {
-    const dueAt = new Date(firstDueAt)
-    dueAt.setMonth(dueAt.getMonth() + index)
+    // استفاده از addLocalMonths برای جلوگیری از تغییر روز
+    const dueLocalDate = addLocalMonths(firstDueLocalDate, index)
+    const dueAt = toUtcInstant(dueLocalDate, MIDNIGHT, offset)
     return {
       tenantId: args.ctx.tenantId,
       appointmentId,
@@ -121,9 +125,9 @@ export async function listInstallments(tx: TransactionClient, tenantId: string) 
 
     if (paidCount > 0 && row.intervalMonths) {
       const baseLocalDate = fromUtcInstant(new Date(row.dueAt), offset).localDate
-      const nextLocalDate = addMonthsJalali(baseLocalDate, paidCount * row.intervalMonths)
-      
-      finalDueAt = toUtcInstant(asLocalDate(nextLocalDate), MIDNIGHT, offset)
+      // استفاده از addLocalMonths به جای addMonthsJalali برای دقت بالا
+      const nextLocalDate = addLocalMonths(baseLocalDate, paidCount * row.intervalMonths)
+      finalDueAt = toUtcInstant(nextLocalDate, MIDNIGHT, offset)
     }
 
     return {

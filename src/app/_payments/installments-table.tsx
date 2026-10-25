@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { formatDate, dateToLocalDate, toPersianDigits } from '@/core/localization'
+import { formatDate, dateToLocalDate, toPersianDigits, addLocalMonths, toUtcInstant, fromClockParts } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import { ADMIN_INSTALLMENTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
@@ -11,7 +11,6 @@ import { deleteInstallmentAction } from '@/app/_debts/actions'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Pagination } from '@/app/_components/Pagination'
 
-// 👈 ۱. ایمپورت کردن هر دو دیالوگ پیگیری
 import { FollowUpDialog as AdminFollowUpDialog } from '@/app/admin/debts/_components/FollowUpDialog'
 import { FollowUpDialog as ReceptionFollowUpDialog } from '@/app/reception/debts/_components/FollowUpDialog'
 
@@ -60,7 +59,6 @@ export function InstallmentsTable({
   const [followUpRow, setFollowUpRow] = useState<InstallmentRow | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  // 👈 ۲. انتخاب دیالوگ مناسب بر اساس پنل
   const FollowUpDialog = panel === 'reception' ? ReceptionFollowUpDialog : AdminFollowUpDialog
 
   const totalPages = Math.ceil(rows.length / PAGE_SIZE)
@@ -85,7 +83,7 @@ export function InstallmentsTable({
   const handleDelete = (id: string) => {
     if (!confirm('آیا از حذف این قسط مطمئن هستید؟')) return
     startTransition(async () => {
-      const res = await deleteInstallmentAction(panel, id) // 👈 استفاده از panel
+      const res = await deleteInstallmentAction(panel, id)
       if (res.ok) {
         router.refresh()
       } else {
@@ -104,6 +102,9 @@ export function InstallmentsTable({
     const qs = params.toString()
     return qs ? `?${qs}` : ''
   }
+
+  // 👈 زمان نیمه‌شب به عنوان LocalTime (برای toUtcInstant)
+  const MIDNIGHT = fromClockParts({ hour: 0, minute: 0 })
 
   return (
     <>
@@ -151,25 +152,26 @@ export function InstallmentsTable({
                 const remainingForAppointment = totalAmount - totalPaidForAppointment
                 const paidSoFar = totalPaidForAppointment > totalAmount ? totalAmount : totalPaidForAppointment
 
+                const safePerInstallment = perInstallmentAmount > 0n ? perInstallmentAmount : 1n
                 const paidCount = Math.min(
                   totalInstallments,
-                  Math.floor(Number(paidSoFar) / Number(perInstallmentAmount > 0n ? perInstallmentAmount : 1n))
+                  Math.floor(Number(paidSoFar) / Number(safePerInstallment))
                 )
                 
-                let dynamicDueAt = new Date(row.dueAt)
+                // 👈 محاسبه سررسید دقیق در فرانت‌اند با حفظ روز ماه (31 -> 30)
+                let due = new Date(row.dueAt)
                 if (paidCount > 0 && row.intervalMonths) {
-                  const baseDate = new Date(row.dueAt)
-                  baseDate.setMonth(baseDate.getMonth() + (paidCount * row.intervalMonths))
-                  dynamicDueAt = baseDate
+                  const baseLocalDate = dateToLocalDate(row.dueAt)
+                  const nextLocalDate = addLocalMonths(baseLocalDate, paidCount * row.intervalMonths)
+                  due = toUtcInstant(nextLocalDate, MIDNIGHT)
                 }
-                const due = dynamicDueAt
 
                 const today = realClock()
                 const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24))
 
                 const displaySequence = Math.min(
                   totalInstallments,
-                  Math.floor(Number(paidSoFar) / Number(perInstallmentAmount)) + 1
+                  Math.floor(Number(paidSoFar) / Number(safePerInstallment)) + 1
                 )
 
                 const progressPercent = totalAmount > 0n 
@@ -193,7 +195,9 @@ export function InstallmentsTable({
                     </td>
                     <td className="px-4 py-4 text-ink-2">{doctorName}</td>
                     <td className="px-4 py-4 text-ink-2">{serviceName}</td>
-                    <td className="px-4 py-4 text-ink-3 tabular-nums">{formatDate(dateToLocalDate(due), 'short')}</td>
+                    <td className="px-4 py-4 text-ink-3 tabular-nums">
+                      {formatDate(dateToLocalDate(due), 'short')}
+                    </td>
                     
                     <td className="px-4 py-4">
                       {diffDays === 0 ? (
@@ -332,7 +336,7 @@ export function InstallmentsTable({
           appointmentId={followUpRow.appointmentId}
           customerName={`${followUpRow.appointment.customer?.firstName || ''} ${followUpRow.appointment.customer?.lastName || ''}`.trim()}
           amountDue={followUpRow.amount.toString()}
-          panel={panel} // 👈 ۳. پاس دادن panel به دیالوگ پیگیری
+          panel={panel}
           onSuccess={() => {
             setFollowUpRow(null)
             window.location.reload()
