@@ -14,8 +14,6 @@ import { requireStaffPanel } from '@/app/_shell/session'
 import { DebtsKpi } from '@/app/reception/debts/_components/debts-kpi'
 import { DebtsFollowUpDateField } from '@/app/reception/debts/_components/debts-follow-up-date-field'
 
-
-
 export const metadata: Metadata = { title: DEBTS_PAGE.doctor.title }
 const BASE_PATH = '/doctor/debts'
 
@@ -32,14 +30,12 @@ export default async function DoctorDebtsPage({ searchParams }: { readonly searc
   const search = asString(params.q).trim()
   const followUpDate = asLocalDateParam(params.due)
 
-  const { myBuckets, collectedRial, offset, followUpsMap } = await runInTenantScope(
+  const { myBuckets, collectedRial, offset, followUpsMap, installments } = await runInTenantScope(
     session.permissions,
     prisma(),
     async (tx) => {
       const settings = await readDebtSettings(tx, session.tenantId)
-      
-      // 👈 فقط بدهی‌های همین دکتر خونده میشه (دقیقاً مثل صفحه مشتریان)
-      const allBuckets = await clinicDebts({ tx, ctx: session.permissions, now }) // فعلا همه رو میگیریم و فیلتر میکنیم
+      const allBuckets = await clinicDebts({ tx, ctx: session.permissions, now }) 
       const myId = session.permissions.userId
       const myBuckets = {
         overdue30: allBuckets.overdue30.filter(r => r.doctorId === myId),
@@ -50,6 +46,12 @@ export default async function DoctorDebtsPage({ searchParams }: { readonly searc
 
       const collectedRial = await paymentsThisMonth(tx, session.tenantId, now, settings.utcOffsetMinutes)
       const appointmentIds = myBuckets.overdue30.concat(myBuckets.overdue7, myBuckets.overdue, myBuckets.dueSoon).map((row) => row.appointmentId)
+
+      // 👈 گرفتن اقساط برای تشخیص نوع بدهی
+      const installments = await tx.installment.findMany({
+        where: { appointmentId: { in: appointmentIds } },
+        select: { id: true, appointmentId: true, type: true }
+      })
 
       const allFollowUps = await tx.debtFollowUp.findMany({
         where: { tenantId: session.tenantId, appointmentId: { in: appointmentIds } },
@@ -64,7 +66,7 @@ export default async function DoctorDebtsPage({ searchParams }: { readonly searc
         else followUpsMap[f.appointmentId] = [f]
       }
 
-      return { myBuckets, collectedRial, offset: settings.utcOffsetMinutes, followUpsMap }
+      return { myBuckets, collectedRial, offset: settings.utcOffsetMinutes, followUpsMap, installments }
     },
   )
 
@@ -72,7 +74,14 @@ export default async function DoctorDebtsPage({ searchParams }: { readonly searc
   const pastDue = [...myBuckets.overdue30, ...myBuckets.overdue7, ...myBuckets.overdue]
   const totalRial = allRows.reduce((total, row) => total + row.balance, 0n)
 
-  const tabRows = rowsForTab(allRows, tab, now, offset)
+  // 👈 ساخت نگاشت برای نوع بدهی
+  const installmentByAppointment = new Map(installments.map(i => [i.appointmentId, i.type]))
+  const typedRows = allRows.map(row => ({
+    ...row,
+    type: installmentByAppointment.get(row.appointmentId) || 'NORMAL'
+  }))
+
+  const tabRows = rowsForTab(typedRows, tab, now, offset)
   const filteredRows = applyFilters(tabRows, search, followUpDate, offset)
 
   const page = pageFromParam(params.page)
@@ -125,7 +134,8 @@ export default async function DoctorDebtsPage({ searchParams }: { readonly searc
         <button type="submit" className="mt-5 shrink-0 rounded-xs border border-brand-300 bg-brand-50 px-4 py-[6px] text-xs font-semibold text-brand-700 hover:bg-brand-100">{DEBTS_PAGE.search.label}</button>
       </form>
 
-      <DebtsTable rows={slice} showActions={false} followUpsMap={followUpsMap} panel="doctor" />
+      {/* 👈 ارسال ردیف‌های دارای فیلد type */}
+      <DebtsTable rows={slice as any} showActions={false} followUpsMap={followUpsMap} panel="doctor" />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
         <span className="text-ink-3">{`${DEBTS_PAGE.total.label} (${formatNumber(slice.length)} ${DEBTS_PAGE.total.pageRows})`}</span>
@@ -137,7 +147,7 @@ export default async function DoctorDebtsPage({ searchParams }: { readonly searc
   )
 }
 
-function rowsForTab(rows: readonly DebtRow[], tab: DebtsTab, now: Date, utcOffsetMinutes: number): readonly DebtRow[] {
+function rowsForTab(rows: readonly any[], tab: DebtsTab, now: Date, utcOffsetMinutes: number): readonly any[] {
   if (tab === 'everyone') return rows
   if (tab === 'unfollowed') return rows.filter((row) => row.lastFollowUp === null)
   if (tab === 'today') return rows.filter((row) => isToday(row.nextContactAt, now, utcOffsetMinutes))
@@ -152,7 +162,7 @@ function dayKey(instant: Date, utcOffsetMinutes: number): string {
   const shifted = new Date(instant.getTime() + utcOffsetMinutes * 60 * 1000)
   return shifted.toISOString().slice(0, 10)
 }
-function compareByNextContact(a: DebtRow, b: DebtRow, now: Date): number {
+function compareByNextContact(a: any, b: any, now: Date): number {
   if (a.nextContactAt === null && b.nextContactAt === null) return 0
   if (a.nextContactAt === null) return 1
   if (b.nextContactAt === null) return -1
@@ -164,7 +174,7 @@ function compareByNextContact(a: DebtRow, b: DebtRow, now: Date): number {
   if (!aPast && bPast) return 1
   return aTime - bTime
 }
-function applyFilters(rows: readonly DebtRow[], search: string, followUpDate: string | null, utcOffsetMinutes: number): readonly DebtRow[] {
+function applyFilters(rows: readonly any[], search: string, followUpDate: string | null, utcOffsetMinutes: number): readonly any[] {
   return rows.filter((row) => {
     if (followUpDate !== null) {
       if (row.nextContactAt === null) return false

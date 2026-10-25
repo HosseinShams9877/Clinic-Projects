@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { formatDate, dateToLocalDate, toPersianDigits, addLocalMonths, toUtcInstant, fromClockParts } from '@/core/localization'
+import { formatDate, dateToLocalDate, toPersianDigits, addLocalMonths, toUtcInstant, fromClockParts, asLocalDate } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import { ADMIN_INSTALLMENTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
@@ -158,9 +158,18 @@ export function InstallmentsTable({
                   Math.floor(Number(paidSoFar) / Number(safePerInstallment))
                 )
                 
-                // 👈 محاسبه سررسید دقیق در فرانت‌اند با حفظ روز ماه (31 -> 30)
+                // 👈 محاسبه سررسید دقیق در فرانت‌اند
                 let due = new Date(row.dueAt)
-                if (paidCount > 0 && row.intervalMonths) {
+                
+                // اگر قسط هنوز پرداخت نشده، چک کن ببین تاریخ دستی (OVERRIDE) داریم یا نه
+                const isUnpaid = paidSoFar === 0n
+                const overrideMatch = row.note?.match(/OVERRIDE:(\d{4}-\d{2}-\d{2})/)
+                
+                if (isUnpaid && overrideMatch && overrideMatch[1]) {
+                  // تاریخ جدیدی که کاربر ویرایش کرده رو نمایش بده
+                  due = toUtcInstant(asLocalDate(overrideMatch[1]), MIDNIGHT)
+                } else if (paidCount > 0 && row.intervalMonths) {
+                  // محاسبات عادی برای مرحله بعد (اگر پرداخت شده)
                   const baseLocalDate = dateToLocalDate(row.dueAt)
                   const nextLocalDate = addLocalMonths(baseLocalDate, paidCount * row.intervalMonths)
                   due = toUtcInstant(nextLocalDate, MIDNIGHT)

@@ -42,35 +42,66 @@ export default async function AdminDebtsPage({ searchParams }: { searchParams: a
   const query = asString(params.q)
   const doctorId = asString(params.doctor)
   const bucket = bucketFromParam(params.bucket)
+  const typeFilter = asString(params.type) // 👈 گرفتن فیلتر نوع (قسط یا چک)
   const now = realClock()
 
   const data = await runInTenantScope(session.permissions, prisma(), async (tx) => {
     const settings = await readDebtSettings(tx, session.tenantId)
+    
+    // ۱. گرفتن بدهی‌ها
     const [buckets, collectedRial, services] = await Promise.all([
       clinicDebts({ tx, ctx: session.permissions, now }),
       paymentsThisMonth(tx, session.tenantId, now, settings.utcOffsetMinutes),
       listServices({ tx, ctx: session.permissions }),
     ])
+    
     const rows = allDebtRows(buckets)
     const allDoctorIds = Array.from(new Set(rows.map(r => r.doctorId)))
     
+    // ۲. گرفتن تمام اقساط مربوط به این بیماران (برای تشخیص نوع بدهی)
+    const appointmentIds = rows.map(r => r.appointmentId)
+    const installments = await tx.installment.findMany({
+      where: { appointmentId: { in: appointmentIds } },
+      select: { id: true, appointmentId: true, type: true }
+    })
+
     return {
       buckets,
       collectedRial,
       serviceNames: Object.fromEntries(services.map((service) => [service.id, service.name])),
       doctorNames: await loadDoctorNamesByUserId(tx, session.tenantId, allDoctorIds),
+      installments,
       offset: settings.utcOffsetMinutes,
     } as const
   })
 
   const today = fromUtcInstant(now, data.offset).localDate
   const allRows = allDebtRows(data.buckets)
+
+  // ۳. ساخت نگاشت (Map) برای تشخیص نوع بدهی هر نوبت
+  const installmentByAppointment = new Map(data.installments.map(i => [i.appointmentId, i.type]))
   
-  const visible = allRows.filter(
-    (row) =>
-      (doctorId === '' || row.doctorId === doctorId) &&
-      (bucket === null || row.bucket === bucket) &&
-      matchesQuery(row, query)
+  // 👈 اضافه کردن نوع بدهی به ردیف‌ها
+  const typedRows = allRows.map(row => ({
+    ...row,
+    type: installmentByAppointment.get(row.appointmentId) || 'NORMAL'
+  }))
+
+  const visible = typedRows.filter(
+    (row) => {
+      if (doctorId !== '' && row.doctorId !== doctorId) return false
+      if (bucket !== null && row.bucket !== bucket) return false
+      if (!matchesQuery(row, query)) return false
+
+      // 👈 فیلتر کردن بر اساس نوع (قسط یا چک)
+      if (typeFilter === 'INSTALLMENT') {
+        return row.type === 'INSTALLMENT'
+      }
+      if (typeFilter === 'CHEQUE') {
+        return row.type === 'CHEQUE'
+      }
+      return true
+    }
   )
 
   const page = pageFromParam(params.page)
@@ -138,9 +169,9 @@ export default async function AdminDebtsPage({ searchParams }: { searchParams: a
            <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold text-ink-3">نوع بدهی</label>
               <div className="flex gap-2">
-                 <button type="button" className="rounded-full bg-brand px-6 py-2 text-sm font-semibold text-ink-inverse">همه</button>
-                 <button type="button" className="rounded-full border border-line-2 bg-surface px-6 py-2 text-sm font-semibold text-ink-2">قسط</button>
-                 <button type="button" className="rounded-full border border-line-2 bg-surface px-6 py-2 text-sm font-semibold text-ink-2">چک</button>
+                 <button type="submit" name="type" value="" className={`rounded-full px-6 py-2 text-sm font-semibold ${typeFilter === '' ? 'bg-brand text-ink-inverse' : 'border border-line-2 bg-surface text-ink-2'}`}>همه</button>
+                 <button type="submit" name="type" value="INSTALLMENT" className={`rounded-full px-6 py-2 text-sm font-semibold ${typeFilter === 'INSTALLMENT' ? 'bg-brand text-ink-inverse' : 'border border-line-2 bg-surface text-ink-2'}`}>قسط</button>
+                 <button type="submit" name="type" value="CHEQUE" className={`rounded-full px-6 py-2 text-sm font-semibold ${typeFilter === 'CHEQUE' ? 'bg-brand text-ink-inverse' : 'border border-line-2 bg-surface text-ink-2'}`}>چک</button>
               </div>
            </div>
         </div>
@@ -188,7 +219,7 @@ export default async function AdminDebtsPage({ searchParams }: { searchParams: a
               {slice.map((row) => (
                 <DebtRowView
                   key={row.appointmentId}
-                  row={row}
+                  row={row as any} // 👈 any موقت برای پاس دادن فیلد type
                   today={today}
                   serviceName={data.serviceNames[row.serviceId ?? ''] ?? null}
                   doctorName={data.doctorNames[row.doctorId] ?? null}
@@ -208,6 +239,7 @@ export default async function AdminDebtsPage({ searchParams }: { searchParams: a
               if (query !== '') sp.set('q', query)
               if (doctorId !== '') sp.set('doctor', doctorId)
               if (bucket !== null) sp.set('bucket', bucket)
+              if (typeFilter !== '') sp.set('type', typeFilter)
               if (p > 1) sp.set('page', String(p))
               const qs = sp.toString()
               return qs === '' ? '/admin/debts' : `/admin/debts?${qs}`

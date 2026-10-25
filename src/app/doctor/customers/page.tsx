@@ -58,7 +58,7 @@ export default async function DoctorCustomersPage({
         doctorNames={data.doctorNames}
         emptyMessage={query === '' ? CUSTOMERS_PAGE.empty.noPatients : CUSTOMERS_PAGE.empty.noResults}
         panel="doctor"
-        profileBasePath="/doctor/customers" // <-- این خط باعث می‌شود دکمه پرونده ظاهر شود
+        profileBasePath="/doctor/customers"
       />
 
       <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />

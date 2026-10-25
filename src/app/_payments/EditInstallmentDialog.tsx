@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { JalaliDatePicker } from '@/core/components/date-picker'
 import { Field } from '@/core/components/form'
-import { deleteInstallmentAction } from '@/app/_debts/actions'
+import { deleteInstallmentAction, updateInstallmentAction } from '@/app/_debts/actions' // 👈 updateInstallmentAction اضافه شد
 import { Icon } from '@/core/components/icons'
 import { toPersianDigits, formatMoney } from '@/core/localization'
 import { PaymentDialog } from '@/app/admin/debts/_components/PaymentDialog'
@@ -70,11 +70,22 @@ export function EditInstallmentDialog({
     if (isOverLimit) return // جلوگیری از ذخیره در صورت وجود خطا
     
     startTransition(async () => {
-      if (onTempAmountChange) {
-        onTempAmountChange(installmentId, amountRial)
+      // 👈 فراخوانی اکشن سرور برای ذخیره تاریخ و مبلغ جدید
+      const res = await updateInstallmentAction(panel, installmentId, {
+        newDueDate: dueDate,
+        newAmount: amountRial.toString()
+      })
+
+      if (res.ok) {
+        // تغییر موقت مبلغ در جدول کلاینت (اگر نیاز بود)
+        if (onTempAmountChange) {
+          onTempAmountChange(installmentId, amountRial)
+        }
+        setIsOpen(false)
+        router.refresh() // 👈 رفرش صفحه برای نمایش تاریخ و مبلغ جدید
+      } else {
+        alert(res.message)
       }
-      
-      setIsOpen(false)
     })
   }
 
@@ -151,7 +162,7 @@ export function EditInstallmentDialog({
               <button
                 type="button"
                 onClick={() => {
-                  setIsPaymentDialogOpen(true) // 👈 فقط مودال پرداخت رو باز کن
+                  setIsPaymentDialogOpen(true)
                 }}
                 className="w-full rounded-xl border border-brand-200 bg-brand-50 py-2.5 text-xs font-bold text-brand-700 hover:bg-brand-100 hover:border-brand-300 transition-colors flex items-center justify-center gap-2"
               >
@@ -217,7 +228,7 @@ export function EditInstallmentDialog({
         customerName={customerName}
         amountDue={remainingAmount}
         panel={panel}
-        mode="edit" // 👈 این خط اضافه بشه
+        mode="edit"
         onSuccess={() => {
           setIsPaymentDialogOpen(false)
           setIsOpen(false)

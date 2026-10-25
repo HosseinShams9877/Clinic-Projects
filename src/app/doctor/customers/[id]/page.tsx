@@ -28,6 +28,9 @@ import {
   monthName,
   toPersianDigits,
   type LocalDate,
+  addLocalMonths,
+  toUtcInstant,
+  fromClockParts,
 } from '@/core/localization'
 import { isAppError, NotFoundError } from '@/core/types'
 import { cx } from '@/core/lib'
@@ -56,8 +59,7 @@ import { customerDebtFollowUps } from '@/modules/debts'
 import { CollapsibleCard } from '@/app/_customers/CollapsibleCard'
 
 // 👈 ایمپورت تب‌های جدید
-import { TreatmentHistoryTab, type TreatmentHistoryRow } from '@/app/_customers/treatment-history-tab'
-import { PaymentsTab, type InstallmentRow, type PaymentRow } from '@/app/_customers/payments-tab'
+import { PaymentsTab, type InstallmentRow, type PaymentRow, type OpenDebtRow } from '@/app/_customers/payments-tab'
 import { InternalNotesTab } from '@/app/_customers/internal-notes-tab'
 
 export const metadata: Metadata = { title: CUSTOMER_PROFILE_PAGE.title }
@@ -116,59 +118,10 @@ export default async function DoctorCustomerDetailPage({
   const customerAge = profile.birthDate ? calculateAge(profile.birthDate) : '—'
 
   // ─────────────────────────────────────────────
-  // ساخت ردیف‌های سوابق
-  // ─────────────────────────────────────────────
-  const historyRows: TreatmentHistoryRow[] = []
-
-  const injectionsByAppointment = new Map<string, any[]>()
-  injections.forEach((inj: any) => {
-    if (!inj.appointmentId) return
-    const list = injectionsByAppointment.get(inj.appointmentId) ?? []
-    list.push(inj)
-    injectionsByAppointment.set(inj.appointmentId, list)
-  })
-
-  dbAppts.forEach((appt: any) => {
-    const relatedInjections = injectionsByAppointment.get(appt.id) ?? []
-    const first = relatedInjections[0] ?? null
-    const isDoctorApproved = appt.isDoctorApproved === true
-    const finalStatus = isDoctorApproved ? 'COMPLETED' : 'PENDING'
-
-    historyRows.push({
-      id: appt.id,
-      kind: 'appointment',
-      localDate: appt.localDate || '—',
-      localTime: appt.localTime || '—',
-      doctorName: appt.doctor ? `${appt.doctor.firstName} ${appt.doctor.lastName || ''}`.trim() : 'نامشخص',
-      serviceName: appt.service?.name || 'ویزیت',
-      status: finalStatus,
-      note: appt.note || appt.resultNote || null,
-      recommendations: appt.recommendations || null,
-      priceAtBooking: appt.priceAtBooking || 0n,
-      area: first?.area ?? null,
-      material: first?.material ?? null,
-      amount: first?.amount ?? null,
-      amountUnit: first?.amountUnit ?? null,
-      brand: first?.brand ?? null,
-      depth: first?.depth ?? null,
-      technique: first?.technique ?? null,
-      injections: relatedInjections.map((inj: any) => ({
-        id: inj.id,
-        area: inj.area || null,
-        material: inj.material || null,
-        amount: inj.amount ?? null,
-        amountUnit: inj.amountUnit || null,
-        brand: inj.brand || null,
-        depth: inj.depth || null,
-        technique: inj.technique || null,
-        note: inj.note || null,
-      })),
-    })
-  })
-
-  // ─────────────────────────────────────────────
   // محاسبات مالی اقساط
   // ─────────────────────────────────────────────
+  const MIDNIGHT = fromClockParts({ hour: 0, minute: 0 })
+
   let totalCount = 1
   let totalInstallmentsAmount = 0n
   
@@ -201,16 +154,33 @@ export default async function DoctorCustomerDetailPage({
     const firstPayment = instPayments.length > 0 ? instPayments[0] : null
     const paidAt = firstPayment ? firstPayment.paidAt : null
     const paymentMethod = firstPayment ? firstPayment.method : null
-    const isOverdue = !paidAt && new Date(inst.dueAt) < new Date()
+
+    let finalDueAt = new Date(inst.dueAt)
+    const totalInstallments = inst.totalPlanCount || 1
+    const safePerInstallment = inst.amount > 0n ? inst.amount : 1n
+    const paidCount = Math.min(
+      totalInstallments,
+      Math.floor(Number(paidAmount) / Number(safePerInstallment))
+    )
+
+    if (paidCount > 0 && inst.intervalMonths) {
+      const baseLocalDate = dateToLocalDate(inst.dueAt)
+      const nextLocalDate = addLocalMonths(baseLocalDate, paidCount * inst.intervalMonths)
+      finalDueAt = toUtcInstant(nextLocalDate, MIDNIGHT)
+    }
+
+    const isOverdue = paidAmount < (inst.totalPlanAmount || inst.amount) && !paidAt && finalDueAt < new Date()
 
     return {
       id: inst.id,
       appointmentId: inst.appointmentId,
       sequence: inst.sequence,
       amount: inst.amount,
-      dueAt: inst.dueAt,
+      totalPlanAmount: inst.totalPlanAmount,
+      dueAt: finalDueAt,
       note: inst.note,
-      status: paidAmount >= inst.amount ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING', 
+      type: inst.type,
+      status: paidAmount >= (inst.totalPlanAmount || inst.amount) ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING', 
       paidAmount,
       paidAt,
       paymentMethod,
@@ -226,6 +196,47 @@ export default async function DoctorCustomerDetailPage({
       method: p.method,
       kind: p.kind,
     }))
+
+  // 👈 ساخت لیست بدهی‌های باز (شامل اقساط و بدهی‌های عادی)
+  const openDebts: OpenDebtRow[] = [];
+
+  installmentsData.forEach(inst => {
+    if (inst.status !== 'PAID') {
+      openDebts.push({
+        id: inst.id,
+        appointmentId: inst.appointmentId,
+        customerId: profile.id,
+        amount: inst.totalPlanAmount || inst.amount,
+        paidAmount: inst.paidAmount,
+        dueAt: inst.dueAt,
+        type: inst.type || 'INSTALLMENT',
+        installmentId: inst.id
+      });
+    }
+  });
+
+  const installmentAppIds = new Set(installmentsData.map(i => i.appointmentId));
+  dbAppts.forEach(appt => {
+    if (appt.status === 'COMPLETED' && !installmentAppIds.has(appt.id)) {
+      const paidForThisAppt = profile.payments
+        .filter((p: any) => p.appointmentId === appt.id)
+        .reduce((sum: bigint, p: any) => sum + BigInt(p.amount || 0), 0n);
+      
+      const remaining = appt.priceAtBooking - paidForThisAppt;
+      if (remaining > 0n) {
+        openDebts.push({
+          id: `debt-${appt.id}`,
+          appointmentId: appt.id,
+          customerId: profile.id,
+          amount: appt.priceAtBooking,
+          paidAmount: paidForThisAppt,
+          dueAt: appt.scheduledAt,
+          type: 'NORMAL',
+          installmentId: null
+        });
+      }
+    }
+  });
 
   const nextInst = installmentsData.find((i) => i.status !== 'PAID')
 
@@ -271,23 +282,8 @@ export default async function DoctorCustomerDetailPage({
         </div>
       )}
 
-      {tab === 'history' && (
-        <div className="w-full min-w-0">
-          <TreatmentHistoryTab
-            customerName={name}
-            customerAge={customerAge}
-            customerPhone={profile.mobile}
-            visitsCount={dbAppts.length}
-            pendingCount={historyRows.filter((r) => r.status === 'PENDING').length}
-            lastVisitDate={profile.lastVisitAt ? dateToLocalDate(profile.lastVisitAt) : null}
-            historyRows={historyRows}
-          />
-        </div>
-      )}
-
       {tab === 'payments' && (
         <div className="w-full min-w-0">
-          {/* 👈 پزشک پرداخت‌ها را می‌بیند ولی دکمه ثبت پرداخت برایش نمایش داده نمی‌شود */}
           <PaymentsTab
             customerId={profile.id}
             totalAmount={profile.chargedTotal}
@@ -298,6 +294,7 @@ export default async function DoctorCustomerDetailPage({
             nextDueAmount={nextInst ? nextInst.amount : 0n}
             installments={installmentsData}
             payments={paymentsData}
+            openDebts={openDebts} // 👈 پاس دادن لیست بدهی‌های باز
             totalInstallmentsAmount={totalInstallmentsAmount}
             totalPaidOnInstallments={totalPaidOnInstallments}
             totalCount={totalCount}

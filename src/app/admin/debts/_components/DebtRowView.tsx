@@ -78,11 +78,12 @@ export function DebtRowView({ row, today, serviceName, doctorName }: DebtRowView
         <td className="px-4 py-3 text-start align-middle font-bold text-ink tabular-nums">
           {formatMoney(row.balance)}
         </td>
-        <td className="px-4 py-3 text-start align-middle">
+               <td className="px-4 py-3 text-start align-middle">
           {row.totalInstallments > 0 ? (
             <div className="flex flex-col gap-1">
               <span className="font-semibold text-ink-2 whitespace-nowrap">
-                قسط {toPersianDigits(row.paidInstallments + 1)} از {toPersianDigits(row.totalInstallments)}
+                {/* 👈 نمایش چک یا قسط بر اساس نوع */}
+                {(row as any).type === 'CHEQUE' ? 'چک' : 'قسط'} {toPersianDigits(row.paidInstallments + 1)} از {toPersianDigits(row.totalInstallments)}
               </span>
               <span className="text-xs text-ink-3">
                 {toPersianDigits(row.paidInstallments)} از {toPersianDigits(row.totalInstallments)} پرداخت شده

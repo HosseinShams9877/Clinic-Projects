@@ -14,7 +14,7 @@ import { requireStaffPanel } from '@/app/_shell/session'
 import { DebtsKpi } from '@/app/admin/debts/_components/DebtsKpi'
 import { BucketChips } from '@/app/admin/debts/_components/BucketChips'
 import { asString, bucketCounts, allDebtRows, bucketFromParam, matchesQuery } from '@/app/admin/debts/_components/helpers'
-import { DebtsTable } from '@/app/_debts/debts-table' // 👈 استفاده از جدول مشترک
+import { DebtsTable } from '@/app/_debts/debts-table'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: DEBTS_PAGE.reception.title }
@@ -34,6 +34,13 @@ export default async function ReceptionDebtsPage({ searchParams }: { searchParam
     const rows = allDebtRows(buckets)
     const allDoctorIds = Array.from(new Set(rows.map(r => r.doctorId)))
     
+    // 👈 گرفتن اقساط برای تشخیص نوع بدهی
+    const appointmentIds = rows.map(r => r.appointmentId)
+    const installments = await tx.installment.findMany({
+      where: { appointmentId: { in: appointmentIds } },
+      select: { id: true, appointmentId: true, type: true }
+    })
+
     const serviceNames: Record<string, string> = {}
     rows.forEach(row => {
       if (row.serviceId && row.serviceName) serviceNames[row.serviceId] = row.serviceName
@@ -42,6 +49,7 @@ export default async function ReceptionDebtsPage({ searchParams }: { searchParam
     return {
       buckets,
       serviceNames,
+      installments, // 👈 اضافه شد
       doctorNames: await loadDoctorNamesByUserId(tx, session.tenantId, allDoctorIds),
       offset: settings.utcOffsetMinutes,
     } as const
@@ -50,7 +58,15 @@ export default async function ReceptionDebtsPage({ searchParams }: { searchParam
   const today = fromUtcInstant(now, data.offset).localDate
   const allRows = allDebtRows(data.buckets)
   
-  const visible = allRows.filter(
+  // 👈 ساخت نگاشت برای نوع بدهی
+  const installmentByAppointment = new Map(data.installments.map(i => [i.appointmentId, i.type]))
+  
+  const typedRows = allRows.map(row => ({
+    ...row,
+    type: installmentByAppointment.get(row.appointmentId) || 'NORMAL'
+  }))
+
+  const visible = typedRows.filter(
     (row) =>
       (doctorId === '' || row.doctorId === doctorId) &&
       (bucket === null || row.bucket === bucket) &&
@@ -120,9 +136,9 @@ export default async function ReceptionDebtsPage({ searchParams }: { searchParam
         </div>
       </form>
 
-      {/* 👈 استفاده از DebtsTable و پاس دادن today */}
+      {/* 👈 ارسال ردیف‌های دارای فیلد type */}
       <DebtsTable
-        rows={slice}
+        rows={slice as any}
         showActions
         followUpsMap={{}}
         panel="reception"

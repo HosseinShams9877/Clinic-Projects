@@ -25,7 +25,8 @@ import {
 import { CustomerLifecycle, LeadStatus, isMember } from '@/core/constants'
 import { cx } from '@/core/lib'
 
-import { updateCustomerNoteAction } from './actions'
+// 👈 این خط رو اصلاح کردم تا خطا نده
+import { updateCustomerNoteAction } from '@/app/_customers/actions'
 
 export interface CustomersTableProps {
   readonly rows: readonly CustomerListRow[]

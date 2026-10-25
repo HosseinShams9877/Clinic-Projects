@@ -2,12 +2,11 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma, runInTenantScope } from '@/core/db'
-import { asLocalDate, fromClockParts, toUtcInstant, fromUtcInstant, addLocalMonths } from '@/core/localization'
+import { asLocalDate, fromClockParts, toUtcInstant, fromUtcInstant, addLocalMonths, todayLocalDate } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import type { TenantContext } from '@/core/tenant'
 import { PaymentMethod, PaymentKind, isMember } from '@/core/constants'
 import { ValidationError } from '@/core/types'
-import { recordPayment } from '@/modules/payments'
 import { recordFollowUp, rescheduleDueDate, readDebtSettings } from '@/modules/debts'
 import type { Panel } from '@/app/_shell/navigation'
 import { resolveStaffPanel } from '@/app/_shell/session'
@@ -314,11 +313,18 @@ export async function recordPaymentWithInstallmentsAction(
         ? Math.max(...allInstallments.map(i => i.sequence))
         : 0
 
-      let baseDate: Date
+           let baseDate: Date
       
-      if (currentInstallment && intervalMonths > 0) {
+      // 👈 اگر کاربر تاریخ جدیدی در فرم انتخاب کرده، از همون استفاده کن
+      if (input.firstDueDate && input.firstDueDate !== todayLocalDate(realClock())) {
+        baseDate = toUtcInstant(
+          asLocalDate(input.firstDueDate),
+          MIDNIGHT,
+          settings.utcOffsetMinutes,
+        )
+      } else if (currentInstallment && intervalMonths > 0) {
+        // در غیر این صورت، از تاریخ قسط قبلی + فاصله ماه‌ها استفاده کن
         const currentLocalDate = fromUtcInstant(currentInstallment.dueAt, settings.utcOffsetMinutes).localDate
-        // 👈 استفاده از addLocalMonths برای حفظ روز ماه (31 -> 30)
         const nextLocalDate = addLocalMonths(currentLocalDate, intervalMonths)
         baseDate = toUtcInstant(nextLocalDate, MIDNIGHT, settings.utcOffsetMinutes)
       } else {
@@ -624,13 +630,25 @@ export async function updateInstallmentAction(
   input: { newDueDate: string; newAmount: string }
 ): Promise<ActionResult> {
   const result = await inTenantScope(panel, async ({ tx, tenantId }) => {
-    const settings = await readDebtSettings(tx, tenantId)
-    const dueAt = toUtcInstant(asLocalDate(input.newDueDate), MIDNIGHT, settings.utcOffsetMinutes)
     const amountBigInt = asAmount(input.newAmount)
+    
+    const currentInst = await tx.installment.findUnique({
+      where: { id: installmentId, tenantId }
+    })
+    if (!currentInst) throw new Error('Installment not found')
+
+    // 👈 کد قبلی OVERRIDE رو (اگر بود) پاک میکنیم و کد جدید رو جایگزین میکنیم
+    const oldNote = currentInst.note || ''
+    const cleanNote = oldNote.replace(/OVERRIDE:\d{4}-\d{2}-\d{2}/g, '').trim()
+    const overrideCode = `OVERRIDE:${input.newDueDate}`
+    const newNote = `${overrideCode} ${cleanNote}`.trim()
 
     await tx.installment.update({
       where: { id: installmentId, tenantId },
-      data: { dueAt, amount: amountBigInt }
+      data: { 
+        amount: amountBigInt,
+        note: newNote // تاریخ جدید در note ذخیره میشه
+      }
     })
     return SUCCESS
   })

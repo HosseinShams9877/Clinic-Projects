@@ -112,10 +112,13 @@ export function DebtsTable({
                     )}
                   </td>
                   <td className="px-3 py-3 text-start align-middle font-bold text-ink tabular-nums">{formatMoney(row.balance)}</td>
-                  <td className="px-3 py-3 text-start align-middle">
+                                   <td className="px-3 py-3 text-start align-middle">
                     {row.totalInstallments > 0 ? (
                       <div className="flex flex-col gap-0.5">
-                        <span className="font-semibold text-ink-2 whitespace-nowrap text-xs">قسط {toPersianDigits(row.paidInstallments + 1)} از {toPersianDigits(row.totalInstallments)}</span>
+                        <span className="font-semibold text-ink-2 whitespace-nowrap text-xs">
+                          {/* 👈 این خط تغییر کرد */}
+                          {(row as any).type === 'CHEQUE' ? 'چک' : 'قسط'} {toPersianDigits(row.paidInstallments + 1)} از {toPersianDigits(row.totalInstallments)}
+                        </span>
                         <span className="text-[10px] text-ink-3">{toPersianDigits(row.paidInstallments)} از {toPersianDigits(row.totalInstallments)} پرداخت شده</span>
                       </div>
                     ) : (
@@ -142,20 +145,25 @@ export function DebtsTable({
                     )}
                   </td>
                   <td className="px-3 py-3 text-start align-middle">
-                    <div className="flex flex-row items-center gap-1.5 flex-nowrap">
-                      <button 
-                        onClick={() => setSelectedFollowUpRow(row)}
-                        className="rounded-full border border-line-2 bg-surface px-2.5 py-1 text-[11px] font-semibold text-ink-2 hover:bg-surface-2 transition-colors whitespace-nowrap shadow-sm"
-                      >
-                        پیگیری
-                      </button>
-                      <button
-                        onClick={() => setSelectedPaymentRow(row)}
-                        className="rounded-full bg-[#ba6a73] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90 transition-opacity whitespace-nowrap shadow-sm"
-                      >
-                        ثبت پرداخت
-                      </button>
-                    </div>
+                    {/* 👈 شرط showActions برای مخفی کردن دکمه‌ها از چشم پزشک */}
+                    {showActions ? (
+                      <div className="flex flex-row items-center gap-1.5 flex-nowrap">
+                        <button 
+                          onClick={() => setSelectedFollowUpRow(row)}
+                          className="rounded-full border border-line-2 bg-surface px-2.5 py-1 text-[11px] font-semibold text-ink-2 hover:bg-surface-2 transition-colors whitespace-nowrap shadow-sm"
+                        >
+                          پیگیری
+                        </button>
+                        <button
+                          onClick={() => setSelectedPaymentRow(row)}
+                          className="rounded-full bg-[#ba6a73] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90 transition-opacity whitespace-nowrap shadow-sm"
+                        >
+                          ثبت پرداخت
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-ink-3">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -164,23 +172,23 @@ export function DebtsTable({
         </div>
       </section>
 
-      {selectedPaymentRow && (
-  <PaymentDialog
-    isOpen={!!selectedPaymentRow}
-    onClose={() => setSelectedPaymentRow(null)}
-    customerId={selectedPaymentRow.customerId}
-    appointmentId={selectedPaymentRow.appointmentId}
-    customerName={`${selectedPaymentRow.customerFirstName} ${selectedPaymentRow.customerLastName ?? ''}`.trim()}
-    amountDue={selectedPaymentRow.installmentAmount > 0n ? selectedPaymentRow.installmentAmount : selectedPaymentRow.balance}
-    installmentId={selectedPaymentRow.installmentId} 
-    totalAmountDue={selectedPaymentRow.balance}
-    remainingAmount={selectedPaymentRow.balance}   // 👈 فقط این خط اضافه شد
-    panel={panel}
-    onSuccess={() => setSelectedPaymentRow(null)}
-  />
-)}
+      {selectedPaymentRow && showActions && (
+        <PaymentDialog
+          isOpen={!!selectedPaymentRow}
+          onClose={() => setSelectedPaymentRow(null)}
+          customerId={selectedPaymentRow.customerId}
+          appointmentId={selectedPaymentRow.appointmentId}
+          customerName={`${selectedPaymentRow.customerFirstName} ${selectedPaymentRow.customerLastName ?? ''}`.trim()}
+          amountDue={selectedPaymentRow.installmentAmount > 0n ? selectedPaymentRow.installmentAmount : selectedPaymentRow.balance}
+          installmentId={selectedPaymentRow.installmentId} 
+          totalAmountDue={selectedPaymentRow.balance}
+          remainingAmount={selectedPaymentRow.balance}
+          panel={panel}
+          onSuccess={() => setSelectedPaymentRow(null)}
+        />
+      )}
 
-      {selectedFollowUpRow && (
+      {selectedFollowUpRow && showActions && (
         <FollowUpDialog
           isOpen={!!selectedFollowUpRow}
           onClose={() => setSelectedFollowUpRow(null)}

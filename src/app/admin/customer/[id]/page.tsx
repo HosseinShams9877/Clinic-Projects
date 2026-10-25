@@ -22,6 +22,9 @@ import {
   jalaliParts,
   monthName,
   toPersianDigits,
+  addLocalMonths,
+  toUtcInstant,
+  fromClockParts,
   type LocalDate,
 } from '@/core/localization'
 import { isAppError, NotFoundError } from '@/core/types'
@@ -35,8 +38,7 @@ import { Pagination, paginate, pageFromParam } from '@/app/_components/Paginatio
 import { CUSTOMER_PROFILE_PAGE } from '@/app/catalog'
 import { loadCustomerProfile } from '@/app/_customers/page-data'
 import { CustomerTabs, tabFromParam } from '@/app/_customers/customer-tabs'
-import { TreatmentHistoryTab, type TreatmentHistoryRow } from '@/app/_customers/treatment-history-tab'
-import { PaymentsTab, type InstallmentRow, type PaymentRow } from '@/app/_customers/payments-tab'
+import { PaymentsTab, type InstallmentRow, type PaymentRow, type OpenDebtRow } from '@/app/_customers/payments-tab'
 import {
   InjectionTab,
   DEFAULT_INJECTION_VIEW,
@@ -51,8 +53,6 @@ import { ProgressBar } from '@/app/_components/ProgressBar'
 import { requireStaffPanel } from '@/app/_shell/session'
 import { customerDebtFollowUps } from '@/modules/debts'
 import { CollapsibleCard } from '@/app/_customers/CollapsibleCard'
-
-// 👈 ایمپورت تب یادداشت‌های داخلی
 import { InternalNotesTab } from '@/app/_customers/internal-notes-tab'
 
 export const metadata: Metadata = { title: CUSTOMER_PROFILE_PAGE.title }
@@ -86,8 +86,6 @@ export default async function CustomerProfilePage({
   })
 
   const data = await loadProfile(session.permissions, id)
-
-  // 👈 اضافه شدن installments به دیتای دریافتی
   const { profile, cycles, messages, injections, injectionCounts, notes, followUps, internalNotes, installments } = data
   
   const name = profile.lastName === null ? profile.firstName : `${profile.firstName} ${profile.lastName}`
@@ -110,103 +108,7 @@ export default async function CustomerProfilePage({
     return qs === '' ? basePath : `${basePath}?${qs}`
   }
 
-  // ─────────────────────────────────────────────
-  // ساخت ردیف‌های سوابق
-  // ─────────────────────────────────────────────
-  const historyRows: TreatmentHistoryRow[] = []
-
-  // ۱. تزریق‌ها رو بر اساس appointmentId گروه‌بندی کن
-  const injectionsByAppointment = new Map<string, any[]>()
-  injections.forEach((inj: any) => {
-    if (!inj.appointmentId) return
-    const list = injectionsByAppointment.get(inj.appointmentId) ?? []
-    list.push(inj)
-    injectionsByAppointment.set(inj.appointmentId, list)
-  })
-
-  // ۲. برای هر نوبت یک ردیف بساز — با همه تزریق‌های متصل بهش
-  dbAppts.forEach((appt: any) => {
-    const relatedInjections = injectionsByAppointment.get(appt.id) ?? []
-    const first = relatedInjections[0] ?? null
-    const isDoctorApproved = appt.isDoctorApproved === true
-    const finalStatus = isDoctorApproved ? 'COMPLETED' : 'PENDING'
-
-    historyRows.push({
-      id: appt.id,
-      kind: 'appointment',
-      localDate: appt.localDate || '—',
-      localTime: appt.localTime || '—',
-      doctorName: appt.doctor
-        ? `${appt.doctor.firstName} ${appt.doctor.lastName || ''}`.trim()
-        : 'نامشخص',
-      serviceName: appt.service?.name || 'ویزیت',
-      status: finalStatus,
-      note: appt.note || appt.resultNote || null,
-      recommendations: appt.recommendations || null,
-      priceAtBooking: appt.priceAtBooking || 0n,
-      area: first?.area ?? null,
-      material: first?.material ?? null,
-      amount: first?.amount ?? null,
-      amountUnit: first?.amountUnit ?? null,
-      brand: first?.brand ?? null,
-      depth: first?.depth ?? null,
-      technique: first?.technique ?? null,
-      injections: relatedInjections.map((inj: any) => ({
-        id: inj.id,
-        area: inj.area || null,
-        material: inj.material || null,
-        amount: inj.amount ?? null,
-        amountUnit: inj.amountUnit || null,
-        brand: inj.brand || null,
-        depth: inj.depth || null,
-        technique: inj.technique || null,
-        note: inj.note || null,
-      })),
-    })
-  })
-
-  // ۳. تزریق‌های بدون نوبت (standalone)
-  const knownAppointmentIds = new Set(dbAppts.map((a: any) => a.id))
-  injections.forEach((inj: any) => {
-    if (inj.appointmentId && knownAppointmentIds.has(inj.appointmentId)) return
-
-    historyRows.push({
-      id: inj.id,
-      kind: 'standalone-injection',
-      localDate: inj.localDate || '—',
-      localTime: inj.sessionAt
-        ? inj.sessionAt.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
-        : '—',
-      doctorName: 'نامشخص',
-      serviceName: 'تزریق بدون جلسه',
-      status: 'COMPLETED',
-      note: inj.note || null,
-      recommendations: null,
-      priceAtBooking: 0n,
-      area: inj.area || null,
-      material: inj.material || null,
-      amount: inj.amount ?? null,
-      amountUnit: inj.amountUnit || null,
-      brand: inj.brand || null,
-      depth: inj.depth || null,
-      technique: inj.technique || null,
-      injections: [
-        {
-          id: inj.id,
-          area: inj.area || null,
-          material: inj.material || null,
-          amount: inj.amount ?? null,
-          amountUnit: inj.amountUnit || null,
-          brand: inj.brand || null,
-          depth: inj.depth || null,
-          technique: inj.technique || null,
-          note: inj.note || null,
-        },
-      ],
-    })
-  })
-
-   // 👈 استخراج مبلغ کل و تعداد کل از فیلد note (کل بدهی اصلی)
+  // 👈 استخراج مبلغ کل و تعداد کل
   let totalCount = 1
   let totalInstallmentsAmount = 0n
   
@@ -222,10 +124,9 @@ export default async function CustomerProfilePage({
       totalInstallmentsAmount += inst.amount
     }
   })
-       // 👈 پیدا کردن شناسه نوبت‌هایی که الان بدهی قسطی/چکی دارن
+
   const installmentAppointmentIds = new Set(installments.map((inst: any) => inst.appointmentId))
 
-  // 👈 مبلغ پرداخت شده: فقط پرداخت‌های "جزئی" که مربوط به همین نوبت‌های قسطی/چکی هستن
   const totalPaidOnInstallments = profile.payments
     .filter((p: any) => 
       (p.kind === 'PARTIAL' || p.kind === PaymentKind.Partial) && 
@@ -233,6 +134,8 @@ export default async function CustomerProfilePage({
     )
     .reduce((sum: bigint, p: any) => sum + BigInt(p.amount || 0), BigInt(0))
     
+  const MIDNIGHT = fromClockParts({ hour: 0, minute: 0 })
+
   const installmentsData: InstallmentRow[] = installments.map((inst: any) => {
     const instPayments = inst.payments || []
     const paidAmount = instPayments.reduce((sum: bigint, p: any) => sum + p.amount + (p.discountAmount || 0n), 0n)
@@ -240,23 +143,40 @@ export default async function CustomerProfilePage({
     const firstPayment = instPayments.length > 0 ? instPayments[0] : null
     const paidAt = firstPayment ? firstPayment.paidAt : null
     const paymentMethod = firstPayment ? firstPayment.method : null
-    const isOverdue = !paidAt && new Date(inst.dueAt) < new Date()
+
+    // 👈 محاسبه دقیق سررسید با addLocalMonths
+    let finalDueAt = new Date(inst.dueAt)
+    const totalInstallments = inst.totalPlanCount || 1
+    const safePerInstallment = inst.amount > 0n ? inst.amount : 1n
+    const paidCount = Math.min(
+      totalInstallments,
+      Math.floor(Number(paidAmount) / Number(safePerInstallment))
+    )
+
+    if (paidCount > 0 && inst.intervalMonths) {
+      const baseLocalDate = dateToLocalDate(inst.dueAt)
+      const nextLocalDate = addLocalMonths(baseLocalDate, paidCount * inst.intervalMonths)
+      finalDueAt = toUtcInstant(nextLocalDate, MIDNIGHT)
+    }
+
+    const isOverdue = paidAmount < (inst.totalPlanAmount || inst.amount) && !paidAt && finalDueAt < new Date()
 
     return {
       id: inst.id,
       appointmentId: inst.appointmentId,
       sequence: inst.sequence,
       amount: inst.amount,
-      dueAt: inst.dueAt,
+      totalPlanAmount: inst.totalPlanAmount,
+      dueAt: finalDueAt,
       note: inst.note,
-      status: paidAmount >= inst.amount ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING', 
+      type: inst.type,
+      status: paidAmount >= (inst.totalPlanAmount || inst.amount) ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING', 
       paidAmount,
       paidAt,
       paymentMethod,
     }
   })
   
-  // 👈 حذف پرداخت‌های مربوط به اقساط از تاریخچه پایین
   const paymentsData: PaymentRow[] = profile.payments
     .filter((p: any) => !p.installmentId)
     .map((p: any) => ({
@@ -266,6 +186,49 @@ export default async function CustomerProfilePage({
       method: p.method,
       kind: p.kind,
     }))
+
+  // 👈 ساخت لیست بدهی‌های باز (شامل اقساط و بدهی‌های عادی)
+  const openDebts: OpenDebtRow[] = [];
+
+  // ۱. اقساط تسویه نشده
+  installmentsData.forEach(inst => {
+    if (inst.status !== 'PAID') {
+      openDebts.push({
+        id: inst.id,
+        appointmentId: inst.appointmentId,
+        customerId: profile.id,
+        amount: inst.totalPlanAmount || inst.amount,
+        paidAmount: inst.paidAmount,
+        dueAt: inst.dueAt,
+        type: inst.type || 'INSTALLMENT',
+        installmentId: inst.id
+      });
+    }
+  });
+
+  // ۲. بدهی‌های عادی (نوبت‌های تکمیل‌شده‌ای که هنوز پولشون کامل پرداخت نشده و قسطی هم نشدن)
+  const installmentAppIds = new Set(installmentsData.map(i => i.appointmentId));
+  dbAppts.forEach(appt => {
+    if (appt.status === 'COMPLETED' && !installmentAppIds.has(appt.id)) {
+      const paidForThisAppt = profile.payments
+        .filter((p: any) => p.appointmentId === appt.id)
+        .reduce((sum: bigint, p: any) => sum + BigInt(p.amount || 0), 0n);
+      
+      const remaining = appt.priceAtBooking - paidForThisAppt;
+      if (remaining > 0n) {
+        openDebts.push({
+          id: `debt-${appt.id}`,
+          appointmentId: appt.id,
+          customerId: profile.id,
+          amount: appt.priceAtBooking,
+          paidAmount: paidForThisAppt,
+          dueAt: appt.scheduledAt,
+          type: 'NORMAL',
+          installmentId: null
+        });
+      }
+    }
+  });
 
   const nextInst = installmentsData.find((i) => i.status !== 'PAID')
   const customerAge = profile.birthDate ? calculateAge(profile.birthDate) : '—'
@@ -327,20 +290,6 @@ export default async function CustomerProfilePage({
         </div>
       )}
 
-      {tab === 'history' && (
-        <div className="w-full min-w-0">
-          <TreatmentHistoryTab
-            customerName={name}
-            customerAge={customerAge}
-            customerPhone={profile.mobile}
-            visitsCount={dbAppts.length}
-            pendingCount={historyRows.filter((r) => r.status === 'PENDING').length}
-            lastVisitDate={profile.lastVisitAt ? dateToLocalDate(profile.lastVisitAt) : null}
-            historyRows={historyRows}
-          />
-        </div>
-      )}
-
       {tab === 'payments' && (
         <div className="w-full min-w-0">
           <PaymentsTab
@@ -353,6 +302,7 @@ export default async function CustomerProfilePage({
             nextDueAmount={nextInst ? nextInst.amount : 0n}
             installments={installmentsData}
             payments={paymentsData}
+            openDebts={openDebts}
             totalInstallmentsAmount={totalInstallmentsAmount}
             totalPaidOnInstallments={totalPaidOnInstallments}
             totalCount={totalCount}
@@ -360,7 +310,6 @@ export default async function CustomerProfilePage({
         </div>
       )}
 
-      {/* 👈 تب یادداشت‌های داخلی */}
       {tab === 'internal' && (
         <div className="w-full min-w-0">
           <InternalNotesTab
@@ -390,30 +339,10 @@ export default async function CustomerProfilePage({
         <div className="flex w-full min-w-0 flex-col gap-5 sm:gap-6">
           {/* KPI ها */}
           <div className="grid w-full grid-cols-2 gap-2.5 sm:gap-3 panel:grid-cols-4">
-            <KpiTile
-              label={ADMIN_CUSTOMER_PROFILE.kpi.visits}
-              value={toPersianDigits(dbAppts.length)}
-              icon="appointment"
-              tone="bg-info-bg text-info"
-            />
-            <KpiTile
-              label={ADMIN_CUSTOMER_PROFILE.kpi.activeCycles}
-              value={toPersianDigits(activeCycles.length)}
-              icon="treatment"
-              tone="bg-ok-bg text-ok"
-            />
-            <KpiTile
-              label={ADMIN_CUSTOMER_PROFILE.kpi.balance}
-              value={formatMoney(balance)}
-              icon="debt"
-              tone="bg-warn-bg text-warn"
-            />
-            <KpiTile
-              label={ADMIN_CUSTOMER_PROFILE.kpi.totalPaid}
-              value={formatMoney(profile.paidTotal)}
-              icon="payment"
-              tone="bg-brand-50 text-brand"
-            />
+            <KpiTile label={ADMIN_CUSTOMER_PROFILE.kpi.visits} value={toPersianDigits(dbAppts.length)} icon="appointment" tone="bg-info-bg text-info" />
+            <KpiTile label={ADMIN_CUSTOMER_PROFILE.kpi.activeCycles} value={toPersianDigits(activeCycles.length)} icon="treatment" tone="bg-ok-bg text-ok" />
+            <KpiTile label={ADMIN_CUSTOMER_PROFILE.kpi.balance} value={formatMoney(balance)} icon="debt" tone="bg-warn-bg text-warn" />
+            <KpiTile label={ADMIN_CUSTOMER_PROFILE.kpi.totalPaid} value={formatMoney(profile.paidTotal)} icon="payment" tone="bg-brand-50 text-brand" />
           </div>
 
           {/* محتوای اصلی + سایدبار */}
@@ -423,10 +352,7 @@ export default async function CustomerProfilePage({
                 <CyclesTable rows={cycles} />
               </CollapsibleCard>
 
-              <CollapsibleCard
-                title={ADMIN_CUSTOMER_PROFILE.cards.visits}
-                note={`${toPersianDigits(dbAppts.length)} ${ADMIN_CUSTOMER_PROFILE.recentSuffix}`}
-              >
+              <CollapsibleCard title={ADMIN_CUSTOMER_PROFILE.cards.visits} note={`${toPersianDigits(dbAppts.length)} ${ADMIN_CUSTOMER_PROFILE.recentSuffix}`}>
                 <AppointmentHistory
                   rows={appts.slice.map((a: any) => ({
                     id: a.id,
@@ -465,15 +391,7 @@ export default async function CustomerProfilePage({
             <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
               <CollapsibleCard
                 title={ADMIN_CUSTOMER_PROFILE.cards.details}
-                action={
-                  <ProfileEdit
-                    customerId={profile.id}
-                    firstName={profile.firstName}
-                    lastName={profile.lastName}
-                    birthDate={profile.birthDate}
-                    residenceArea={profile.residenceArea}
-                  />
-                }
+                action={<ProfileEdit customerId={profile.id} firstName={profile.firstName} lastName={profile.lastName} birthDate={profile.birthDate} residenceArea={profile.residenceArea} />}
               >
                 <DetailsDl profile={profile} doctorName={data.primaryDoctorName} />
               </CollapsibleCard>
@@ -499,60 +417,29 @@ export default async function CustomerProfilePage({
 
 function FollowUpsList({ rows }: { readonly rows: any[] }) {
   if (rows.length === 0) {
-    return (
-      <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">
-        هیچ پیگیری‌ای برای این مشتری ثبت نشده است.
-      </p>
-    )
+    return <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">هیچ پیگیری‌ای برای این مشتری ثبت نشده است.</p>
   }
-
   return (
     <div className="w-full overflow-x-auto">
       <table className="w-full min-w-[560px] border-collapse text-sm text-right">
         <thead>
           <tr className="border-b border-line-2 text-ink-3">
-            <Th>تاریخ ثبت</Th>
-            <Th>مسئول پیگیری</Th>
-            <Th>نتیجه / توضیحات</Th>
-            <Th>تاریخ وعده پرداخت</Th>
-            <Th>تاریخ پیگیری بعدی</Th>
+            <Th>تاریخ ثبت</Th><Th>مسئول پیگیری</Th><Th>نتیجه / توضیحات</Th><Th>تاریخ وعده پرداخت</Th><Th>تاریخ پیگیری بعدی</Th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => {
             let finalText = row.note || ''
-            const replacements: Record<string, string> = {
-              PROMISE_TO_PAY: 'وعده پرداخت',
-              NO_ANSWER: 'تماس شد؛ پاسخ نداد',
-              SMS_SENT: 'پیامک ارسال شد',
-              DISCOUNT_REQUEST: 'درخواست تخفیف',
-              PROMISE_TOMORROW: 'قول پرداخت تا فردا',
-              AWAITING_REVIEW: 'در انتظار بررسی',
-              INSTALLMENT_REQUEST: 'درخواست تقسیط',
-            }
-            Object.entries(replacements).forEach(([eng, fa]) => {
-              finalText = finalText.replace(new RegExp(eng, 'g'), fa)
-            })
+            const replacements: Record<string, string> = { PROMISE_TO_PAY: 'وعده پرداخت', NO_ANSWER: 'تماس شد؛ پاسخ نداد', SMS_SENT: 'پیامک ارسال شد', DISCOUNT_REQUEST: 'درخواست تخفیف', PROMISE_TOMORROW: 'قول پرداخت تا فردا', AWAITING_REVIEW: 'در انتظار بررسی', INSTALLMENT_REQUEST: 'درخواست تقسیط' }
+            Object.entries(replacements).forEach(([eng, fa]) => { finalText = finalText.replace(new RegExp(eng, 'g'), fa) })
             const parts = finalText.split(' - ')
-            const resultPart = parts[0] || ''
-            const notePart = parts.slice(1).join(' - ')
-
             return (
               <tr key={row.id} className="border-b border-line last:border-b-0">
-                <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">
-                  {formatDate(dateToLocalDate(row.createdAt), 'short')}
-                </td>
-                <td className="px-3 py-3 text-ink-2">
-                  {row.createdBy ? `${row.createdBy.firstName} ${row.createdBy.lastName ?? ''}` : 'سیستم'}
-                </td>
-                <td className="px-3 py-3 text-ink whitespace-pre-wrap">
-                  <span className="font-semibold">{resultPart}</span>
-                  {notePart && <span className="mt-1 block text-xs text-ink-3">{notePart}</span>}
-                </td>
+                <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">{formatDate(dateToLocalDate(row.createdAt), 'short')}</td>
+                <td className="px-3 py-3 text-ink-2">{row.createdBy ? `${row.createdBy.firstName} ${row.createdBy.lastName ?? ''}` : 'سیستم'}</td>
+                <td className="px-3 py-3 text-ink whitespace-pre-wrap"><span className="font-semibold">{parts[0]}</span>{parts.slice(1).join(' - ') && <span className="mt-1 block text-xs text-ink-3">{parts.slice(1).join(' - ')}</span>}</td>
                 <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">—</td>
-                <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">
-                  {row.nextContactAt ? formatDate(dateToLocalDate(row.nextContactAt), 'short') : '—'}
-                </td>
+                <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">{row.nextContactAt ? formatDate(dateToLocalDate(row.nextContactAt), 'short') : '—'}</td>
               </tr>
             )
           })}
@@ -567,10 +454,7 @@ function injectionViewFromParam(value: string | string[] | undefined): Injection
   return DEFAULT_INJECTION_VIEW
 }
 
-async function loadProfile(
-  ctx: Parameters<typeof loadCustomerProfile>[0]['ctx'],
-  customerId: string,
-) {
+async function loadProfile(ctx: Parameters<typeof loadCustomerProfile>[0]['ctx'], customerId: string) {
   try {
     return await runInTenantScope(ctx, prisma(), async (tx) => {
       const [base, cycles, messages, notes, followUps] = await Promise.all([
@@ -580,34 +464,12 @@ async function loadProfile(
         getCustomerNotes({ tx, tenantId: ctx.tenantId, customerId }),
         customerDebtFollowUps({ tx, tenantId: ctx.tenantId, customerId }),
       ])
-
       const internalNotes = await tx.internalNote.findMany({
         where: { customerId },
-        include: { 
-          author: { 
-            select: { 
-              firstName: true, 
-              lastName: true, 
-              memberships: { 
-                where: { tenantId: ctx.tenantId },
-                select: { role: true } 
-              } 
-            } 
-          } 
-        },
+        include: { author: { select: { firstName: true, lastName: true, memberships: { where: { tenantId: ctx.tenantId }, select: { role: true } } } } },
         orderBy: { createdAt: 'desc' },
       })
-
-      const installments = await tx.installment.findMany({
-        where: {
-          appointment: { customerId: customerId }
-        },
-        include: {
-          payments: true
-        },
-        orderBy: { dueAt: 'asc' }
-      })
-      
+      const installments = await tx.installment.findMany({ where: { appointment: { customerId } }, include: { payments: true }, orderBy: { dueAt: 'asc' } })
       return { ...base, cycles, messages, notes, followUps, internalNotes, installments } as const
     })
   } catch (error: unknown) {
@@ -619,9 +481,7 @@ async function loadProfile(
 function KpiTile({ label, value, icon, tone }: { readonly label: string; readonly value: string; readonly icon: IconName; readonly tone: string }) {
   return (
     <div className="flex w-full min-w-0 items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-2 sm:gap-3 sm:px-3 sm:py-2.5">
-      <span className={cx('grid size-8 shrink-0 place-items-center rounded-md sm:size-9', tone)}>
-        <Icon name={icon} size="compact" />
-      </span>
+      <span className={cx('grid size-8 shrink-0 place-items-center rounded-md sm:size-9', tone)}><Icon name={icon} size="compact" /></span>
       <span className="flex min-w-0 flex-1 flex-col justify-center">
         <span className="truncate text-[10px] text-ink-3 sm:text-xs">{label}</span>
         <span className="mt-0.5 truncate text-xs font-bold tabular-nums text-ink sm:text-sm md:text-base">{value}</span>
@@ -631,23 +491,13 @@ function KpiTile({ label, value, icon, tone }: { readonly label: string; readonl
 }
 
 function NotesList({ notes }: { readonly notes: readonly { id: string; text: string; createdAt: Date; authorName: string | null }[] }) {
-  if (notes.length === 0) {
-    return (
-      <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">
-        {CUSTOMER_PROFILE_PAGE.note.historyEmpty}
-      </p>
-    )
-  }
-
+  if (notes.length === 0) return <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">{CUSTOMER_PROFILE_PAGE.note.historyEmpty}</p>
   return (
     <div className="flex flex-col gap-3">
       {notes.map((note) => (
         <div key={note.id} className="rounded-md bg-surface-2 p-3 text-sm">
           <p className="whitespace-pre-wrap text-ink">{note.text}</p>
-          <span className="mt-2 block text-xs text-ink-3">
-            {note.authorName ?? CUSTOMER_PROFILE_PAGE.note.authorUnknown} —{' '}
-            {formatDate(dateToLocalDate(note.createdAt), 'short')}
-          </span>
+          <span className="mt-2 block text-xs text-ink-3">{note.authorName ?? CUSTOMER_PROFILE_PAGE.note.authorUnknown} — {formatDate(dateToLocalDate(note.createdAt), 'short')}</span>
         </div>
       ))}
     </div>
@@ -655,28 +505,16 @@ function NotesList({ notes }: { readonly notes: readonly { id: string; text: str
 }
 
 function CyclesTable({ rows }: { readonly rows: readonly CycleRow[] }) {
-  if (rows.length === 0) {
-    return <EmptyState sentence={ADMIN_CUSTOMER_PROFILE.empty.cycles} />
-  }
-
+  if (rows.length === 0) return <EmptyState sentence={ADMIN_CUSTOMER_PROFILE.empty.cycles} />
   return (
     <div className="w-full overflow-x-auto">
       <table className="w-full min-w-[560px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-line-2 text-ink-3">
-            <Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.service}</Th>
-            <Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.doctor}</Th>
-            <Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.sessions}</Th>
-            <Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.interval}</Th>
-            <Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.nextDue}</Th>
-            <Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.status}</Th>
+            <Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.service}</Th><Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.doctor}</Th><Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.sessions}</Th><Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.interval}</Th><Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.nextDue}</Th><Th>{ADMIN_CUSTOMER_PROFILE.cycleColumns.status}</Th>
           </tr>
         </thead>
-        <tbody>
-          {rows.map((row) => (
-            <CycleRow key={row.id} row={row} />
-          ))}
-        </tbody>
+        <tbody>{rows.map((row) => <CycleRow key={row.id} row={row} />)}</tbody>
       </table>
     </div>
   )
@@ -689,87 +527,50 @@ function CycleRow({ row }: { readonly row: CycleRow }) {
       <td className="px-3 py-2 text-ink-2">{row.doctorName}</td>
       <td className="px-3 py-2">
         <div className="flex flex-col gap-1 tabular-nums">
-          <span className="font-semibold text-ink">
-            {toPersianDigits(row.completedSessions)}
-            {row.totalSessions === 0
-              ? ''
-              : ` ${ADMIN_CUSTOMER_PROFILE.cycleColumns.sessions} ${toPersianDigits(row.totalSessions)}`}
-          </span>
-          {row.totalSessions === 0 ? null : (
-            <ProgressBar done={row.completedSessions} total={row.totalSessions} />
-          )}
+          <span className="font-semibold text-ink">{toPersianDigits(row.completedSessions)}{row.totalSessions === 0 ? '' : ` ${ADMIN_CUSTOMER_PROFILE.cycleColumns.sessions} ${toPersianDigits(row.totalSessions)}`}</span>
+          {row.totalSessions === 0 ? null : <ProgressBar done={row.completedSessions} total={row.totalSessions} />}
         </div>
       </td>
       <td className="px-3 py-2 text-ink-2 tabular-nums">{intervalLabel(row.intervalDays)}</td>
-      <td className="px-3 py-2 font-semibold text-ink tabular-nums">
-        {row.nextDueDate === null ? '—' : formatDate(dateToLocalDate(row.nextDueDate), 'short')}
-      </td>
-      <td className="px-3 py-2">
-        <CycleStatusBadge status={row.status} />
-      </td>
+      <td className="px-3 py-2 font-semibold text-ink tabular-nums">{row.nextDueDate === null ? '—' : formatDate(dateToLocalDate(row.nextDueDate), 'short')}</td>
+      <td className="px-3 py-2"><CycleStatusBadge status={row.status} /></td>
     </tr>
   )
 }
 
 function intervalLabel(intervalDays: number): string {
-  if (intervalDays % 7 === 0) {
-    return `${toPersianDigits(intervalDays / 7)} ${ADMIN_CUSTOMER_PROFILE.unitWeeks}`
-  }
+  if (intervalDays % 7 === 0) return `${toPersianDigits(intervalDays / 7)} ${ADMIN_CUSTOMER_PROFILE.unitWeeks}`
   return `${toPersianDigits(intervalDays)} ${ADMIN_CUSTOMER_PROFILE.unitDays}`
 }
 
 function CycleStatusBadge({ status }: { readonly status: string }) {
   if (!isMember(CycleStatus, status)) return <span className="text-ink-3">—</span>
   return (
-    <span
-      className={cx(
-        'inline-flex rounded-pill px-2 py-1 text-xs font-semibold',
-        status === CycleStatus.Due
-          ? 'bg-danger-bg text-danger'
-          : status === CycleStatus.AtRisk
-            ? 'bg-brand-100 text-brand-700'
-            : status === CycleStatus.Completed
-              ? 'bg-ok-bg text-ok'
-              : status === CycleStatus.Abandoned
-                ? 'bg-surface-sunken text-ink-3'
-                : 'bg-neutral-bg text-ink-2'
-      )}
-    >
+    <span className={cx('inline-flex rounded-pill px-2 py-1 text-xs font-semibold', status === CycleStatus.Due ? 'bg-danger-bg text-danger' : status === CycleStatus.AtRisk ? 'bg-brand-100 text-brand-700' : status === CycleStatus.Completed ? 'bg-ok-bg text-ok' : status === CycleStatus.Abandoned ? 'bg-surface-sunken text-ink-3' : 'bg-neutral-bg text-ink-2')}>
       {CYCLE_STATUS_LABELS[status]}
     </span>
   )
 }
 
 function AppointmentHistory({ rows, page, totalPages, hrefFor }: { readonly page: number; readonly totalPages: number; readonly hrefFor: (page: number) => string; readonly rows: ReadonlyArray<{ readonly id: string; readonly scheduledAt: Date; readonly localDate: string; readonly localTime: string; readonly status: string; readonly priceAtBooking: bigint; readonly serviceName: string | null; readonly doctorName: string | null }> }) {
-  if (rows.length === 0) {
-    return <EmptyState sentence={CUSTOMER_PROFILE_PAGE.empty.appointments} />
-  }
-
+  if (rows.length === 0) return <EmptyState sentence={CUSTOMER_PROFILE_PAGE.empty.appointments} />
   return (
     <div className="flex flex-col gap-3">
       <div className="w-full overflow-x-auto">
         <table className="w-full min-w-[480px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line-2 text-ink-3">
-              <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.date}</Th>
-              <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.service}</Th>
-              <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.doctor}</Th>
-              <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.status}</Th>
-              <Th align="end">{ADMIN_CUSTOMER_PROFILE.visitColumns.amount}</Th>
+              <Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.date}</Th><Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.service}</Th><Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.doctor}</Th><Th>{ADMIN_CUSTOMER_PROFILE.visitColumns.status}</Th><Th align="end">{ADMIN_CUSTOMER_PROFILE.visitColumns.amount}</Th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-b border-line last:border-b-0">
-                <td className="whitespace-nowrap px-3 py-2 text-ink-2 tabular-nums">
-                  {formatDate(row.localDate as LocalDate, 'short')}
-                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-ink-2 tabular-nums">{formatDate(row.localDate as LocalDate, 'short')}</td>
                 <td className="px-3 py-2 font-semibold text-ink">{row.serviceName ?? '—'}</td>
                 <td className="px-3 py-2 text-ink-2">{row.doctorName ?? '—'}</td>
                 <td className="px-3 py-2">{statusBadge(row.status)}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-end font-semibold text-ink tabular-nums">
-                  {formatMoney(row.priceAtBooking)}
-                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-end font-semibold text-ink tabular-nums">{formatMoney(row.priceAtBooking)}</td>
               </tr>
             ))}
           </tbody>
@@ -781,31 +582,21 @@ function AppointmentHistory({ rows, page, totalPages, hrefFor }: { readonly page
 }
 
 function PaymentHistory({ rows, page, totalPages, hrefFor }: { readonly page: number; readonly totalPages: number; readonly hrefFor: (page: number) => string; readonly rows: ReadonlyArray<{ readonly id: string; readonly amount: bigint; readonly paidAt: Date | null; readonly method: string; readonly kind: string }> }) {
-  if (rows.length === 0) {
-    return <EmptyState sentence={CUSTOMER_PROFILE_PAGE.empty.payments} />
-  }
-
+  if (rows.length === 0) return <EmptyState sentence={CUSTOMER_PROFILE_PAGE.empty.payments} />
   return (
     <div className="flex flex-col gap-3">
       <div className="w-full overflow-x-auto">
         <table className="w-full min-w-[420px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line-2 text-ink-3">
-              <Th>{CUSTOMER_PROFILE_PAGE.history.paidAt}</Th>
-              <Th>{CUSTOMER_PROFILE_PAGE.history.amount}</Th>
-              <Th>{CUSTOMER_PROFILE_PAGE.history.method}</Th>
-              <Th>{CUSTOMER_PROFILE_PAGE.history.kind}</Th>
+              <Th>{CUSTOMER_PROFILE_PAGE.history.paidAt}</Th><Th>{CUSTOMER_PROFILE_PAGE.history.amount}</Th><Th>{CUSTOMER_PROFILE_PAGE.history.method}</Th><Th>{CUSTOMER_PROFILE_PAGE.history.kind}</Th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-b border-line last:border-b-0">
-                <td className="whitespace-nowrap px-3 py-2 text-ink-2 tabular-nums">
-                  {row.paidAt === null ? '—' : formatDate(dateToLocalDate(row.paidAt), 'short')}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 font-semibold text-ink tabular-nums">
-                  {formatMoney(row.amount)}
-                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-ink-2 tabular-nums">{row.paidAt === null ? '—' : formatDate(dateToLocalDate(row.paidAt), 'short')}</td>
+                <td className="whitespace-nowrap px-3 py-2 font-semibold text-ink tabular-nums">{formatMoney(row.amount)}</td>
                 <td className="px-3 py-2 text-ink-2">{methodLabel(row.method)}</td>
                 <td className="px-3 py-2 text-ink-2">{kindLabel(row.kind)}</td>
               </tr>
@@ -820,19 +611,8 @@ function PaymentHistory({ rows, page, totalPages, hrefFor }: { readonly page: nu
 
 function statusBadge(status: string): React.ReactNode {
   if (!isMember(AppointmentStatus, status)) return <span className="text-ink-3">{status}</span>
-  const tone =
-    status === AppointmentStatus.Completed
-      ? 'bg-ok-bg text-ok'
-      : status === AppointmentStatus.NoShow
-        ? 'bg-neutral-bg text-ink-3'
-        : status === AppointmentStatus.Cancelled
-          ? 'bg-danger-bg text-danger'
-          : 'bg-surface-sunken text-ink-2'
-  return (
-    <span className={cx('inline-flex rounded-pill px-2 py-1 text-xs font-semibold', tone)}>
-      {APPOINTMENT_STATUS_LABELS[status]}
-    </span>
-  )
+  const tone = status === AppointmentStatus.Completed ? 'bg-ok-bg text-ok' : status === AppointmentStatus.NoShow ? 'bg-neutral-bg text-ink-3' : status === AppointmentStatus.Cancelled ? 'bg-danger-bg text-danger' : 'bg-surface-sunken text-ink-2'
+  return <span className={cx('inline-flex rounded-pill px-2 py-1 text-xs font-semibold', tone)}>{APPOINTMENT_STATUS_LABELS[status]}</span>
 }
 
 function DetailsDl({ profile, doctorName }: { readonly profile: { readonly mobile: string; readonly birthDate: string | null; readonly firstVisitAt: Date | null; readonly acquisitionSource: string | null; readonly residenceArea: string | null; readonly medicalHistory: string | null; readonly sensitivities: string | null }; readonly doctorName: string | null }) {
@@ -840,14 +620,7 @@ function DetailsDl({ profile, doctorName }: { readonly profile: { readonly mobil
     <dl className="grid grid-cols-1 gap-x-6 gap-y-3">
       <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.mobile} value={formatPhone(profile.mobile)} ltr />
       <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.birthDate} value={formatBirthday(profile.birthDate)} />
-      <Detail
-        label={ADMIN_CUSTOMER_PROFILE.detailFields.firstVisit}
-        value={
-          profile.firstVisitAt === null
-            ? null
-            : formatDate(dateToLocalDate(profile.firstVisitAt), 'long')
-        }
-      />
+      <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.firstVisit} value={profile.firstVisitAt === null ? null : formatDate(dateToLocalDate(profile.firstVisitAt), 'long')} />
       <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.source} value={sourceLabel(profile.acquisitionSource)} />
       <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.doctor} value={doctorName} />
       <Detail label={ADMIN_CUSTOMER_PROFILE.detailFields.residence} value={profile.residenceArea} />
@@ -861,18 +634,13 @@ function Detail({ label, value, span, ltr }: { readonly label: string; readonly 
   return (
     <div className={span ? 'col-span-1' : undefined}>
       <dt className="text-xs text-ink-3">{label}</dt>
-      <dd className={cx('mt-1 text-sm font-semibold text-ink', ltr && 'tabular-nums')} dir={ltr ? 'ltr' : undefined}>
-        {value ?? '—'}
-      </dd>
+      <dd className={cx('mt-1 text-sm font-semibold text-ink', ltr && 'tabular-nums')} dir={ltr ? 'ltr' : undefined}>{value ?? '—'}</dd>
     </div>
   )
 }
 
 function MessageList({ rows }: { readonly rows: ReadonlyArray<{ readonly id: string; readonly renderedText: string; readonly createdAt: Date }> }) {
-  if (rows.length === 0) {
-    return <EmptyState sentence={ADMIN_CUSTOMER_PROFILE.empty.messages} />
-  }
-
+  if (rows.length === 0) return <EmptyState sentence={ADMIN_CUSTOMER_PROFILE.empty.messages} />
   const thirtyDaysAgo = realClock().getTime() - THIRTY_DAYS_MS
   const recent = rows.filter((row) => row.createdAt.getTime() >= thirtyDaysAgo).length
   const lastFive = rows.slice(0, 5)
@@ -882,18 +650,12 @@ function MessageList({ rows }: { readonly rows: ReadonlyArray<{ readonly id: str
       <div className="flex flex-col gap-2">
         {lastFive.map((row) => (
           <div key={row.id} className="flex items-center justify-between gap-3 text-sm">
-            <span className="min-w-0 truncate text-ink-2" title={row.renderedText}>
-              {row.renderedText}
-            </span>
-            <span className="shrink-0 text-xs text-ink-3 tabular-nums">
-              {formatDate(dateToLocalDate(row.createdAt), 'short')}
-            </span>
+            <span className="min-w-0 truncate text-ink-2" title={row.renderedText}>{row.renderedText}</span>
+            <span className="shrink-0 text-xs text-ink-3 tabular-nums">{formatDate(dateToLocalDate(row.createdAt), 'short')}</span>
           </div>
         ))}
       </div>
-      <p className="text-xs text-ink-3">
-        {toPersianDigits(recent)} {ADMIN_CUSTOMER_PROFILE.messageCountSuffix}
-      </p>
+      <p className="text-xs text-ink-3">{toPersianDigits(recent)} {ADMIN_CUSTOMER_PROFILE.messageCountSuffix}</p>
     </div>
   )
 }
@@ -905,19 +667,14 @@ function formatBirthday(birthDate: string | null): string | null {
 }
 
 function EmptyState({ sentence }: { readonly sentence: string }) {
-  return (
-    <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">{sentence}</p>
-  )
+  return <p className="rounded-sm bg-surface-2 px-4 py-6 text-center text-sm text-ink-3">{sentence}</p>
 }
 
 function Th({ children, align = 'start' }: { readonly children: React.ReactNode; readonly align?: 'start' | 'center' | 'end' }) {
   return (
     <th
       scope="col"
-      className={cx(
-        'whitespace-nowrap px-3 py-2 text-xs font-semibold',
-        align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : 'text-start'
-      )}
+      className={cx('whitespace-nowrap px-3 py-2 text-xs font-semibold', align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : 'text-start')}
     >
       {children}
     </th>
