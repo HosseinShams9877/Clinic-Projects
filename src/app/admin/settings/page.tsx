@@ -6,7 +6,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { prisma, runInTenantScope } from '@/core/db'
-import { Permission, MODULES } from '@/core/constants'
+import { Permission } from '@/core/constants'
 import { toPersianDigits } from '@/core/localization'
 import { cx } from '@/core/lib'
 
@@ -167,9 +167,7 @@ export default async function SettingsPage({
         <OptionsForm
           toggles={surface.options.toggles}
           toggleLabels={TOGGLE_LABELS}
-          overrides={surface.options.overrides}
           labels={OPTIONS_FIELDS}
-          modules={MODULES}
         />
       ) : null}
     </div>

@@ -182,11 +182,21 @@ function InjectionForm({
           
           {/* 👈 منوی انتخاب جلسه */}
           <Field label="جلسه مربوط به">
-            <select
-              className={CONTROL_CLASSES}
-              value={values.appointmentId}
-              onChange={(event) => setValues({ ...values, appointmentId: event.target.value })}
-            >
+  <select
+    className={CONTROL_CLASSES}
+    value={values.appointmentId}
+    onChange={(event) => {
+      const selectedId = event.target.value
+      const selectedAppt = appointments?.find(a => a.id === selectedId)
+      
+      setValues({ 
+        ...values, 
+        appointmentId: selectedId,
+        // 👈 وقتی نوبت رو عوض می‌کنی، تاریخ پایین هم همراهش عوض میشه
+        localDate: selectedAppt ? asLocalDate(selectedAppt.localDate) : todayLocalDate(realClock())
+      })
+    }}
+  >
               <option value="">— بدون اتصال به جلسه —</option>
               {appointments?.map((appt) => (
                 <option key={appt.id} value={appt.id}>
@@ -351,6 +361,7 @@ function emptyValues(
   defaultArea?: InjectionArea | null,
   appointments?: ReadonlyArray<{ id: string; localDate: string }>,
 ): InjectionValues {
+  // 👈 اگر نوبتی وجود داشت، تاریخ همون نوبت رو بذار
   const latestAppointment = appointments && appointments.length > 0 ? appointments[0] : null
   
   return {
@@ -364,6 +375,7 @@ function emptyValues(
     technique: '',
     batchNumber: '',
     note: '',
+    // 👈 تغییر اصلی: تاریخ پیش‌فرض همون تاریخ نوبت انتخاب‌شده باشه
     localDate: latestAppointment ? asLocalDate(latestAppointment.localDate) : todayLocalDate(realClock()),
   }
 }

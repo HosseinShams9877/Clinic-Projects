@@ -1,60 +1,3 @@
-/**
- * The settings page's six tabs, as the forms the manager submits.
- *
- * The six are one client component because they are one row's own affordances: a tab's
- * form posts to its own server action and re-renders from the row the write left, and
- * the answer a failure carries lands on the form that raised it — the same answer the
- * services catalogue gives and for the same reason (`05-conventions.md` §7).
- *
- * ## Why the fields are plain inputs and not the RHF shell
- *
- * `01-tech-stack.md` §8.5's `Form` shell is for a module form that owns a Zod schema
- * and validates it on the client. A settings tab's fields are the module's own
- * contract, parsed on the server by the same schema (`03-data-model.md` §5), and the
- * tab's job is to post the form and render the sentence the server answered with —
- * so the fields are labelled inputs in the design system's tokens, and the schema is
- * not restated on the client where it would be a second copy.
- *
- * ## Why the toggles do not optimistically flip
- *
- * The eight are enforced server-side, so the checkbox shows the value the row holds
- * until the write landed; a flip that happened before the server agreed would be a
- * toggle the manager believes is set while the write path still refuses it.
- *
- * ## Why the message templates use `TemplateEditor`
- *
- * A template's text is not a plain field: the kind's own placeholders are a closed
- * set, and a manager who types `{amount}` into a booking-confirmation template writes
- * a message the validator refuses. `TemplateEditor` renders the placeholders the kind
- * allows as chips, inserts them into the textarea at the caret, and shows a live
- * preview of the substituted sentence — so what the manager reads and what the
- * validator accepts are the same set.
- *
- * ## Why `placeholders` arrives as a prop and not from the module
- *
- * This file is `'use client'`. Importing `@/modules/messages` from here would pull
- * the module's whole transitive graph — its ledger and dispatch reach
- * `node:async_hooks` — into the browser bundle, which Turbopack refuses. The page
- * (a Server Component) reads `TEMPLATE_PLACEHOLDERS` and hands it down as plain
- * data; the client only renders.
- *
- * ## Why the phone field uses `FormField` and not the local `Field`
- *
- * `PersianPhoneInput` is a core control and joins the shell's contract — it calls
- * `useControlWiring`, which requires a `FieldContext` above it. The local `Field`
- * in this file is a labelled `<input>` helper for the plain settings fields and
- * does not provide that context. The phone field therefore uses the shell's own
- * `Field` (imported as `FormField` to leave the local `Field` name free) so the
- * control has a label, a described-by and an error slot.
- *
- * ## Why the two image uploads are their own component
- *
- * A hero image and an about picture are two separate facts about the clinic, and
- * each upload is its own round trip: the bytes go to storage, the row gets the
- * URL, and a failure is about one image and not the tab. A single form that
- * carried both would be a form whose partial failure is the whole tab.
- */
-
 'use client'
 
 import { useActionState, useState, useTransition } from 'react'
@@ -67,16 +10,13 @@ import { CONTROL_CLASSES } from '@/core/components/form/control-classes'
 import { TemplateEditor } from './template-editor'
 import {
   addHolidayAction,
-  addOverrideAction,
   addShiftAction,
   removeHolidayAction,
   removeShiftAction,
-  removeOverrideAction,
   saveBookingAction,
   saveCycleTabAction,
   saveIdentityAction,
   saveMessagesAction,
-  saveTogglesAction,
   uploadClinicAboutAction,
   uploadClinicHeroAction,
   type ActionResult,
@@ -94,24 +34,16 @@ import type {
 } from '@/modules/settings'
 import type { Toggle } from '@/modules/roles-permissions'
 
-/**
- * A tab's labels, keyed by the catalog's own keys. The catalog constants are the
- * source of truth, so the prop is typed over one of them and a label the catalog
- * lacks is a compile error rather than a blank field.
- */
 type FieldLabels<C> = Readonly<Record<keyof C, string>>
 
-/** The tabs' shared field classes, so a field is the same field in every tab. */
 const FIELD_CLASS = CONTROL_CLASSES
 const LABEL_CLASS = 'text-xs text-ink-3'
 
-/** The answer the server gives a form it could not save, or nothing when it could. */
 function FormAnswer({ result }: { readonly result: ActionResult }) {
   if (result.ok) return null
   return <p className="text-sm font-medium text-danger">{result.message}</p>
 }
 
-/** The one button every tab's form submits with — the design system's primary button. */
 function Submit({ label }: { readonly label: string }) {
   return (
     <Button type="submit" variant="primary" className="self-start">
@@ -120,7 +52,6 @@ function Submit({ label }: { readonly label: string }) {
   )
 }
 
-/** One labelled field, as every tab's grid lays one out. */
 function Field({
   label,
   name,
@@ -140,7 +71,6 @@ function Field({
   )
 }
 
-/** «اطلاعات کلینیک» — the name and the address a customer and the site show. */
 export function IdentityForm({
   tenantName,
   clinicName,
@@ -172,9 +102,6 @@ export function IdentityForm({
   )
 }
 
-/**
- * «تصاویر سایت» — the clinic's hero image and about picture.
- */
 export function ClinicImagesForm({
   clinicId,
   heroImageUrl,
@@ -225,7 +152,6 @@ export function ClinicImagesForm({
   )
 }
 
-/** One image field — a preview, a file input, and a save. */
 function ImageUpload({
   title,
   initialUrl,
@@ -301,7 +227,6 @@ function ImageUpload({
   )
 }
 
-/** «نوبت‌دهی» — the booking mode, the lifecycle timings and the two policy values. */
 export function BookingForm({
   mode,
   slotDurationMinutes,
@@ -391,7 +316,6 @@ export function BookingForm({
   )
 }
 
-/** «ساعات کاری» — the clinic's weekly shifts and its holidays. */
 export function WorkingHoursForm({
   shifts,
   holidays,
@@ -530,7 +454,6 @@ export function WorkingHoursForm({
   )
 }
 
-/** A row's removal, as the one button the two tables share. */
 function RemoveButton({
   action,
   id,
@@ -547,7 +470,6 @@ function RemoveButton({
   )
 }
 
-/** «چرخه درمان» — the two defaults `04-roles-permissions.md` §5 keeps with the engine. */
 export function CycleForm({
   noShowAddsToContactList,
   rescheduleShiftsDueDates,
@@ -579,7 +501,6 @@ export function CycleForm({
   )
 }
 
-/** One labelled checkbox, as the two cycle defaults render it. */
 function ToggleCheckbox({
   name,
   label,
@@ -597,7 +518,6 @@ function ToggleCheckbox({
   )
 }
 
-/** «پیام‌ها» — every automatic message's text, and the send policy. */
 export function MessagesForm({
   templates,
   sendWindowStart,
@@ -674,96 +594,53 @@ export function MessagesForm({
   )
 }
 
-/** «اختیارات» — the eight toggles, and the overrides this tenant has declared. */
 export function OptionsForm({
   toggles,
   toggleLabels,
-  overrides,
   labels,
-  modules,
 }: {
   readonly toggles: Readonly<Record<string, boolean>>
   readonly toggleLabels: Readonly<
     Record<Toggle, { readonly label: string; readonly description: string }>
   >
-  readonly overrides: ReadonlyArray<{ readonly module: string; readonly implementation: string }>
   readonly labels: FieldLabels<typeof OPTIONS_FIELDS>
-  readonly modules: readonly string[]
 }) {
-  const [toggleResult, toggleAction] = useActionState(saveTogglesAction, {
-    ok: true,
-    message: null,
-  })
-  const [overrideResult, overrideAction] = useActionState(addOverrideAction, {
-    ok: true,
-    message: null,
-  })
-
   return (
-    <div className="flex flex-col gap-6">
-      <form action={toggleAction} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3">
-          {(Object.keys(toggleLabels) as readonly Toggle[]).map((toggle) => (
-            <label
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
+        {(Object.keys(toggleLabels) as readonly Toggle[]).map((toggle) => {
+          const labelText = toggleLabels[toggle]?.label ?? ''
+          const toggleStr = String(toggle) // 👈 برای جلوگیری از ارور TypeScript
+
+          // 👈 اگر لیبل شامل کلمه "پزشک" یا "قیمت" بود، همیشه بدون تیک نشون بده
+          const forceUncheck = 
+            labelText.includes('پزشک') || 
+            labelText.includes('قیمت') || 
+            toggleStr === 'doctorCanBookOwn' || 
+            toggleStr === 'doctorCanBlockHours' || 
+            toggleStr === 'secretaryCanEditPrice'
+
+          const isChecked = forceUncheck ? false : (toggles[toggle] ?? false)
+
+          return (
+            <div
               key={toggle}
-              className="flex items-start gap-3 rounded-md border border-line bg-surface-2 px-3 py-2"
+              className="flex items-start gap-3 rounded-md border border-line bg-surface-2 px-3 py-2 opacity-80"
             >
               <input
                 type="checkbox"
-                name={toggle}
-                defaultChecked={toggles[toggle] ?? false}
-                className="mt-0.5 accent-ink"
+                checked={isChecked}
+                disabled
+                className="mt-0.5 accent-ink cursor-not-allowed"
               />
               <span className="flex flex-col gap-0.5 text-sm">
                 <span className="font-medium text-ink">{toggleLabels[toggle].label}</span>
                 <span className="text-ink-3">{toggleLabels[toggle].description}</span>
               </span>
-            </label>
-          ))}
-        </div>
-        <FormAnswer result={toggleResult} />
-        <Submit label={labels.save} />
-      </form>
-
-      <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-bold text-ink">{labels.overrides}</h3>
-        {overrides.length === 0 ? (
-          <p className="text-sm text-ink-3">{labels.noOverrides}</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {overrides.map((override) => (
-              <li
-                key={override.module}
-                className="flex items-center justify-between rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-ink"
-              >
-                <span>{`${override.module} — ${override.implementation}`}</span>
-                <RemoveButton
-                  action={removeOverrideAction}
-                  id={override.module}
-                  label={labels.removeOverride}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <form action={overrideAction} className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className={LABEL_CLASS}>{labels.overrideModule}</span>
-            <select name="module" defaultValue="" className={FIELD_CLASS}>
-              <option value="">—</option>
-              {modules.map((module) => (
-                <option key={module} value={module}>
-                  {module}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Field label={labels.overrideImplementation} name="implementation" defaultValue="" />
-          <Submit label={labels.addOverride} />
-        </form>
-        <FormAnswer result={overrideResult} />
-      </section>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
