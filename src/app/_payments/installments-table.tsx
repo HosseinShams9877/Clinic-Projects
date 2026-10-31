@@ -7,6 +7,7 @@ import { ADMIN_INSTALLMENTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
 import { InstallmentPaymentDialog } from '@/app/admin/installments/_components/InstallmentPaymentDialog'
 import { EditInstallmentDialog } from '@/app/_payments/EditInstallmentDialog'
+import { overrideAmountInNote, overrideDueInNote } from '@/app/_payments/installment-overrides'
 import { deleteInstallmentAction } from '@/app/_debts/actions'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Pagination } from '@/app/_components/Pagination'
@@ -144,7 +145,14 @@ export function InstallmentsTable({
                 const totalInstallments = row.totalPlanCount || 1
                 const totalAmount = row.totalPlanAmount || row.amount
                 const currentTempAmount = tempAmounts[row.id]
-                const perInstallmentAmount = currentTempAmount !== undefined ? currentTempAmount : row.amount
+                // 👈 ویرایش موقتِ مبلغ: فقط تا زمانی که این قسط پرداخت نشده
+                const overrideAmount = row.paidAmount === 0n ? overrideAmountInNote(row.note) : null
+                const perInstallmentAmount =
+                  currentTempAmount !== undefined
+                    ? currentTempAmount
+                    : overrideAmount !== null
+                      ? overrideAmount
+                      : row.amount
 
                 const appointmentRows = rows.filter(r => r.appointmentId === row.appointmentId)
                 const totalPaidForAppointment = appointmentRows.reduce((sum, r) => sum + r.paidAmount, 0n)
@@ -160,14 +168,17 @@ export function InstallmentsTable({
                 
                 // 👈 محاسبه سررسید دقیق در فرانت‌اند
                 let due = new Date(row.dueAt)
-                
-                // اگر قسط هنوز پرداخت نشده، چک کن ببین تاریخ دستی (OVERRIDE) داریم یا نه
-                const isUnpaid = paidSoFar === 0n
-                const overrideMatch = row.note?.match(/OVERRIDE:(\d{4}-\d{2}-\d{2})/)
-                
-                if (isUnpaid && overrideMatch && overrideMatch[1]) {
+
+                // اگر این قسط هنوز پرداخت نشده، چک کن ببین تاریخ دستی (OVERRIDE) داریم یا نه.
+                // 👈 شرط باید مثل مبلغ روی خودِ قسط باشد (row.paidAmount)، نه روی کلِ نوبت:
+                // یک نوبت می‌تواند چند قسط داشته باشد و پرداختِ قسطِ اول نباید ویرایشِ موقتِ
+                // قسطِ دوم را پاک کند (مثل payments-tab و صفحه‌ی مشتری).
+                const isUnpaid = row.paidAmount === 0n
+                const overrideDate = isUnpaid ? overrideDueInNote(row.note) : null
+
+                if (overrideDate !== null) {
                   // تاریخ جدیدی که کاربر ویرایش کرده رو نمایش بده
-                  due = toUtcInstant(asLocalDate(overrideMatch[1]), MIDNIGHT)
+                  due = toUtcInstant(asLocalDate(overrideDate), MIDNIGHT)
                 } else if (paidCount > 0 && row.intervalMonths) {
                   // محاسبات عادی برای مرحله بعد (اگر پرداخت شده)
                   const baseLocalDate = dateToLocalDate(row.dueAt)

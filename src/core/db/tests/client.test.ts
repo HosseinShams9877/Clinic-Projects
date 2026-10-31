@@ -7,8 +7,8 @@
  * constructors behave differently at run time as well as in the name.
  *
  * Prisma 6 no longer uses a driver adapter, so the `adapterFor` tests are gone;
- * the URL is the client's own concern now, and the two constructors differ only
- * in whether the tenant extension is applied.
+ * both constructors forward the URL to `PrismaClient`'s `datasources` option and
+ * differ only in whether the tenant extension is applied.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'

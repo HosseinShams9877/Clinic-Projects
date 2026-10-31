@@ -116,7 +116,13 @@ export function RowActions({
   // 🟢 برای ادمین و منشی
   const canArriveAsBooking =
     !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.Arrived)
-  const canCompleteAsBooking = !isSlotBlock && status === AppointmentStatus.Arrived
+  // The relation is the whole answer here: `ARRIVED → COMPLETED` is the desk's result,
+  // and `RESULT_NOT_RECORDED → COMPLETED` is the alarm's own close — the arrival was
+  // recorded and the result was not, so the row offers the result dialog rather than
+  // asking the desk to re-mark an arrival it already recorded. `BOOKED` completes only
+  // as a slot block, and `!isSlotBlock` keeps that case on the block's own button.
+  const canCompleteAsBooking =
+    !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.Completed)
   const canNoShow =
     !isSlotBlock && canTransition(status as AppointmentStatus, AppointmentStatus.NoShow)
   const canCancel = canTransition(status as AppointmentStatus, AppointmentStatus.Cancelled)

@@ -6,6 +6,7 @@ import type { ChangeEvent } from 'react'
 import { Button } from '@/core/components/button'
 import { Field as FormField, PersianPhoneInput } from '@/core/components/form'
 import { CONTROL_CLASSES } from '@/core/components/form/control-classes'
+import { TimePicker } from '@/core/components/date-picker/TimePicker'
 
 import { TemplateEditor } from './template-editor'
 import {
@@ -49,6 +50,33 @@ function Submit({ label }: { readonly label: string }) {
     <Button type="submit" variant="primary" className="self-start">
       {label}
     </Button>
+  )
+}
+
+/**
+ * A time of day, posted under `name` as `HH:mm`.
+ *
+ * The native `type="time"` input this replaces posted its value under the same name,
+ * so the picker carries the chosen time in a hidden input of that name and the
+ * server action's `stringOf(form, name)` reads the same string it always did. The
+ * state is seeded from the default and owned here because the picker is controlled,
+ * while the forms around it stay plain `<form action={…}>` with no provider.
+ */
+function TimeField({
+  label,
+  name,
+  defaultValue,
+}: {
+  readonly label: string
+  readonly name: string
+  readonly defaultValue: string
+}) {
+  const [value, setValue] = useState(defaultValue)
+  return (
+    <label className="flex flex-col gap-1 text-sm">
+      <span className={LABEL_CLASS}>{label}</span>
+      <TimePicker name={name} value={value} onChange={setValue} />
+    </label>
   )
 }
 
@@ -395,8 +423,8 @@ export function WorkingHoursForm({
               ))}
             </select>
           </label>
-          <Field label={labels.startTime} name="startTime" defaultValue="09:00" type="time" />
-          <Field label={labels.endTime} name="endTime" defaultValue="17:00" type="time" />
+          <TimeField label={labels.startTime} name="startTime" defaultValue="09:00" />
+          <TimeField label={labels.endTime} name="endTime" defaultValue="17:00" />
           <Submit label={labels.addShift} />
         </form>
         <FormAnswer result={shiftResult} />
@@ -548,17 +576,15 @@ export function MessagesForm({
   return (
     <form action={action} className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-3 panel:grid-cols-2">
-        <Field
+        <TimeField
           label={labels.sendWindowStart}
           name="sendWindowStart"
           defaultValue={sendWindowStart}
-          type="time"
         />
-        <Field
+        <TimeField
           label={labels.sendWindowEnd}
           name="sendWindowEnd"
           defaultValue={sendWindowEnd}
-          type="time"
         />
         <Field
           label={labels.dailyMessageCap}

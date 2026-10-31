@@ -89,15 +89,28 @@ const storage = new AsyncLocalStorage<TenantContext>()
  * scoped by the extension, and — on PostgreSQL — the transaction itself carries
  * `app.tenant_id` so the engine enforces the same boundary independently.
  *
- * A scope does not nest: Prisma rejects a transaction inside a transaction, and
- * the entry point that opened the scope is the one that owns it. A worker job
- * runs the same way, once per job, in its own scoped transaction.
+ * A scope does not nest. Prisma used to reject a transaction inside a
+ * transaction; Prisma 6 no longer does — the inner `$transaction` waits for
+ * the outer to release the connection and hangs instead of failing, which is
+ * a worse failure mode for the one thing the document needs it to be: loud and
+ * immediate. The wrapper therefore guards nesting itself: a `runInTenantScope`
+ * called inside one is a `TenantScopeError` at the call, not a timeout a
+ * developer has to reproduce. The entry point that opened the scope is the one
+ * that owns it, and a worker job runs the same way, once per job, in its own
+ * scoped transaction.
  */
 export async function runInTenantScope<T>(
   context: TenantContext,
   client: PrismaClient,
   block: (tx: TransactionClient) => Promise<T>,
 ): Promise<T> {
+  if (storage.getStore() !== undefined) {
+    throw new TenantScopeError(
+      'runInTenantScope() was called inside another runInTenantScope(). Scopes do not nest: the ' +
+        'entry point that opened the scope owns it, and a module function receives the transaction ' +
+        'client rather than opening its own. See docs/knowledge/09-security.md §4.3.',
+    )
+  }
   return storage.run(context, () =>
     client.$transaction(async (tx) => {
       await setTenantConfig(tx)

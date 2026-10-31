@@ -253,8 +253,19 @@ async function sendToAudience(args: {
     // The campaign's daily cap bounds the run itself.
     if (campaign.dailyCap !== null && sent + queued >= campaign.dailyCap) break
 
-    // Already recorded for this campaign — the ledger's own idempotency.
-    if (await campaignSendRecordedFor({ tx, tenantId, customerId, campaignId: campaign.id })) {
+    // Already recorded for this campaign in this period — the ledger's own idempotency,
+    // scoped by the period the dispatch is running. `campaign.scheduledAt` is this
+    // period's start as this run read it (before the advance below), so a row the
+    // current period already wrote blocks a re-run, and a past period's row does not.
+    if (
+      await campaignSendRecordedFor({
+        tx,
+        tenantId,
+        customerId,
+        campaignId: campaign.id,
+        since: campaign.scheduledAt,
+      })
+    ) {
       continue
     }
 

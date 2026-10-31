@@ -72,6 +72,50 @@ export interface ReconciliationReport {
   readonly corrected: number
 }
 
+/**
+ * مرحله‌ای که یک خطِ پرداخت به آن نسبت داده می‌شود — «قسط ۲ از ۴»، «چک»، یا
+ * برچسبِ نوعِ خودِ پرداخت وقتی قسطی در کار نیست.
+ */
+export type PaymentLineStage =
+  | { readonly kind: 'INSTALLMENT'; readonly sequence: number; readonly total: number }
+  | { readonly kind: 'CHEQUE' }
+  | { readonly kind: 'PAYMENT'; readonly label: string }
+
+/**
+ * یک خطِ پرداخت در گزارشِ مالی — ردیفِ جدولِ «جزئیات پرداخت».
+ *
+ * `stage` توسط `appointmentPaymentLines` از جمعِ تجمعیِ پرداخت‌های هر طرح ساخته
+ * می‌شود، چون جدول `Payment` شماره‌ی مرحله را ذخیره نمی‌کند.
+ */
+export interface PaymentLine {
+  readonly id: string
+  readonly appointmentId: string
+  readonly installmentId: string | null
+  /** نامِ مشتری، برای ستونِ اولِ جدول. */
+  readonly customerName: string
+  /** مرحله‌ای که این پرداخت به آن تعلق دارد — `قسط ۲ از ۴` یا `چک`. */
+  readonly stage: PaymentLineStage
+  /** مبلغِ پرداخت‌شده به ریال؛ برای `REFUND` منفی است. */
+  readonly amount: bigint
+  readonly method: PaymentMethod
+  /** تاریخِ پرداخت — `paidAt`. */
+  readonly paidAt: Date
+}
+
+/** خلاصه‌ی درآمدِ یک بازه — همان چیزی که `financialSummary` برمی‌گرداند. */
+export interface FinancialSummaryReport {
+  readonly gross: bigint
+  readonly discounts: bigint
+  readonly refunds: bigint
+  readonly paymentCount: number
+  readonly refundCount: number
+  readonly byMethod: ReadonlyArray<{
+    readonly method: PaymentMethod
+    readonly amount: bigint
+    readonly count: number
+  }>
+}
+
 /** The module's contract, for `05-conventions.md` §15.5's override registry. */
 export interface PaymentsModule {
   readonly name: 'payments'

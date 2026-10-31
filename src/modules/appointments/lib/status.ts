@@ -30,6 +30,7 @@
  * | `ARRIVED` | `NO_SHOW` | منشی — arrived, but the doctor did not |
  * | `ARRIVED` | `RESULT_NOT_RECORDED` | the sweep — arrival was recorded, the result was not |
  * | `RESULT_NOT_RECORDED` | `ARRIVED` | منشی — the arrival was never recorded |
+ * | `RESULT_NOT_RECORDED` | `COMPLETED` | پزشک یا منشی — the arrival was recorded, the result was not |
  * | `RESULT_NOT_RECORDED` | `NO_SHOW` | منشی, closing the alarm |
  * | `RESULT_NOT_RECORDED` | `CANCELLED` | منشی |
  *
@@ -50,6 +51,15 @@
  * way of saying "this hour is over". A `BOOKED` *booking* that reaches `COMPLETED`
  * is refused by `recordResult`'s own transition guard on the way in — the transition
  * is legal, the row is not a block, and the desk is told to mark the arrival first.
+ *
+ * `RESULT_NOT_RECORDED` does go to `COMPLETED`, and for the same reason the alarm
+ * exists: the sweep flags a row whose arrival was recorded but whose result was not,
+ * and the one true fact the desk then holds — the service was performed — has to be
+ * recordable. Forcing `ARRIVED` first would ask the desk to re-assert an arrival the
+ * row already recorded, and `NO_SHOW`/`CANCELLED` would assert the opposite of what
+ * happened. A `RESULT_NOT_RECORDED` row reached from `BOOKED` (the customer never
+ * came, the sweep promoted and flagged it) resolves as `NO_SHOW`, which is that
+ * row's own path and not this one.
  *
  * `BOOKED` does go straight to `NO_SHOW`: the sweep is hourly and a desk that has
  * watched a customer fail to arrive should not have to wait for the sweep before
@@ -108,6 +118,7 @@ export const APPOINTMENT_TRANSITIONS: Readonly<Record<Status, readonly Status[]>
   RESCHEDULED: [],
   RESULT_NOT_RECORDED: [
     AppointmentStatus.Arrived,
+    AppointmentStatus.Completed,
     AppointmentStatus.NoShow,
     AppointmentStatus.Cancelled,
   ],

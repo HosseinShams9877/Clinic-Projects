@@ -57,6 +57,19 @@ export const ADMIN_DEBTS = {
     remainingLabel: (count: string) => `${count} مرحله`,
     toman: 'تومان',
     close: 'بستن',
+    /** 👈 جدولِ خط‌های پرداخت — تفکیکِ اقساط و چک‌های پرداخت‌شده. */
+    lines: {
+      title: 'خط‌های پرداخت',
+      empty: 'هنوز پرداختی برای این نوبت ثبت نشده است.',
+      cheque: 'چک',
+      columns: {
+        customer: 'بیمار',
+        stage: 'مرحله',
+        amount: 'مبلغ پرداختی',
+        date: 'تاریخ پرداخت',
+        method: 'روش پرداخت',
+      },
+    },
   },
   totalSubSuffix: ' مشتری',
   overdueSubSuffix: ' مورد',

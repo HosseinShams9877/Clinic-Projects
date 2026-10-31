@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma, runInTenantScope } from '@/core/db'
-import { asLocalDate, fromClockParts, toUtcInstant, fromUtcInstant, addLocalMonths, todayLocalDate } from '@/core/localization'
+import { asLocalDate, asLocalTime, fromClockParts, toUtcInstant, fromUtcInstant, addLocalMonths, todayLocalDate } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import type { TenantContext } from '@/core/tenant'
 import { PaymentMethod, PaymentKind, isMember } from '@/core/constants'
@@ -10,6 +10,7 @@ import { ValidationError } from '@/core/types'
 import { recordFollowUp, rescheduleDueDate, readDebtSettings } from '@/modules/debts'
 import type { Panel } from '@/app/_shell/navigation'
 import { resolveStaffPanel } from '@/app/_shell/session'
+import { withOverrideTokens, stripOverrideTokens } from '@/app/_payments/installment-overrides'
 import { moduleFailureMessage } from '../_shared/module-failure'
 
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly message: string }
@@ -69,6 +70,17 @@ function revalidateDebts(): void {
   revalidatePath('/doctor/debts')
   revalidatePath('/admin/installments')
   revalidatePath('/reception/installments')
+  revalidatePath('/doctor/installments')
+}
+
+/**
+ * 👈 صفحه‌ی پروفایلِ مشتری در سه پنل. مسیرها مثل internal-notes-actions هستند:
+ * ادمین `/admin/customer/:id` و منشی/پزشک `/reception|doctor/customers/:id`.
+ */
+function revalidateCustomer(customerId: string): void {
+  revalidatePath(`/admin/customer/${customerId}`)
+  revalidatePath(`/reception/customers/${customerId}`)
+  revalidatePath(`/doctor/customers/${customerId}`)
 }
 
 /**
@@ -239,15 +251,13 @@ export async function recordPaymentWithInstallmentsAction(
     }
 
     const realCustomerId = appointment.customerId
-    const effectiveAmount = amountBigInt > 0n ? amountBigInt : appointment.priceAtBooking
-    const payableAmount = effectiveAmount - discountBigInt
 
     const totalPaidBefore = await tx.payment.aggregate({
       where: { tenantId, appointmentId },
       _sum: { amount: true },
     })
     const paidSoFar = totalPaidBefore._sum.amount ?? 0n
-    
+
     let currentInstallment = null
     if (input.installmentId) {
       currentInstallment = await tx.installment.findUnique({
@@ -260,25 +270,46 @@ export async function recordPaymentWithInstallmentsAction(
       })
     }
 
-    const totalDebt = currentInstallment 
-      ? (currentInstallment.totalPlanAmount ?? currentInstallment.amount) 
+    const totalDebt = currentInstallment
+      ? (currentInstallment.totalPlanAmount ?? currentInstallment.amount)
       : appointment.priceAtBooking
 
-    const intervalMonths = input.installmentInterval 
-      ? Number(input.installmentInterval.replace('_MONTH', '')) 
+    const intervalMonths = input.installmentInterval
+      ? Number(input.installmentInterval.replace('_MONTH', ''))
       : 1
 
     const isInstallmentMode = input.method === 'INSTALLMENT' || input.method === 'CHEQUE' || input.forceInstallment
 
-    const currentInstallmentTotal = currentInstallment 
-      ? (currentInstallment.totalPlanAmount ?? currentInstallment.amount) 
+    const currentInstallmentTotal = currentInstallment
+      ? (currentInstallment.totalPlanAmount ?? currentInstallment.amount)
       : appointment.priceAtBooking
-      
-    const limitCheck = currentInstallment 
-      ? (currentInstallmentTotal - currentInstallment.paidAmount) 
+
+    const limitCheck = currentInstallment
+      ? (currentInstallmentTotal - currentInstallment.paidAmount)
       : (appointment.priceAtBooking - paidSoFar)
 
+    /**
+     * The balance a re-installment redistributes. The dialog pre-fills `amount` with
+     * the remaining figure and the desk may edit it — but when the field is cleared
+     * (or only a discount is sent), the debt left to re-bill is the **outstanding
+     * balance**, not the price the visit was booked at. Falling back to
+     * `priceAtBooking` here re-charged what the customer had already paid — a
+     * «بازتعریف» that turned ۲٬۰۰۰٬۰۰۰ of settled debt back into ۲٬۰۰۰٬۰۰۰ owed —
+     * and it is the same `limitCheck` the desk-payment branch guards with, so the
+     * two paths cannot disagree about what remains.
+     */
+    const outstandingBalance = limitCheck
+    const effectiveAmount = amountBigInt > 0n ? amountBigInt : outstandingBalance
+    const payableAmount = effectiveAmount - discountBigInt
+
     if (!isInstallmentMode && amountBigInt + discountBigInt > limitCheck) {
+      return {
+        ok: false as const,
+        message: 'مبلغ پرداختی نمی‌تواند بیشتر از باقی‌مانده این قسط باشد.',
+      }
+    }
+
+    if (isInstallmentMode && amountBigInt > 0n && amountBigInt + discountBigInt > outstandingBalance) {
       return {
         ok: false as const,
         message: 'مبلغ پرداختی نمی‌تواند بیشتر از باقی‌مانده این قسط باشد.',
@@ -349,7 +380,8 @@ export async function recordPaymentWithInstallmentsAction(
           totalPlanCount: input.installmentCount,
           intervalMonths,
           type: input.method === 'CHEQUE' ? 'CHEQUE' : 'INSTALLMENT',
-          note: input.note || null,
+          // 👈 ویرایش موقتِ مرحله‌ی قبل نباید به طرح جدید نشت کند
+          note: stripOverrideTokens(input.note ?? null),
         }
       })
 
@@ -551,8 +583,6 @@ export async function recordInstallmentPaymentAction(
   const paymentAmount = asAmount(input.amount)
 
   const result = await inTenantScope(panel, async ({ tx, ctx, tenantId, userId }) => {
-    const now = realClock()
-    
     const currentInstallment = await tx.installment.findUnique({
       where: { id: installmentId, tenantId },
       include: { appointment: { select: { customerId: true } } }
@@ -574,6 +604,9 @@ export async function recordInstallmentPaymentAction(
       return { ok: false, message: 'مبلغ پرداختی نمی‌تواند بیشتر از باقی‌مانده این قسط باشد.' }
     }
 
+    // 👈 تاریخ و ساعت دریافت از فرم — وقتی فرم چیزی نگفته، همان لحظه ثبت می‌خوره
+    const paidAt = await asReceiveInstant(tx, tenantId, input.receiveDate, input.receiveTime)
+
     await tx.payment.create({
       data: {
         tenantId,
@@ -586,7 +619,7 @@ export async function recordInstallmentPaymentAction(
         discountAmount: 0n,
         discountReason: null,
         note: `پرداخت بابت قسط ${currentInstallment.sequence}`,
-        paidAt: now,
+        paidAt,
         installmentId: currentInstallment.id,
       }
     })
@@ -631,29 +664,33 @@ export async function updateInstallmentAction(
 ): Promise<ActionResult> {
   const result = await inTenantScope(panel, async ({ tx, tenantId }) => {
     const amountBigInt = asAmount(input.newAmount)
-    
+
     const currentInst = await tx.installment.findUnique({
-      where: { id: installmentId, tenantId }
+      where: { id: installmentId, tenantId },
+      // 👈 برای revalidate کردن صفحه‌ی مشتری: ویرایشِ موقت باید روی پروفایل هم
+      // فوراً دیده شود، نه فقط روی جدول‌های بدهی/قسط
+      select: {
+        id: true,
+        note: true,
+        appointment: { select: { customerId: true } },
+      },
     })
     if (!currentInst) throw new Error('Installment not found')
 
-    // 👈 کد قبلی OVERRIDE رو (اگر بود) پاک میکنیم و کد جدید رو جایگزین میکنیم
-    const oldNote = currentInst.note || ''
-    const cleanNote = oldNote.replace(/OVERRIDE:\d{4}-\d{2}-\d{2}/g, '').trim()
-    const overrideCode = `OVERRIDE:${input.newDueDate}`
-    const newNote = `${overrideCode} ${cleanNote}`.trim()
-
+    // 👈 ویرایش فقط برای همین مرحله است: تاریخ و مبلغ موقت در note ذخیره می‌شوند
+    // و ستون‌های `dueAt`/`amount` دست‌نخورده باقی می‌مانند. وقتی قسط پرداخت شد
+    // و سیستم به مرحله‌ی بعد رفت، سررسید و مبلغ استاندارد دوباره استفاده می‌شوند.
     await tx.installment.update({
       where: { id: installmentId, tenantId },
-      data: { 
-        amount: amountBigInt,
-        note: newNote // تاریخ جدید در note ذخیره میشه
+      data: {
+        note: withOverrideTokens(currentInst.note, input.newDueDate, amountBigInt)
       }
     })
-    return SUCCESS
+    return { succeeded: true as const, customerId: currentInst.appointment.customerId }
   })
   if (!('succeeded' in result)) return result
   revalidateDebts()
+  if (result.customerId) revalidateCustomer(result.customerId)
   return { ok: true }
 }
 
@@ -720,6 +757,27 @@ function asAmount(text: string | null): bigint {
 async function asInstant(tx: ScopeArgs['tx'], tenantId: string, localDate: string): Promise<Date> {
   const settings = await readDebtSettings(tx, tenantId)
   return toUtcInstant(asLocalDate(localDate), MIDNIGHT, settings.utcOffsetMinutes)
+}
+
+/**
+ * 👈 لحظه‌ای که فرم پرداخت قسط برای دریافت ثبت کرده.
+ *
+ * فرم همیشه یک تاریخ و ساعت می‌فرستد؛ وقتی مقدارها نامعتبر بودند (مثلاً قدیمی‌ترین
+ * مسیرها که چیزی نمی‌فرستادند) به ساعت همین لحظه برمی‌گردد تا هیچ پرداختی بدون
+ * مهر زمان ثبت نشود.
+ */
+async function asReceiveInstant(
+  tx: ScopeArgs['tx'],
+  tenantId: string,
+  receiveDate: string,
+  receiveTime: string,
+): Promise<Date> {
+  try {
+    const settings = await readDebtSettings(tx, tenantId)
+    return toUtcInstant(asLocalDate(receiveDate), asLocalTime(receiveTime), settings.utcOffsetMinutes)
+  } catch {
+    return realClock()
+  }
 }
 
 function normaliseNote(note: string | null | undefined): string | null {

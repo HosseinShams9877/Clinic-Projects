@@ -8,7 +8,9 @@ import { Icon } from '@/core/components/icons'
 import type { IconName } from '@/core/components/icons'
 
 import { InstallmentPaymentDialog } from '@/app/admin/installments/_components/InstallmentPaymentDialog'
+import { PaymentDialog } from '@/app/admin/debts/_components/PaymentDialog'
 import { EditInstallmentDialog } from '@/app/_payments/EditInstallmentDialog'
+import { overrideAmountInNote } from '@/app/_payments/installment-overrides'
 
 const PAYMENT_KIND_LABELS: Record<string, string> = {
   PAYMENT: 'پرداخت',
@@ -68,6 +70,7 @@ export type OpenDebtRow = {
 
 interface PaymentsTabProps {
   customerId: string
+  customerName: string
   totalAmount: bigint
   totalPaid: bigint
   panel: 'admin' | 'reception' | 'doctor'
@@ -84,6 +87,7 @@ interface PaymentsTabProps {
 
 export function PaymentsTab({
   customerId,
+  customerName,
   totalAmount,
   totalPaid,
   panel,
@@ -103,6 +107,14 @@ export function PaymentsTab({
   const [isHistoryOpen, setIsHistoryOpen] = useState(true)
 
   const [paymentDialogData, setPaymentDialogData] = useState<{ isOpen: boolean; installmentId: string; amount: bigint; customerName: string; maxTotal: bigint } | null>(null)
+  // 👈 پرداختِ بدهیِ عادی (غیرقسطی) همین‌جا روی صفحه — بدون هدایت به صفحه‌ی بدهی‌ها
+  const [debtPayment, setDebtPayment] = useState<{
+    isOpen: boolean
+    appointmentId: string
+    amount: bigint
+    totalAmount: bigint
+    remaining: bigint
+  } | null>(null)
   const [tempAmounts, setTempAmounts] = useState<Record<string, bigint>>({})
 
   const activeInstallments = installments.filter(
@@ -214,7 +226,15 @@ export function PaymentsTab({
                         const planAmount = inst.totalPlanAmount ?? inst.amount
                         const remaining = planAmount - inst.paidAmount
                         const currentTempAmount = tempAmounts[inst.id]
-                        const perInstallmentAmount = currentTempAmount !== undefined ? currentTempAmount : inst.amount
+                        // 👈 ویرایش موقتِ مبلغ: فقط تا زمانی که این قسط پرداخت نشده
+                        const overrideAmount =
+                          inst.paidAmount === 0n ? overrideAmountInNote(inst.note) : null
+                        const perInstallmentAmount =
+                          currentTempAmount !== undefined
+                            ? currentTempAmount
+                            : overrideAmount !== null
+                              ? overrideAmount
+                              : inst.amount
                         const typeLabel = inst.type === 'CHEQUE' ? 'چک' : 'قسط'
 
                         return (
@@ -229,10 +249,12 @@ export function PaymentsTab({
                             <td className="whitespace-nowrap px-3 py-2.5 text-center sm:px-4">
                               {panel !== 'doctor' ? (
                                 <div className="flex items-center justify-center gap-1.5">
-                                  <button onClick={() => setPaymentDialogData({ isOpen: true, installmentId: inst.id, amount: perInstallmentAmount, customerName: 'مشتری', maxTotal: totalRemaining })} className="inline-flex items-center gap-1 rounded-md bg-[#ba6a73] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity shadow-sm">ثبت پرداخت</button>
-                                  <EditInstallmentDialog installmentId={inst.id} appointmentId={inst.appointmentId} customerId={customerId} customerName="مشتری" remainingAmount={remaining} sequence={inst.sequence} currentDueDate={dateToLocalDate(inst.dueAt)} currentAmount={perInstallmentAmount} panel={panel} onTempAmountChange={handleTempAmountChange} />
+                                  <button onClick={() => setPaymentDialogData({ isOpen: true, installmentId: inst.id, amount: perInstallmentAmount, customerName, maxTotal: totalRemaining })} className="inline-flex items-center gap-1 rounded-md bg-[#ba6a73] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity shadow-sm">ثبت پرداخت</button>
+                                  <EditInstallmentDialog installmentId={inst.id} appointmentId={inst.appointmentId} customerId={customerId} customerName={customerName} remainingAmount={remaining} sequence={inst.sequence} currentDueDate={dateToLocalDate(inst.dueAt)} currentAmount={perInstallmentAmount} panel={panel} onTempAmountChange={handleTempAmountChange} />
                                 </div>
-                              ) : <span className="text-xs text-ink-3">—</span>}
+                              ) : (
+                                <span className="text-xs text-ink-3">—</span>
+                              )}
                             </td>
                           </tr>
                         )
@@ -322,7 +344,7 @@ export function PaymentsTab({
                         <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-ok sm:px-4">{formatMoney(debt.paidAmount)}</td>
                         <td className="whitespace-nowrap px-3 py-2.5 font-semibold tabular-nums text-danger sm:px-4">{formatMoney(remaining)}</td>
                         <td className="whitespace-nowrap px-3 py-2.5 text-center sm:px-4">
-                          {panel !== 'doctor' && (
+                          {panel !== 'doctor' ? (
                             <button
                               onClick={() => {
                                 if (debt.installmentId) {
@@ -330,18 +352,25 @@ export function PaymentsTab({
                                     isOpen: true,
                                     installmentId: debt.installmentId,
                                     amount: remaining,
-                                    customerName: 'مشتری',
+                                    customerName,
                                     maxTotal: totalRemaining,
                                   })
                                 } else {
-                                  // برای بدهی عادی به دیالوگ پرداخت مانده حساب هدایت میکنیم
-                                  router.push(`/admin/debts`) 
+                                  setDebtPayment({
+                                    isOpen: true,
+                                    appointmentId: debt.appointmentId,
+                                    amount: remaining,
+                                    totalAmount: debt.amount,
+                                    remaining,
+                                  })
                                 }
                               }}
                               className="inline-flex items-center gap-1 rounded-md bg-[#ba6a73] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity shadow-sm"
                             >
                               ثبت پرداخت
                             </button>
+                          ) : (
+                            <span className="text-xs text-ink-3">—</span>
                           )}
                         </td>
                       </tr>
@@ -366,7 +395,27 @@ export function PaymentsTab({
           panel={panel} 
           onSuccess={() => {
             setPaymentDialogData(null)
-            router.refresh() 
+            router.refresh()
+          }}
+        />
+      )}
+
+      {/* 👈 دیالوگ پرداختِ بدهیِ عادی (غیرقسطی) — روی همان صفحه‌ی پروفایل */}
+      {debtPayment?.isOpen && (
+        <PaymentDialog
+          isOpen={true}
+          onClose={() => setDebtPayment(null)}
+          customerId={customerId}
+          appointmentId={debtPayment.appointmentId}
+          customerName={customerName}
+          amountDue={debtPayment.amount}
+          totalAmountDue={debtPayment.totalAmount}
+          remainingAmount={debtPayment.remaining}
+          panel={panel}
+          mode="payment"
+          onSuccess={() => {
+            setDebtPayment(null)
+            router.refresh()
           }}
         />
       )}

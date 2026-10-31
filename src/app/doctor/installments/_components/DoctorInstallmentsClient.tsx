@@ -1,18 +1,25 @@
 'use client'
 
-import { formatDate, formatMoney, dateToLocalDate, toPersianDigits } from '@/core/localization'
+import { formatDate, formatMoney, dateToLocalDate, toPersianDigits, fromClockParts } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 import { ADMIN_INSTALLMENTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
+import { effectiveAmount, effectiveDueInstant, legacyTotalInNote } from '@/app/_payments/installment-overrides'
+
+// 👈 زمان نیمه‌شب به عنوان LocalTime — همان مقداری که صفحه‌ی ادمین/منشی استفاده می‌کند
+const MIDNIGHT = fromClockParts({ hour: 0, minute: 0 })
 
 interface InstallmentRow {
   readonly id: string
   readonly sequence: number
   readonly amount: bigint
+  readonly paidAmount: bigint
   readonly dueAt: Date
   readonly note: string | null
+  readonly type: string
+  readonly totalPlanAmount: bigint | null
+  readonly totalPlanCount: number | null
   readonly appointmentId: string
-  readonly payments: readonly { readonly amount: bigint }[]
   readonly appointment: {
     readonly customer: {
       readonly firstName: string
@@ -62,15 +69,20 @@ export function DoctorInstallmentsClient({ rows }: { rows: readonly InstallmentR
               const customer = row.appointment.customer
               const serviceName = row.appointment.service?.name ?? '—'
               
-              const due = new Date(row.dueAt)
+              // 👈 سررسید و مبلغِ مؤثر — دقیقاً مثل جدولِ اقساطِ ادمین/منشی: تاریخ و
+              // مبلغِ موقتِ این مرحله فقط تا زمانی که چیزی پرداخت نشده اعمال می‌شود.
+              const due = effectiveDueInstant(row.note, row.paidAmount, new Date(row.dueAt), MIDNIGHT)
               const today = realClock()
               const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24))
-              
-              const parts = row.note?.split(':') || []
-              const totalInstallments = Number(parts[1] || 1)
-              const totalAmount = BigInt(parts[3] || row.amount)
 
-              const perInstallmentAmount = row.amount
+              // 👈 طرحِ کل و تعداد مرحله‌ها: اول فیلدهای ساختارافته، بعد نشانه‌ی قدیمیِ
+              // TOTAL: که باید از noteی پاک‌شده از توکن‌های ویرایشِ موقت خوانده شود —
+              // split(':') روی noteی دارای OVERRIDE:… عددِ مرحله را NaN می‌کرد.
+              const legacy = legacyTotalInNote(row.note)
+              const totalInstallments = row.totalPlanCount ?? legacy?.count ?? 1
+              const totalAmount = row.totalPlanAmount ?? legacy?.amount ?? row.amount
+
+              const perInstallmentAmount = effectiveAmount(row.note, row.paidAmount, row.amount)
               const paidSoFar = BigInt(row.sequence - 1) * perInstallmentAmount
               const progressPercent = totalAmount > 0n ? Math.min(100, Number((paidSoFar * 100n) / totalAmount)) : 0
 

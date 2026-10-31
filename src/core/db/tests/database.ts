@@ -1,5 +1,5 @@
 /**
- * A database for one test file, built from the committed migrations.
+ * A database for one test file, built from the schema.
  *
  * `10-testing-strategy.md` §2 rule 4: "tests run against the same engine as
  * production." They cannot — production is PostgreSQL, and the isolation suite is
@@ -10,14 +10,19 @@
  * intersected wrongly looks correct to a mock and returns the wrong rows to a
  * database.
  *
- * ## Why the migrations are the input
+ * ## Why the schema is the input
  *
- * The schema could be created with `prisma db push`, but that derives the DDL
- * from the schema at run time. Reading every committed `migration.sql` under
- * `prisma/migrations/` instead means the file a developer applies — and the file
- * production applies — is the file the suite exercised
- * (`setup/database-migration.md` §2). A migration SQLite cannot accept is a
- * migration that fails a real test, not a check that validated a schema.
+ * The suite once read every committed `migration.sql` and applied it to the file,
+ * on the principle that the file a developer applies is the file the suite
+ * exercises. That stopped being possible when the schema was switched between
+ * providers per environment (`scripts/db-provider.mjs`): `prisma/migrations` is
+ * locked to `postgresql` and its `ALTER TABLE … ADD CONSTRAINT` form is not
+ * SQLite, and `prisma/migrations-sqlite` drifted behind `schema.prisma` as soon
+ * as features landed through `db push`. The one file that is single-source-of-
+ * truth for both engines, and the one the developer's SQLite database is built
+ * from, is `prisma/schema.prisma` — so the suite applies it with the same `db
+ * push` command, and a schema the CLI cannot apply to SQLite is a schema a test
+ * fails on, which is the same property the migrations were there to give.
  *
  * ## Why the file is per test file
  *
@@ -30,15 +35,16 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { PrismaClient } from '@prisma/client'
 
 import { createPrismaClient, createUnscopedClient } from '../index'
 
-/** Where the committed migrations live, relative to the directory vitest runs in. */
-const MIGRATIONS = join('prisma', 'migrations')
+/** The Prisma CLI, resolved from the directory vitest runs in. */
+const PRISMA_CLI = join('node_modules', 'prisma', 'build', 'index.js')
 
 /**
  * The environment a boot resolves, for a test file that opens a scope.
@@ -67,52 +73,55 @@ export interface TestDatabase {
 }
 
 /**
- * Creates a database with every committed migration applied, and the two clients
- * a test needs: the scoped one the product uses, and the unscoped one that writes
- * the rows the scope should keep out — which is how a test proves it kept them
- * out.
+ * Creates a database with the schema applied, and the two clients a test needs:
+ * the scoped one the product uses, and the unscoped one that writes the rows the
+ * scope should keep out — which is how a test proves it kept them out.
  */
 export async function createTestDatabase(): Promise<TestDatabase> {
-  const url = `file:./prisma/.test-${randomUUID()}.db`
+  // Prisma 6 (no driver adapter) resolves a relative `file:` URL against the
+  // schema directory, not the working directory: `file:./x.db` opens
+  // `<cwd>/prisma/x.db`. The URL is therefore written as if relative to `prisma/`
+  // — and the delete below removes it from that same place. An absolute URL is
+  // not an option here: the repo path contains a space, and SQLite refuses
+  // percent-encoded absolute `file:` URLs with `SQLITE_CANTOPEN`.
+  const url = `file:./.test-${randomUUID()}.db`
   mkdirSync(join(process.cwd(), 'prisma'), { recursive: true })
 
-  const unscoped = createUnscopedClient(url)
-  for (const statement of migrationStatements()) {
-    await unscoped.$executeRawUnsafe(statement)
-  }
+  // `db push` has no `--url` flag in this Prisma version; the datasource reads
+  // `DATABASE_URL`/`DIRECT_URL`, and process variables are not overridden by the
+  // `.env` the CLI loads, so an env scoped to the child process is the override.
+  execFileSync(process.execPath, [PRISMA_CLI, 'db', 'push', '--skip-generate'], {
+    cwd: process.cwd(),
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, DATABASE_URL: url, DIRECT_URL: url },
+  })
 
+  const unscoped = createUnscopedClient(url)
   return { url, client: createPrismaClient(url), unscoped }
 }
 
-/** Deletes the file, after the connections that used it have gone. */
+/**
+ * Deletes the file, after the connections that used it have gone.
+ *
+ * `$disconnect()` is awaited, but on Windows the query engine releases its file
+ * handle asynchronously, and the first `rmSync` can race it and throw `EPERM`.
+ * The handle is always released within a moment, so the delete retries with a
+ * short backoff — and a file that still lingers is not a test failure: the
+ * databases are gitignored `prisma/.test-*.db` and the next run would have
+ * deleted it, so the only cost of leaving one is a little disk.
+ */
 export async function deleteTestDatabase(database: TestDatabase): Promise<void> {
   await database.client.$disconnect()
   await database.unscoped.$disconnect()
-  rmSync(join(process.cwd(), database.url.slice('file:'.length)), { force: true })
-}
-
-/**
- * Every committed migration's SQL, as executable statements.
- *
- * Comments are stripped before the split rather than after, so a semicolon inside
- * a comment cannot become a statement boundary. The committed migrations hold no
- * string literal containing a semicolon — no trigger, no function body — and that
- * is the assumption the split makes; a migration that breaks it is a migration
- * this helper would misapply, and the test that catches it is the one that reads
- * the schema back.
- */
-function migrationStatements(): readonly string[] {
-  const files = readdirSync(join(process.cwd(), MIGRATIONS))
-    .filter((name) => /^\d+_/.test(name))
-    .sort()
-
-  return files
-    .map((name) => readFileSync(join(process.cwd(), MIGRATIONS, name, 'migration.sql'), 'utf8'))
-    .join('\n')
-    .split('\n')
-    .filter((line) => !line.trimStart().startsWith('--'))
-    .join('\n')
-    .split(';')
-    .map((statement) => statement.trim())
-    .filter((statement) => statement !== '')
+  // Relative to the schema directory (`prisma/`), see createTestDatabase.
+  const file = join(process.cwd(), 'prisma', database.url.slice('file:'.length))
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      rmSync(file, { force: true })
+      return
+    } catch {
+      if (attempt === 4) return // see above: a lingering file is not a failure.
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  }
 }

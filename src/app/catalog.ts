@@ -226,15 +226,6 @@ export const BOOKING_POPUP = {
   duration: 'مدت زمان این خدمت',
 } as const satisfies Record<string, unknown>
 
-/**
- * The slot block popup's own copy — «بستن یک ساعت» is a booking the desk makes
- * against the calendar itself, and its sentence names the hour it closes.
- */
-export const BLOCK_HOURS_POPUP = {
-  title: 'بستن یک ساعت',
-  lead: 'ساعت انتخاب شده برای پزشک بسته می‌شود و دیگر قابل رزرو نیست.',
-} as const satisfies Record<string, unknown>
-
 export const CUSTOMERS_PAGE = {
   reception: {
     title: 'مشتریان',
@@ -955,6 +946,18 @@ export const ADMIN_FINANCIAL_REPORTS = {
     activeDebtors: 'بدهکاران فعال',
     followedToday: 'پیگیری‌شده امروز',
     awaitingResult: 'در انتظار نتیجه',
+  },
+  /** 👈 نوارِ خلاصه‌ی درآمدِ ماهِ جاری — `financialSummary` روی بازه‌ی ماهِ جلالی. */
+  income: {
+    title: 'درآمد این ماه',
+    gross: 'درآمد ناخالص',
+    discounts: 'تخفیف‌ها',
+    refunds: 'برگشت‌ها',
+    net: 'درآمد خالص',
+    paymentCountSuffix: ' تراکنش',
+    toman: 'تومان',
+    byMethod: 'به تفکیک روش پرداخت',
+    empty: 'این ماه هنوز پرداختی ثبت نشده است.',
   },
   units: { person: 'نفر' },
   searchLabel: 'جستجو',

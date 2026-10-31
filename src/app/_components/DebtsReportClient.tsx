@@ -5,6 +5,8 @@ import { formatMoney, formatNumber, toPersianDigits } from '@/core/localization'
 import { ADMIN_FINANCIAL_REPORTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
 import type { DebtRow } from '@/modules/debts'
+import { PAYMENT_METHOD_LABELS } from '@/modules/payments/catalog'
+import type { FinancialSummaryReport, PaymentLine } from '@/modules/payments'
 import { DebtDetailsDialog } from '@/app/_components/DebtDetailsDialog'
 
 export function DebtsReportClient({
@@ -14,17 +16,23 @@ export function DebtsReportClient({
   activeDebtorsCount,
   followedTodayCount,
   awaitingResultCount,
+  summary,
+  paymentLines,
   basePath,
   q,
   doctorId,
   bucket,
 }: {
-  rows: DebtRow[]
-  uniqueDoctors: { id: string, name: string }[]
+  rows: readonly DebtRow[]
+  uniqueDoctors: readonly { id: string, name: string }[]
   weekDueCount: number
   activeDebtorsCount: number
   followedTodayCount: number
   awaitingResultCount: number
+  /** 👈 خلاصه‌ی درآمدِ ماهِ جاری — `financialSummary` روی بازه‌ی ماهِ جلالی. */
+  summary: FinancialSummaryReport
+  /** 👈 خط‌های پرداخت — برای دیالوگِ «جزئیات پرداخت». */
+  paymentLines: readonly PaymentLine[]
   basePath: string
   q: string
   doctorId: string
@@ -84,6 +92,53 @@ export function DebtsReportClient({
             <span className="mt-1 text-lg font-bold text-ink tabular-nums">{formatNumber(awaitingResultCount)}</span>
           </span>
         </div>
+      </div>
+
+      {/* 👈 نوارِ خلاصه‌ی درآمدِ ماهِ جاری — خالص = ناخالص − تخفیف + برگشت‌ها */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-line/50 bg-surface p-5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 font-bold text-ink">
+            <Icon name="money" size="card" />
+            {ADMIN_FINANCIAL_REPORTS.income.title}
+          </div>
+          <span className="text-xs text-ink-3">
+            {toPersianDigits(summary.paymentCount)}{ADMIN_FINANCIAL_REPORTS.income.paymentCountSuffix}
+          </span>
+        </div>
+        {summary.paymentCount === 0 && summary.refundCount === 0 ? (
+          <p className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.empty}</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
+              <div className="flex flex-col gap-1 rounded-xl bg-ok-bg/10 px-4 py-3">
+                <span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.gross}</span>
+                <span className="text-base font-bold text-ok tabular-nums">{formatMoney(summary.gross)} {ADMIN_FINANCIAL_REPORTS.income.toman}</span>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-warn-bg/10 px-4 py-3">
+                <span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.discounts}</span>
+                <span className="text-base font-bold text-warn tabular-nums">{formatMoney(summary.discounts)} {ADMIN_FINANCIAL_REPORTS.income.toman}</span>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-danger-bg/10 px-4 py-3">
+                <span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.refunds}</span>
+                <span className="text-base font-bold text-danger tabular-nums">{formatMoney(summary.refunds)} {ADMIN_FINANCIAL_REPORTS.income.toman}</span>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-brand-50 px-4 py-3">
+                <span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.net}</span>
+                <span className="text-base font-bold text-brand-700 tabular-nums">{formatMoney(summary.gross - summary.discounts + summary.refunds)} {ADMIN_FINANCIAL_REPORTS.income.toman}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.byMethod}:</span>
+              {summary.byMethod.map((row) => (
+                <span key={row.method} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-3 py-1 text-xs font-semibold text-ink-2">
+                  {PAYMENT_METHOD_LABELS[row.method] ?? row.method}
+                  <span className="tabular-nums text-ink-3">{formatMoney(row.amount)}</span>
+                  <span className="text-ink-3">({toPersianDigits(row.count)})</span>
+                </span>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* فرم فیلترها */}
@@ -205,10 +260,11 @@ export function DebtsReportClient({
         </div>
       </section>
 
-      <DebtDetailsDialog 
-        isOpen={!!selectedRow} 
-        onClose={() => setSelectedRow(null)} 
-        row={selectedRow} 
+      <DebtDetailsDialog
+        isOpen={!!selectedRow}
+        onClose={() => setSelectedRow(null)}
+        row={selectedRow}
+        paymentLines={paymentLines}
       />
     </div>
   )

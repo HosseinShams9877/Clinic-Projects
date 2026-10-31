@@ -4,11 +4,18 @@ import { requireStaffPanel } from '@/app/_shell/session'
 import { listInstallments } from '@/modules/payments'
 import { ADMIN_INSTALLMENTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
-import { formatMoney, formatNumber } from '@/core/localization'
+import { formatMoney, formatNumber, fromClockParts } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
+import { effectiveAmount, effectiveDueInstant } from '@/app/_payments/installment-overrides'
 import { DoctorInstallmentsClient } from './_components/DoctorInstallmentsClient'
 
 export const metadata: Metadata = { title: ADMIN_INSTALLMENTS.title }
+
+// 👈 مثل پنل ادمین و منشی: تا دیتا کش نشه و ویرایشِ موقت (OVERRIDE) همیشه تازه باشه
+export const dynamic = 'force-dynamic'
+
+// 👈 زمان نیمه‌شب به عنوان LocalTime — همان مقداری که جدول سمت کلاینت استفاده می‌کند
+const MIDNIGHT = fromClockParts({ hour: 0, minute: 0 })
 
 export default async function DoctorInstallmentsPage({ 
   searchParams 
@@ -54,13 +61,16 @@ export default async function DoctorInstallmentsPage({
       }
     }
 
+    // 👈 نوع قسط از فیلد `type` خوانده می‌شود، نه از `note`: note ممکن است توکنِ
+    // ویرایشِ موقت (OVERRIDE:...) را در خود داشته باشد و دیگر فقط "CHEQUE" نیست.
     if (type !== 'ALL') {
-      if (type === 'INSTALLMENT' && row.note === 'CHEQUE') return false
-      if (type === 'CHEQUE' && row.note !== 'CHEQUE') return false
+      if (type === 'INSTALLMENT' && row.type === 'CHEQUE') return false
+      if (type === 'CHEQUE' && row.type !== 'CHEQUE') return false
     }
 
     if (bucket) {
-      const dueTime = new Date(row.dueAt).getTime()
+      // 👈 سررسیدِ مؤثر: تاریخ موقت وقتی قسط هنوز پرداخت نشده — مثل جدول
+      const dueTime = effectiveDueInstant(row.note, row.paidAmount, new Date(row.dueAt), MIDNIGHT).getTime()
       const diffDays = Math.ceil((dueTime - todayTime) / (1000 * 3600 * 24))
       
       if (bucket === 'today' && diffDays !== 0) return false
@@ -72,9 +82,14 @@ export default async function DoctorInstallmentsPage({
     return true
   })
 
-  const totalAmount = rows.reduce((sum, r) => sum + (r.amount - r.paidAmount), 0n)
-  const todayCount = rows.filter(r => Math.ceil((new Date(r.dueAt).getTime() - todayTime) / (1000 * 3600 * 24)) === 0).length
-  const tomorrowCount = rows.filter(r => Math.ceil((new Date(r.dueAt).getTime() - todayTime) / (1000 * 3600 * 24)) === 1).length
+  // 👈 دقیقاً مثل ادمین و منشی: فقط مبلغ باقی‌مانده رو جمع می‌زنیم، با احترام به مبلغِ موقت
+  const totalAmount = rows.reduce(
+    (sum, r) => sum + (effectiveAmount(r.note, r.paidAmount, r.amount) - r.paidAmount),
+    0n,
+  )
+  // 👈 شمارش‌ها هم از سررسیدِ مؤثر استفاده می‌کنند تا با جدول و با دسته‌ها یکی باشند
+  const todayCount = rows.filter(r => Math.ceil((effectiveDueInstant(r.note, r.paidAmount, new Date(r.dueAt), MIDNIGHT).getTime() - todayTime) / (1000 * 3600 * 24)) === 0).length
+  const tomorrowCount = rows.filter(r => Math.ceil((effectiveDueInstant(r.note, r.paidAmount, new Date(r.dueAt), MIDNIGHT).getTime() - todayTime) / (1000 * 3600 * 24)) === 1).length
 
   return (
     <div className="flex flex-col gap-6">

@@ -43,7 +43,9 @@ const TENANT_ID: TenantId = asTenantId('tenant-gate')
 const CLINIC_ID = asClinicId('clinic-gate')
 /** The manager who writes the draft — and who may not approve it. */
 const AUTHOR_ID: UserId = asUserId('staff-gate-author')
-/** A second manager, who is the gate's other pair of eyes. */
+/** The second manager — kept in the dataset because the gate's club of two is the
+ *  shape the two-step approval still assumes, even after ADR-0026 let an author
+ *  be their own approver. */
 const APPROVER_ID: UserId = asUserId('staff-gate-approver')
 const CUSTOMER_ID = 'customer-gate'
 
@@ -170,7 +172,7 @@ beforeEach(async () => {
   })
 })
 
-/** The draft's author, who may create and submit but not approve. */
+/** The draft's author, who may create, submit and — since ADR-0026 — approve. */
 function authorContext(): TenantContext {
   return Object.freeze({
     userId: AUTHOR_ID,
@@ -223,24 +225,18 @@ describe('DoD 2 — no campaign dispatches before approval', () => {
     expect(await ledgerCount()).toBe(0)
   })
 
-  it('sends through the real path — submit, a second person approves, activate', async () => {
+  it('sends through the real path — submit, approve, activate', async () => {
     await submitCampaignForApproval({
       tx: unscoped as never,
       ctx: authorContext(),
       campaignId: CAMPAIGN_ID,
     })
-    await expect(
-      approveCampaign({
-        tx: unscoped as never,
-        ctx: authorContext(),
-        campaignId: CAMPAIGN_ID,
-        now: NOW,
-      }),
-    ).rejects.toThrow()
-
+    // ADR-0026: a manager may approve their own campaign. The check this once asserted
+    // was removed by the decision, so the author is the gate's approver here — the
+    // two-step shape (submit, then approve) is what remains of the separation.
     await approveCampaign({
       tx: unscoped as never,
-      ctx: approverContext(),
+      ctx: authorContext(),
       campaignId: CAMPAIGN_ID,
       now: NOW,
     })

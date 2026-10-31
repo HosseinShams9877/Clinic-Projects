@@ -153,24 +153,28 @@ export async function recordCampaignSuppression(args: {
 
 /**
  * Whether this campaign already recorded a send for this customer — the dispatch's
- * idempotency read, across every status.
+ * idempotency read, across every status, scoped to one period.
  *
  * A suppressed row is still a decision that was made, and a repeated run that
  * re-evaluated it would write a second row for the same refusal. A recurring campaign
- * sends again next period, and next period this read is answered by the next period's
- * row — the key is `(customer, campaign)`, not `(customer, campaign, period)`, which is
- * what makes "does not re-send within its period" a ledger fact and not a clock guess.
+ * sends again next period: `since` is the period's start as the dispatch read it (the
+ * campaign's own `scheduledAt`, before the advance), so this period's row answers this
+ * period's run and next period's run is answered by nothing — the key is
+ * `(customer, campaign, period)`, which is what makes "does not re-send within its
+ * period" a ledger fact and not a clock guess.
  */
 export async function campaignSendRecordedFor(args: {
   readonly tx: TransactionClient
   readonly tenantId: string
   readonly customerId: string
   readonly campaignId: string
+  readonly since?: Date | null
 }): Promise<boolean> {
   return campaignSendRecorded(
     args.tx,
     args.tenantId,
     args.customerId,
     args.campaignId,
+    args.since,
   )
 }

@@ -54,6 +54,12 @@ export const PAYMENT_KIND_LABELS: Readonly<Record<PaymentKind, string>> = {
   REFUND: 'بازگشت',
 }
 
+/**
+ * The name a payment line carries where its appointment has no customer behind it —
+ * the drill-down table renders a name, and «مشتری» is the honest stand-in.
+ */
+export const GENERIC_CUSTOMER_NAME = 'مشتری'
+
 /** §4.4's three policies, as the settings screen offers and the refund reads them. */
 export const DEPOSIT_REFUND_POLICY_LABELS: Readonly<Record<DepositRefundPolicy, string>> = {
   FULL: 'کامل',

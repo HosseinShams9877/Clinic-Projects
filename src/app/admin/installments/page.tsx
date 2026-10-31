@@ -4,11 +4,19 @@ import { requireStaffPanel } from '@/app/_shell/session'
 import { listInstallments } from '@/modules/payments'
 import { ADMIN_INSTALLMENTS } from '@/app/catalog'
 import { InstallmentsTable } from '@/app/_payments/installments-table'
+import { effectiveAmount, effectiveDueInstant } from '@/app/_payments/installment-overrides'
+import { fromClockParts } from '@/core/localization'
 import { Icon } from '@/core/components/icons'
 import { formatMoney, formatNumber } from '@/core/localization'
 import { realClock } from '@/core/lib/clock'
 
 export const metadata: Metadata = { title: ADMIN_INSTALLMENTS.title }
+
+// 👈 مثل پنل منشی: تا دیتا کش نشه و مبالگِ موقت (OVERRIDE) همیشه تازه باشن
+export const dynamic = 'force-dynamic'
+
+// 👈 زمان نیمه‌شب به عنوان LocalTime — همان مقداری که جدول سمت کلاینت استفاده می‌کند
+const MIDNIGHT = fromClockParts({ hour: 0, minute: 0 })
 
 export default async function AdminInstallmentsPage({ 
   searchParams 
@@ -44,15 +52,18 @@ export default async function AdminInstallmentsPage({
       return false
     }
 
+    // 👈 نوع قسط از فیلد `type` خوانده می‌شود، نه از `note`: note ممکن است توکنِ
+    // ویرایشِ موقت (OVERRIDE:...) را در خود داشته باشد و دیگر فقط "CHEQUE" نیست.
     if (type !== 'ALL') {
-      if (type === 'INSTALLMENT' && row.note === 'CHEQUE') return false
-      if (type === 'CHEQUE' && row.note !== 'CHEQUE') return false
+      if (type === 'INSTALLMENT' && row.type === 'CHEQUE') return false
+      if (type === 'CHEQUE' && row.type !== 'CHEQUE') return false
     }
 
     if (bucket) {
-      const dueTime = new Date(row.dueAt).getTime()
+      // 👈 سررسیدِ مؤثر: تاریخ موقت وقتی قسط هنوز پرداخت نشده — مثل جدول
+      const dueTime = effectiveDueInstant(row.note, row.paidAmount, new Date(row.dueAt), MIDNIGHT).getTime()
       const diffDays = Math.ceil((dueTime - todayTime) / (1000 * 3600 * 24))
-      
+
       if (bucket === 'today' && diffDays !== 0) return false
       if (bucket === 'tomorrow' && diffDays !== 1) return false
       if (bucket === 'this_week' && (diffDays < 0 || diffDays > 7)) return false
@@ -62,10 +73,14 @@ export default async function AdminInstallmentsPage({
     return true
   })
 
-  // 👈 فقط مبلغ باقی‌مانده هر قسط رو جمع می‌زنیم
-  const totalAmount = rows.reduce((sum, r) => sum + (r.amount - r.paidAmount), 0n)
-  const todayCount = rows.filter(r => Math.ceil((new Date(r.dueAt).getTime() - todayTime) / (1000 * 3600 * 24)) === 0).length
-  const tomorrowCount = rows.filter(r => Math.ceil((new Date(r.dueAt).getTime() - todayTime) / (1000 * 3600 * 24)) === 1).length
+  // 👈 فقط مبلغ باقی‌مانده هر قسط رو جمع می‌زنیم، با احترام به مبلغِ موقت
+  const totalAmount = rows.reduce(
+    (sum, r) => sum + (effectiveAmount(r.note, r.paidAmount, r.amount) - r.paidAmount),
+    0n,
+  )
+  // 👈 شمارش‌ها هم از سررسیدِ مؤثر استفاده می‌کنند تا با جدول و با دسته‌ها یکی باشند
+  const todayCount = rows.filter(r => Math.ceil((effectiveDueInstant(r.note, r.paidAmount, new Date(r.dueAt), MIDNIGHT).getTime() - todayTime) / (1000 * 3600 * 24)) === 0).length
+  const tomorrowCount = rows.filter(r => Math.ceil((effectiveDueInstant(r.note, r.paidAmount, new Date(r.dueAt), MIDNIGHT).getTime() - todayTime) / (1000 * 3600 * 24)) === 1).length
 
   const uniqueDoctorsMap = new Map()
   allRows.forEach(r => {

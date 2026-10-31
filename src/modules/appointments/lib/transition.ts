@@ -18,7 +18,7 @@
 import { AppointmentStatus } from '@/core/constants'
 import type { TenantContext } from '@/core/tenant'
 import type { TransactionClient } from '@/core/db/scope'
-import { NotFoundError } from '@/core/types'
+import { DomainError, NotFoundError } from '@/core/types'
 import { requirePermission } from '@/modules/roles-permissions'
 
 import type { AppointmentsMessageKey } from '../catalog'
@@ -28,6 +28,7 @@ import { assertTransition } from './status'
 const TRANSITION_SELECT = {
   id: true,
   status: true,
+  isSlotBlock: true,
   customerId: true,
   serviceId: true,
   doctorId: true,
@@ -42,6 +43,12 @@ const TRANSITION_SELECT = {
 export interface TransitionRow {
   readonly id: string
   readonly status: string
+  /**
+   * Whether the row is a closed hour rather than a customer's visit — the one
+   * case where `BOOKED → COMPLETED` is the desk closing the hour and not a
+   * result being entered for a day that has not happened.
+   */
+  readonly isSlotBlock: boolean
   readonly customerId: string | null
   readonly serviceId: string | null
   readonly doctorId: string
@@ -132,6 +139,12 @@ export async function recordArrival(args: {
  * the ledger belongs to `payments`, and this function has no columns for it. The
  * caller writes the receipt through `payments`' own `recordPayment` inside the same
  * transaction; see `recordResultAction`.
+ *
+ * A row that is still `BOOKED` is refused unless it is a slot block: the arrival is
+ * the fact the result is recorded against, and a booking that skipped it would be a
+ * result for a customer the desk never saw — the guard `lib/status.ts` documents
+ * and the one only this function can make, because the relation's table cannot
+ * tell a booking from a block.
  */
 export async function recordResult(args: {
   readonly tx: TransactionClient
@@ -143,6 +156,26 @@ export async function recordResult(args: {
   requirePermission(args.ctx, 'record_appointment_result')
 
   const row = await loadTransitionRow(args.tx, args.ctx, args.appointmentId)
+
+  // `BOOKED → COMPLETED` is legal on the relation for one row kind only
+  // (`lib/status.ts`): a slot block, which is a closed hour and has no arrival
+  // to record. A booking that is still BOOKED has not had its arrival recorded,
+  // and completing it here would enter a result for a customer the desk never
+  // saw. The guard is therefore on the *row*, after the relation's own transition
+  // has been checked — the relation cannot distinguish the two, and this is
+  // the one place that can.
+  if (asStatus(row.status) === AppointmentStatus.Booked && !row.isSlotBlock) {
+    throw new DomainError(
+      `An appointment in ${row.status} cannot move to ${AppointmentStatus.Completed} — the arrival ` +
+        `has not been recorded. Mark the arrival first; only a slot block closes as a completed hour.`,
+      {
+        messageKey: 'appointment.illegalTransition' satisfies AppointmentsMessageKey,
+        messageParams: { current: row.status, next: AppointmentStatus.Completed },
+        detail: { current: row.status, next: AppointmentStatus.Completed, isSlotBlock: row.isSlotBlock },
+      },
+    )
+  }
+
   assertTransition(asStatus(row.status), AppointmentStatus.Completed)
 
   const resultNote = args.note === undefined ? null : args.note.trim()

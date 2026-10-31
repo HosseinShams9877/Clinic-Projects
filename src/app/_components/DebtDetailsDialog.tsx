@@ -3,22 +3,39 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '@/core/components/icons'
-import { formatMoney, toPersianDigits } from '@/core/localization'
+import { dateToLocalDate, formatDate, formatMoney, toPersianDigits } from '@/core/localization'
 import type { DebtRow } from '@/modules/debts'
+import { PAYMENT_METHOD_LABELS } from '@/modules/payments/catalog'
+import type { PaymentLine, PaymentLineStage } from '@/modules/payments'
 import { ADMIN_DEBTS } from '@/app/admin/catalog'
 
 function useIsClient() {
   return useSyncExternalStore(() => () => {}, () => true, () => false)
 }
 
+/** 👈 برچسبِ مرحله‌ی یک خطِ پرداخت — «قسط ۲ از ۴»، «چک»، یا نوعِ خودِ پرداخت. */
+function stageLabel(stage: PaymentLineStage, labels: { readonly stageLabel: (current: string, total: string) => string; readonly cheque: string }): string {
+  switch (stage.kind) {
+    case 'INSTALLMENT':
+      return labels.stageLabel(toPersianDigits(stage.sequence), toPersianDigits(stage.total))
+    case 'CHEQUE':
+      return labels.cheque
+    case 'PAYMENT':
+      return stage.label
+  }
+}
+
 export function DebtDetailsDialog({
   isOpen,
   onClose,
   row,
+  /** 👈 خط‌های پرداختِ این نوبت — از صفحه‌های گزارشِ مالی پاس داده می‌شود. */
+  paymentLines,
 }: {
   isOpen: boolean
   onClose: () => void
   row: DebtRow | null
+  paymentLines?: readonly PaymentLine[] | null
 }) {
   const isClient = useIsClient()
 
@@ -33,6 +50,8 @@ export function DebtDetailsDialog({
   const c = ADMIN_DEBTS.detailsDialog
   const totalAmount = row.installmentSequence > 0 ? (row.installmentAmount * BigInt(row.totalInstallments)) : row.charged
   const remainingInstallments = row.totalInstallments - row.paidInstallments
+  // 👈 خط‌های پرداختِ همین نوبت — صفحه‌های گزارشِ مالی آن‌ها را از قبل خوانده‌اند.
+  const lines = (paymentLines ?? []).filter((line) => line.appointmentId === row.appointmentId)
 
   return createPortal(
     <div className="fixed inset-0 z-[50] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4 text-right" dir="rtl">
@@ -109,6 +128,44 @@ export function DebtDetailsDialog({
                    </tr>
                 </tbody>
              </table>
+           </div>
+
+           {/* 👈 تفکیکِ اقساط و چک‌های پرداخت‌شده — جدولِ خط‌های پرداخت */}
+           <div className="flex flex-col gap-2">
+             <div className="flex items-center gap-2 px-1 text-sm font-bold text-ink">
+               <Icon name="invoice" size="compact" />
+               {c.lines.title}
+             </div>
+             {lines.length === 0 ? (
+               <p className="rounded-xl border border-line bg-surface px-4 py-6 text-center text-xs text-ink-3">
+                 {c.lines.empty}
+               </p>
+             ) : (
+               <div className="overflow-x-auto rounded-xl border border-line/50 bg-surface">
+                 <table className="w-full min-w-[440px] table-fixed border-collapse text-center text-xs">
+                   <thead>
+                     <tr className="border-b border-line/50 bg-surface-2 text-ink-3">
+                       <th className="px-2 py-2 font-semibold text-start">{c.lines.columns.customer}</th>
+                       <th className="px-2 py-2 font-semibold text-start">{c.lines.columns.stage}</th>
+                       <th className="px-2 py-2 font-semibold text-start">{c.lines.columns.amount}</th>
+                       <th className="px-2 py-2 font-semibold text-start">{c.lines.columns.date}</th>
+                       <th className="px-2 py-2 font-semibold text-start">{c.lines.columns.method}</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-line/50">
+                     {lines.map((line) => (
+                       <tr key={line.id}>
+                         <td className="px-2 py-2 font-semibold text-ink">{line.customerName}</td>
+                         <td className="px-2 py-2 text-brand-700 whitespace-nowrap">{stageLabel(line.stage, { stageLabel: c.stageLabel, cheque: c.lines.cheque })}</td>
+                         <td className="px-2 py-2 font-semibold text-ink tabular-nums whitespace-nowrap">{formatMoney(line.amount)} {c.toman}</td>
+                         <td className="px-2 py-2 text-ink-3 tabular-nums whitespace-nowrap">{formatDate(dateToLocalDate(line.paidAt), 'short')}</td>
+                         <td className="px-2 py-2 text-ink-2 whitespace-nowrap">{PAYMENT_METHOD_LABELS[line.method] ?? line.method}</td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+             )}
            </div>
         </div>
 

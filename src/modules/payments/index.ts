@@ -4,6 +4,9 @@
 
 export type {
   BalanceSummary,
+  FinancialSummaryReport,
+  PaymentLine,
+  PaymentLineStage,
   PaymentRow,
   PaymentsMessageKey,
   PaymentsModule,
@@ -31,7 +34,7 @@ export { customerCharges, customerLedger, customerPayments, listInstallments } f
 // 👇 این خط تغییر کرده است (listInstallments از اینجا حذف شده)
 export { createInstallmentPlan, type InstallmentInput } from './lib/installments'
 
-export { financialSummary } from './lib/financial-reports'
+export { appointmentPaymentLines, financialSummary } from './lib/financial-reports'
 export { installmentPlanSchema, type InstallmentPlanForm } from './validation/installments'
 
 export { recordPayment, recordRefund, refundAmountFor } from './lib/record'

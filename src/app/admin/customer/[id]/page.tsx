@@ -39,6 +39,7 @@ import { CUSTOMER_PROFILE_PAGE } from '@/app/catalog'
 import { loadCustomerProfile } from '@/app/_customers/page-data'
 import { CustomerTabs, tabFromParam } from '@/app/_customers/customer-tabs'
 import { PaymentsTab, type InstallmentRow, type PaymentRow, type OpenDebtRow } from '@/app/_customers/payments-tab'
+import { effectiveAmount, effectiveDueInstant, legacyTotalInNote } from '@/app/_payments/installment-overrides'
 import {
   InjectionTab,
   DEFAULT_INJECTION_VIEW,
@@ -112,14 +113,14 @@ export default async function CustomerProfilePage({
   let totalCount = 1
   let totalInstallmentsAmount = 0n
   
+  // 👈 طرحِ قسطیِ قدیمی (TOTAL:...) باید از noteی **پاک‌شده از توکن‌های ویرایشِ موقت**
+  // خوانده شود — وگرنه OVERRIDE:… که `withOverrideTokens` قبلِ بقیه‌ی note می‌نویسد
+  // باعث می‌شود `startsWith('TOTAL:')` دیگر کار نکند و طرح quietly نادیده گرفته شود.
   installments.forEach((inst: any) => {
-    if (inst.note && inst.note.startsWith('TOTAL:')) {
-      const parts = inst.note.split(':')
-      const count = Number(parts[1] || 1)
-      const totalAmt = parts[3] ? BigInt(parts[3]) : inst.amount
-      
-      if (count > totalCount) totalCount = count 
-      totalInstallmentsAmount += totalAmt
+    const legacy = legacyTotalInNote(inst.note, inst.amount)
+    if (legacy) {
+      if (legacy.count > totalCount) totalCount = legacy.count
+      totalInstallmentsAmount += legacy.amount
     } else {
       totalInstallmentsAmount += inst.amount
     }
@@ -146,6 +147,7 @@ export default async function CustomerProfilePage({
 
     // 👈 محاسبه دقیق سررسید با addLocalMonths
     let finalDueAt = new Date(inst.dueAt)
+    let stageAmount = inst.amount
     const totalInstallments = inst.totalPlanCount || 1
     const safePerInstallment = inst.amount > 0n ? inst.amount : 1n
     const paidCount = Math.min(
@@ -159,13 +161,20 @@ export default async function CustomerProfilePage({
       finalDueAt = toUtcInstant(nextLocalDate, MIDNIGHT)
     }
 
+    // 👈 ویرایش موقتِ این مرحله — دقیقاً همان توابعِ مشترکی که جدول‌های اقساطِ ادمین و
+    // منشی بهره می‌برند (effectiveDueInstant / effectiveAmount): فقط تا زمانی که چیزی
+    // پرداخت نشده سررسید و مبلغِ دستی کاربر اعمال می‌شود؛ بعد از پرداخت، تاریخ و مبلغ
+    // استاندارد (سررسید لنگرخورده + تعداد پرداختی × بازه) دیده می‌شود.
+    finalDueAt = effectiveDueInstant(inst.note, paidAmount, finalDueAt, MIDNIGHT)
+    stageAmount = effectiveAmount(inst.note, paidAmount, inst.amount)
+
     const isOverdue = paidAmount < (inst.totalPlanAmount || inst.amount) && !paidAt && finalDueAt < new Date()
 
     return {
       id: inst.id,
       appointmentId: inst.appointmentId,
       sequence: inst.sequence,
-      amount: inst.amount,
+      amount: stageAmount,
       totalPlanAmount: inst.totalPlanAmount,
       dueAt: finalDueAt,
       note: inst.note,
@@ -294,6 +303,7 @@ export default async function CustomerProfilePage({
         <div className="w-full min-w-0">
           <PaymentsTab
             customerId={profile.id}
+            customerName={name}
             panel="admin"
             totalAmount={profile.chargedTotal}
             totalPaid={profile.paidTotal}

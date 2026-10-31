@@ -83,7 +83,7 @@ import { requireTenantContext } from './scope'
  * The arguments one of these hooks receives.
  *
  * Prisma types these per model — the `args` of a `Clinic` `findMany` is not the
- * `args` of a `User` one — and the client-level union across all 24 models is not
+ * `args` of a `User` one — and the client-level union across all 31 models is not
  * a type a hook body can name, so the hooks declare the three fields they read
  * and let the rest be opaque. `model` is the schema's spelling (`"Clinic"`),
  * which is what `isTenantScoped` compares against.
@@ -162,7 +162,7 @@ function tenantId(): string {
 
 /**
  * The Prisma `$extends` query object. One hook per operation family, applied to
- * every model, with `isTenantScoped` deciding whether a model is one of the 23.
+ * every model, with `isTenantScoped` deciding whether a model is one of the 31.
  */
 export const tenantExtension = {
   name: 'tenantScope',

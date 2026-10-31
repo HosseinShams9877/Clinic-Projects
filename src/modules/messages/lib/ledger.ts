@@ -184,16 +184,22 @@ export async function recordCampaignRow(args: {
  * The campaign dispatch's idempotency read, keyed on `(customer, campaign)` rather than
  * `(customer, kind)`: a recurring campaign sends again next period, and the kind does
  * not change between periods, so the campaign's own id is the key that distinguishes
- * one period's send from the next one's absence.
+ * one period's send from the next one's absence. `since` scopes the key to one period —
+ * the period's start as the dispatch read it — so a campaign that recurs is answered by
+ * the *next* period's row, not by the one a period already delivered.
  */
 export async function campaignSendRecorded(
   tx: TransactionClient,
   tenantId: string,
   customerId: string,
   campaignId: string,
+  since?: Date | null,
 ): Promise<boolean> {
   const row = await tx.messageSend.findFirst({
-    where: { tenantId, customerId, campaignId },
+    where:
+      since === undefined || since === null
+        ? { tenantId, customerId, campaignId }
+        : { tenantId, customerId, campaignId, createdAt: { gte: since } },
     select: { id: true },
   })
   return row !== null

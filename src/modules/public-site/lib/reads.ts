@@ -254,6 +254,20 @@ export async function publicSlotsForDay(args: {
   const settings = await readBookingSettings(args.tx, args.tenantId)
   const weekday = jalaliWeekday(args.localDate)
 
+  // The service a customer picked is user input, and the slots step runs before
+  // the booking validates it: without this check, a `serviceId` the tenant does
+  // not have — another tenant's, or an invented one — still gets this tenant's
+  // shifts and hours. `serviceId !== null` would be the wrong question;
+  // `isActive` is not asked here because the booking itself refuses an inactive
+  // service (`loadBookableService`), and a slot offered for one the clinic later
+  // turned off is a slot the customer cannot finish, which is the answer the
+  // booking gives, not a reason to hide the day.
+  const service = await args.tx.service.findFirst({
+    where: { id: args.serviceId, tenantId: args.tenantId },
+    select: { id: true },
+  })
+  if (service === null) return []
+
   const [shift, workingHours, shiftRanges, rows, holiday] = await Promise.all([
     args.tx.clinicShift.findFirst({
       where: { tenantId: args.tenantId, clinicId: args.clinicId ?? undefined, weekday },

@@ -5,11 +5,35 @@ import { formatMoney, formatNumber, toPersianDigits } from '@/core/localization'
 import { ADMIN_FINANCIAL_REPORTS } from '@/app/catalog'
 import { Icon } from '@/core/components/icons'
 import type { DebtRow } from '@/modules/debts'
+import { PAYMENT_METHOD_LABELS } from '@/modules/payments/catalog'
+import type { FinancialSummaryReport, PaymentLine } from '@/modules/payments'
 import { DebtDetailsDialog } from '@/app/_components/DebtDetailsDialog'
 
-export function DoctorFinancialReportsClient({ 
-  rows, weekDueCount, activeDebtorsCount, followedTodayCount, awaitingResultCount, basePath, q, bucket 
-}: any) {
+export function DoctorFinancialReportsClient({
+  rows,
+  weekDueCount,
+  activeDebtorsCount,
+  followedTodayCount,
+  awaitingResultCount,
+  summary,
+  paymentLines,
+  basePath,
+  q,
+  bucket,
+}: {
+  rows: readonly DebtRow[]
+  weekDueCount: number
+  activeDebtorsCount: number
+  followedTodayCount: number
+  awaitingResultCount: number
+  /** 👈 خلاصه‌ی درآمدِ ماهِ جاری — فقط پرداخت‌های نوبت‌های خودِ پزشک. */
+  summary: FinancialSummaryReport
+  /** 👈 خط‌های پرداخت — برای دیالوگِ «جزئیات پرداخت». */
+  paymentLines: readonly PaymentLine[]
+  basePath: string
+  q: string
+  bucket: string
+}) {
   const [selectedRow, setSelectedRow] = useState<DebtRow | null>(null)
 
   return (
@@ -41,6 +65,53 @@ export function DoctorFinancialReportsClient({
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-warn-bg text-warn"><Icon name="clock" size="card" /></span>
           <span className="flex flex-col items-end"><span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.kpi.awaitingResult}</span><span className="mt-1 text-lg font-bold text-ink tabular-nums">{formatNumber(awaitingResultCount)}</span></span>
         </div>
+      </div>
+
+      {/* 👈 نوارِ خلاصه‌ی درآمدِ ماهِ جاری — خالص = ناخالص − تخفیف + برگشت‌ها */}
+      <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 font-bold text-ink">
+            <Icon name="money" size="card" />
+            {ADMIN_FINANCIAL_REPORTS.income.title}
+          </div>
+          <span className="text-xs text-ink-3">
+            {toPersianDigits(summary.paymentCount)}{ADMIN_FINANCIAL_REPORTS.income.paymentCountSuffix}
+          </span>
+        </div>
+        {summary.paymentCount === 0 && summary.refundCount === 0 ? (
+          <p className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.empty}</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 panel:grid-cols-4">
+              <div className="flex flex-col gap-1 rounded-lg bg-ok-bg px-4 py-3">
+                <span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.gross}</span>
+                <span className="text-base font-bold text-ok tabular-nums">{formatMoney(summary.gross)} {ADMIN_FINANCIAL_REPORTS.income.toman}</span>
+              </div>
+              <div className="flex flex-col gap-1 rounded-lg bg-warn-bg px-4 py-3">
+                <span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.discounts}</span>
+                <span className="text-base font-bold text-warn tabular-nums">{formatMoney(summary.discounts)} {ADMIN_FINANCIAL_REPORTS.income.toman}</span>
+              </div>
+              <div className="flex flex-col gap-1 rounded-lg bg-danger-bg px-4 py-3">
+                <span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.refunds}</span>
+                <span className="text-base font-bold text-danger tabular-nums">{formatMoney(summary.refunds)} {ADMIN_FINANCIAL_REPORTS.income.toman}</span>
+              </div>
+              <div className="flex flex-col gap-1 rounded-lg bg-brand-50 px-4 py-3">
+                <span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.net}</span>
+                <span className="text-base font-bold text-brand-700 tabular-nums">{formatMoney(summary.gross - summary.discounts + summary.refunds)} {ADMIN_FINANCIAL_REPORTS.income.toman}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-ink-3">{ADMIN_FINANCIAL_REPORTS.income.byMethod}:</span>
+              {summary.byMethod.map((row) => (
+                <span key={row.method} className="inline-flex items-center gap-1 rounded-pill bg-surface-2 px-3 py-1 text-xs font-semibold text-ink-2">
+                  {PAYMENT_METHOD_LABELS[row.method] ?? row.method}
+                  <span className="tabular-nums text-ink-3">{formatMoney(row.amount)}</span>
+                  <span className="text-ink-3">({toPersianDigits(row.count)})</span>
+                </span>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <form action={basePath} method="GET" className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
@@ -89,7 +160,7 @@ export function DoctorFinancialReportsClient({
               {rows.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-ink-3 text-sm">{ADMIN_FINANCIAL_REPORTS.table.empty}</td></tr>
               ) : (
-                rows.map((row: DebtRow) => (
+                rows.map((row) => (
                   <tr key={row.appointmentId} className="border-b border-line last:border-0 hover:bg-surface-2">
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
@@ -118,7 +189,7 @@ export function DoctorFinancialReportsClient({
         </div>
       </section>
 
-      <DebtDetailsDialog isOpen={!!selectedRow} onClose={() => setSelectedRow(null)} row={selectedRow} />
+      <DebtDetailsDialog isOpen={!!selectedRow} onClose={() => setSelectedRow(null)} row={selectedRow} paymentLines={paymentLines} />
     </div>
   )
 }

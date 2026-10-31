@@ -6,6 +6,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { Button } from '@/core/components/button'
 import { Combobox } from '@/core/components/combobox'
 import { Field, TextInput } from '@/core/components/form'
+import { TimePicker } from '@/core/components/date-picker/TimePicker'
 import { Icon } from '@/core/components/icons'
 import { STAFF_PAGE } from '@/app/catalog'
 import { ADMIN_STAFF } from '@/app/admin/catalog'
@@ -502,9 +503,9 @@ export function WorkingHoursModal({
               </label>
               <span className="flex items-center gap-1 text-xs text-ink-3">
                 {ADMIN_STAFF.workingHours.from}
-                <input type="time" value={state.startTime} disabled={!state.active} onChange={(e) => patch(state.weekday, { startTime: e.currentTarget.value })} className="rounded-xs border border-line-2 bg-surface px-2 py-1 text-ink tabular-nums disabled:bg-surface-sunken" />
+                <TimePicker value={state.startTime} disabled={!state.active} onChange={(v) => patch(state.weekday, { startTime: v })} />
                 {ADMIN_STAFF.workingHours.to}
-                <input type="time" value={state.endTime} disabled={!state.active} onChange={(e) => patch(state.weekday, { endTime: e.currentTarget.value })} className="rounded-xs border border-line-2 bg-surface px-2 py-1 text-ink tabular-nums disabled:bg-surface-sunken" />
+                <TimePicker value={state.endTime} disabled={!state.active} onChange={(v) => patch(state.weekday, { endTime: v })} />
               </span>
             </div>
           ))}
@@ -524,8 +525,8 @@ export function WorkingHoursModal({
                   {WEEKDAYS.map((w) => <option key={w} value={w}>{weekdayLabel(w)}</option>)}
                 </select>
                 <span className="flex items-center gap-1 text-xs text-ink-3">
-                  <input type="time" value={range.startTime} onChange={(e) => patchRange(range.id, { startTime: e.currentTarget.value })} className="rounded-xs border border-line-2 bg-surface px-2 py-1 text-ink tabular-nums" />
-                  <input type="time" value={range.endTime} onChange={(e) => patchRange(range.id, { endTime: e.currentTarget.value })} className="rounded-xs border border-line-2 bg-surface px-2 py-1 text-ink tabular-nums" />
+                  <TimePicker value={range.startTime} onChange={(v) => patchRange(range.id, { startTime: v })} />
+                  <TimePicker value={range.endTime} onChange={(v) => patchRange(range.id, { endTime: v })} />
                 </span>
                 <input type="number" inputMode="numeric" value={range.slotMinutes} onChange={(e) => patchRange(range.id, { slotMinutes: e.currentTarget.value })} className="w-16 rounded-xs border border-line-2 bg-surface px-2 py-1 text-ink tabular-nums" />
                 <Button size="small" variant="ghost" leadingIcon="close" onClick={() => removeRange(range.id)} aria-label={ADMIN_STAFF.workingHours.removeRange}>

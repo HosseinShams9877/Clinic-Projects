@@ -87,12 +87,23 @@ describe('canTransition', () => {
     }
   })
 
-  it('does not let a booking skip the awaiting step', () => {
-    // `BOOKED` never goes straight to a state the desk records on the day, which is
-    // what keeps a result being entered for a day that has not happened.
-    expect(canTransition(AppointmentStatus.Booked, AppointmentStatus.Arrived)).toBe(false)
-    expect(canTransition(AppointmentStatus.Booked, AppointmentStatus.Completed)).toBe(false)
-    expect(canTransition(AppointmentStatus.Booked, AppointmentStatus.NoShow)).toBe(false)
+  it('lets the desk reach the day states from BOOKED without waiting for the sweep', () => {
+    // The sweep is hourly and a receptionist cannot wait for it: §2.2's table lets the
+    // desk record ARRIVED and NO_SHOW from BOOKED directly. The protection the older
+    // "no skipping" expectation was after is not in this relation — it is `recordResult`'s
+    // own guard on the row (a BOOKED *booking* is refused completion; only a slot
+    // block closes as a completed hour), which is what the transition tests assert.
+    expect(canTransition(AppointmentStatus.Booked, AppointmentStatus.AwaitingArrival)).toBe(true)
+    expect(canTransition(AppointmentStatus.Booked, AppointmentStatus.Arrived)).toBe(true)
+    expect(canTransition(AppointmentStatus.Booked, AppointmentStatus.NoShow)).toBe(true)
+    expect(canTransition(AppointmentStatus.Booked, AppointmentStatus.Cancelled)).toBe(true)
+    expect(canTransition(AppointmentStatus.Booked, AppointmentStatus.Rescheduled)).toBe(true)
+  })
+
+  it('refuses AWAITING_ARRIVAL → COMPLETED, the one arrival-skipping transition', () => {
+    // The arrival is the fact the result is recorded against (`lib/status.ts`):
+    // skipping it would let a result be written for a customer the desk never saw.
+    expect(canTransition(AppointmentStatus.AwaitingArrival, AppointmentStatus.Completed)).toBe(false)
   })
 
   it('refuses a transition out of a terminal state, including RESCHEDULED', () => {
