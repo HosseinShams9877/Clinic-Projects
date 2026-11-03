@@ -60,7 +60,7 @@ export default async function AboutPage() {
             {copy.values.map((value) => (
               <div
                 key={value.title}
-                className="flex flex-col gap-3 rounded-[18px] border border-line bg-white p-5"
+                className="flex flex-col gap-3 rounded-[18px] border border-line bg-surface p-5"
               >
                 <span className="grid size-10 place-items-center rounded-md bg-brand-50 text-brand">
                   <Icon name={value.icon} size="action" />
@@ -73,7 +73,7 @@ export default async function AboutPage() {
         </div>
       </section>
 
-      <section className="bg-white px-[var(--content-pad)] py-16 panel:px-[var(--content-pad-sm)]">
+      <section className="bg-surface px-[var(--content-pad)] py-16 panel:px-[var(--content-pad-sm)]">
         <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-8">
           <h2 className="text-2xl font-bold text-ink">{copy.statsTitle}</h2>
           <div className="grid gap-5 panel:grid-cols-2 desktop:grid-cols-4">

@@ -129,9 +129,9 @@ export type ButtonSize = (typeof BUTTON_SIZES)[number]
  * carrying its own colour in every state has nothing to race against.
  *
  * The active state is a `scale-[0.97]` on every variant, which is §9's "distinct
- * from hover" where the variant's own ramp has nowhere darker to go: `--brand-300`
- * behind `--brand-700` text is 3.6:1 and fails AA, and `--dark-danger` behind
- * `--danger` is worse, so the variants contract instead of darkening. A transform
+ * from hover" where the variant's own ramp has nowhere darker to go without
+ * hurting the text on it: `--dark-danger` behind `--danger` text is 1.3:1 and
+ * fails AA, so the danger variant contracts instead of darkening. A transform
  * does not affect layout, so §9's "must not cause layout shift" still holds.
  */
 export const VARIANT_CLASSES: Readonly<Record<ButtonVariant, string>> = {
@@ -146,7 +146,7 @@ export const VARIANT_CLASSES: Readonly<Record<ButtonVariant, string>> = {
      state — which is where the demo has it (`box-shadow` sits on `.btn-primary`
      itself). The table settles this one, so the table wins. */
   primary:
-    'border-brand-btn bg-brand-btn text-ink-inverse hover:not-disabled:bg-brand-600 hover:not-disabled:border-brand-600 hover:not-disabled:shadow-brand active:not-disabled:bg-brand-700 active:not-disabled:border-brand-700 active:not-disabled:scale-[0.97]',
+    'border-brand bg-brand text-ink-inverse hover:not-disabled:brightness-95 hover:not-disabled:shadow-brand active:not-disabled:brightness-90 active:not-disabled:scale-[0.97]',
   soft:
     'border-transparent bg-brand-50 text-brand-700 hover:not-disabled:bg-brand-100 active:not-disabled:bg-brand-100 active:not-disabled:scale-[0.97]',
   /* §8's hover column gives the background alone; the demo's `.btn-ghost:hover` also

@@ -103,7 +103,7 @@ export function RowActions({
         <button
           onClick={handleApprove}
           disabled={pending}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-white/40 bg-white/20 px-3 py-1.5 text-xs font-bold text-ink backdrop-blur-sm transition-all hover:bg-white/40 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-surface/40 bg-surface/20 px-3 py-1.5 text-xs font-bold text-ink backdrop-blur-sm transition-all hover:bg-surface/40 disabled:opacity-50"
         >
           <Icon name="confirm" size="compact" />
           {pending ? 'در حال تایید...' : 'تایید جلسه'}

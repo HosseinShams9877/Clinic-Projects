@@ -106,26 +106,31 @@ export function AddCustomerDialog() {
         aria-modal="true"
         aria-labelledby="add-customer-title"
         className={cx(
-          // Base card
           'flex w-full flex-col overflow-hidden bg-surface shadow-3',
-          // Mobile: bottom sheet — only the top corners rounded, capped height.
-          'max-h-[92dvh] rounded-t-2xl',
-          // Desktop: centred modal — all corners rounded, capped width and height.
-          'panel:max-h-[85dvh] panel:max-w-2xl panel:rounded-2xl',
+          'max-h-[92dvh] rounded-xl',
+          'panel:max-h-[85dvh] panel:max-w-2xl panel:rounded-xl',
         )}
         onClick={(event) => event.stopPropagation()}
       >
+        {/* نوار آبی بالای دیالوگ */}
+        <div className="h-1 shrink-0 rounded-t-xl bg-brand" aria-hidden="true" />
         {/* Header */}
-        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-5 py-4">
-          <h2 id="add-customer-title" className="text-lg font-bold text-ink">
-            {RECEPTION_CUSTOMERS.add.title}
-          </h2>
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line/40 bg-brand-50 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-full bg-brand-100 text-brand-700">
+              <Icon name="customers" size="compact" />
+            </span>
+            <h2 id="add-customer-title" className="text-lg font-bold text-brand-900">
+              {RECEPTION_CUSTOMERS.add.title}
+            </h2>
+          </div>
           <Button
             size="icon"
             variant="ghost"
             icon="close"
             aria-label={RECEPTION_CUSTOMERS.add.cancel}
             onClick={close}
+            className="hover:bg-brand-200 hover:text-brand-900"
           />
         </header>
 

@@ -104,21 +104,27 @@ export function AddCustomerDialog() {
         aria-labelledby="add-customer-title"
         className={cx(
           'flex w-full flex-col overflow-hidden bg-surface shadow-3',
-          'max-h-[92dvh] rounded-t-2xl',
-          'panel:max-h-[85dvh] panel:max-w-2xl panel:rounded-2xl',
+          'max-h-[92dvh] rounded-xl',
+          'panel:max-h-[85dvh] panel:max-w-2xl panel:rounded-xl',
         )}
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-5 py-4">
-          <h2 id="add-customer-title" className="text-lg font-bold text-ink">
-            {ADMIN_CUSTOMERS.add.title}
-          </h2>
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line/40 bg-brand-50 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-full bg-brand-100 text-brand-700">
+              <Icon name="customers" size="compact" />
+            </span>
+            <h2 id="add-customer-title" className="text-lg font-bold text-brand-900">
+              {ADMIN_CUSTOMERS.add.title}
+            </h2>
+          </div>
           <Button
             size="icon"
             variant="ghost"
             icon="close"
             aria-label={ADMIN_CUSTOMERS.add.cancel}
             onClick={close}
+            className="hover:bg-brand-200 hover:text-brand-900"
           />
         </header>
 
@@ -180,8 +186,9 @@ export function AddCustomerDialog() {
             className={cx(
               'flex items-center justify-end gap-2',
               'sticky bottom-0 -mx-5 -mb-5 mt-auto',
-              'border-t border-line bg-surface px-5 py-3',
-              'panel:static panel:m-0 panel:border-0 panel:bg-transparent panel:p-0 panel:pt-2',
+              'border-t border-line/40 px-5 py-4',
+              'rounded-b-3xl',
+              'panel:static panel:m-0 panel:border-0 panel:bg-transparent panel:p-0 panel:pt-2 panel:rounded-none',
             )}
           >
             <Button type="button" variant="ghost" disabled={pending} onClick={close}>

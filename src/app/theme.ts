@@ -18,4 +18,4 @@
  */
 
 /** `--bg` from `08-ui-design-system.md` §46. Keep in step with `globals.css`. */
-export const THEME_COLOR = '#f7f2f0'
+export const THEME_COLOR = '#F4F7FB'

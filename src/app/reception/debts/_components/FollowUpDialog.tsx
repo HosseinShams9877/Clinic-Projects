@@ -70,15 +70,15 @@ export function FollowUpDialog({
         
         {/* هدر با استایل مستقیم و !important برای گردی */}
         <div 
-          className="flex items-center justify-between border-b border-line/40 bg-brand-50 px-5 py-4 shrink-0 !rounded-t-[24px]"
+          className="flex items-center justify-between border-b border-line/40 bg-brand-100 px-5 py-4 shrink-0 !rounded-t-[24px]"
         >
           <div className="flex items-center gap-2 font-bold text-base text-brand-900">
-             <span className="grid size-8 place-items-center rounded-full bg-brand-100 text-brand-700">
+             <span className="grid size-8 place-items-center rounded-full bg-brand-200 text-brand-800">
                <Icon name="phone" size="compact" />
              </span>
              {ADMIN_DEBTS.followUp.title}
           </div>
-          <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-brand-100 text-brand-800 hover:text-brand-900 transition-colors">
+          <button onClick={onClose} disabled={isPending} className="grid size-8 place-items-center rounded-full hover:bg-brand-200 text-brand-800 hover:text-brand-900 transition-colors">
             <Icon name="close" size="compact" />
           </button>
         </div>

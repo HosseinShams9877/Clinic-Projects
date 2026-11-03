@@ -48,9 +48,9 @@ function SidebarItem({ item, pathname, home }: { item: NavItem; pathname: string
           onClick={() => setIsOpen(!isOpen)}
           className={cx(
             'flex w-full items-center gap-3 rounded-sm px-3 py-[10px] text-sm font-semibold no-underline',
-            '[color:color-mix(in_srgb,var(--ink-inverse),transparent_28%)]',
+            '[color:color-mix(in_srgb,var(--ink),transparent_25%)]',
             '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
-            'hover:bg-sidebar-dark-2 hover:text-ink-inverse',
+            'hover:bg-brand-50 hover:text-brand-700',
             (isItemActive || isChildActive) && 'bg-brand text-ink-inverse!',
           )}
         >
@@ -71,10 +71,9 @@ function SidebarItem({ item, pathname, home }: { item: NavItem; pathname: string
                 href={child.href ?? '#'}
                 className={cx(
                   'flex items-center gap-3 rounded-sm px-3 py-[8px] text-sm font-semibold no-underline',
-                  '[color:color-mix(in_srgb,var(--ink-inverse),transparent_28%)]',
+                  '[color:color-mix(in_srgb,var(--ink),transparent_25%)]',
                   '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
-                  'hover:bg-sidebar-dark-2 hover:text-ink-inverse',
-                  isActive(pathname, child, home) && 'bg-brand text-ink-inverse!',
+                  isActive(pathname, child, home) ? 'bg-brand text-ink-inverse! hover:bg-brand-600' : 'hover:bg-brand-100 hover:text-brand-800',
                 )}
               >
                 <Icon name={child.icon} size="compact" />
@@ -93,10 +92,9 @@ function SidebarItem({ item, pathname, home }: { item: NavItem; pathname: string
       href={item.href ?? '#'}
       className={cx(
         'flex items-center gap-3 rounded-sm px-3 py-[10px] text-sm font-semibold no-underline',
-        '[color:color-mix(in_srgb,var(--ink-inverse),transparent_28%)]',
+        '[color:color-mix(in_srgb,var(--ink),transparent_25%)]',
         '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
-        'hover:bg-sidebar-dark-2 hover:text-ink-inverse',
-        isItemActive && 'bg-brand text-ink-inverse!',
+        isItemActive ? 'bg-brand text-ink-inverse! hover:bg-brand-600' : 'hover:bg-brand-100 hover:text-brand-800',
       )}
       aria-current={isItemActive ? 'page' : undefined}
     >
@@ -133,8 +131,8 @@ export function PanelChrome({ panel, panelName, clinicName, nav, roleLabel, date
       <aside
         id="panel-sidebar"
         className={cx(
-          'fixed top-0 bottom-0 z-[var(--z-overlay)] flex h-dvh w-[var(--sidebar-w)] shrink-0 flex-col overflow-y-auto bg-sidebar-dark text-ink-inverse shadow-3',
-          '[border-inline-end:1px_solid_var(--sidebar-dark-2)]',
+          'fixed top-0 bottom-0 z-[var(--z-overlay)] flex h-dvh w-[var(--sidebar-w)] shrink-0 flex-col overflow-y-auto bg-surface text-ink shadow-2',
+          '[border-inline-end:1px_solid_var(--line)]',
           drawerOpen
             ? 'visible [inset-inline-start:0] [transition:inset-inline-start_var(--transition-control)]'
             : 'invisible [inset-inline-start:calc(var(--sidebar-w)*-1)] [transition:inset-inline-start_var(--transition-control),visibility_0s_linear_var(--transition-control)]',
@@ -147,8 +145,8 @@ export function PanelChrome({ panel, panelName, clinicName, nav, roleLabel, date
             <Icon name="doctor" size="card" />
           </span>
           <span className="flex min-w-0 flex-col">
-            <span className="truncate text-lg font-bold tracking-[var(--ls-heading)] text-ink-inverse">{clinicName}</span>
-            <span className="truncate text-xs [color:color-mix(in_srgb,var(--ink-inverse),transparent_32%)]">{panelName}</span>
+            <span className="truncate text-lg font-bold tracking-[var(--ls-heading)] text-ink">{clinicName}</span>
+            <span className="truncate text-xs [color:color-mix(in_srgb,var(--ink),transparent_30%)]">{panelName}</span>
           </span>
         </div>
         
@@ -166,9 +164,9 @@ export function PanelChrome({ panel, panelName, clinicName, nav, roleLabel, date
             type="submit"
             className={cx(
               'flex w-full items-center gap-3 rounded-sm px-3 py-[10px] text-sm font-semibold no-underline',
-              '[color:color-mix(in_srgb,var(--ink-inverse),transparent_28%)]',
+              '[color:color-mix(in_srgb,var(--ink),transparent_25%)]',
               '[transition:background-color_var(--transition-control),color_var(--transition-control)]',
-              'border-none bg-transparent hover:bg-sidebar-dark-2 hover:text-ink-inverse',
+              'border-none bg-transparent hover:bg-brand-50 hover:text-brand-700',
             )}
           >
             <Icon name="logout" size="nav" />

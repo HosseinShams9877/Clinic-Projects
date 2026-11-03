@@ -249,7 +249,7 @@ export function PaymentsTab({
                             <td className="whitespace-nowrap px-3 py-2.5 text-center sm:px-4">
                               {panel !== 'doctor' ? (
                                 <div className="flex items-center justify-center gap-1.5">
-                                  <button onClick={() => setPaymentDialogData({ isOpen: true, installmentId: inst.id, amount: perInstallmentAmount, customerName, maxTotal: totalRemaining })} className="inline-flex items-center gap-1 rounded-md bg-[#ba6a73] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity shadow-sm">ثبت پرداخت</button>
+                                  <button onClick={() => setPaymentDialogData({ isOpen: true, installmentId: inst.id, amount: perInstallmentAmount, customerName, maxTotal: totalRemaining })} className="inline-flex items-center gap-1 rounded-md bg-brand px-2.5 py-1.5 text-xs font-semibold text-ink-inverse hover:opacity-90 transition-opacity shadow-sm">ثبت پرداخت</button>
                                   <EditInstallmentDialog installmentId={inst.id} appointmentId={inst.appointmentId} customerId={customerId} customerName={customerName} remainingAmount={remaining} sequence={inst.sequence} currentDueDate={dateToLocalDate(inst.dueAt)} currentAmount={perInstallmentAmount} panel={panel} onTempAmountChange={handleTempAmountChange} />
                                 </div>
                               ) : (
@@ -365,7 +365,7 @@ export function PaymentsTab({
                                   })
                                 }
                               }}
-                              className="inline-flex items-center gap-1 rounded-md bg-[#ba6a73] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity shadow-sm"
+                              className="inline-flex items-center gap-1 rounded-md bg-brand px-2.5 py-1.5 text-xs font-semibold text-ink-inverse hover:opacity-90 transition-opacity shadow-sm"
                             >
                               ثبت پرداخت
                             </button>

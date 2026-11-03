@@ -67,7 +67,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
             </div>
             <Link
               href={{ pathname: '/booking', query: { service: service.id } }}
-              className="inline-flex w-fit items-center justify-center gap-2 rounded-lg bg-brand-btn px-6 py-3 text-sm font-semibold text-white no-underline transition-colors hover:bg-brand"
+              className="inline-flex w-fit items-center justify-center gap-2 rounded-lg bg-brand-btn px-6 py-3 text-sm font-semibold text-ink-inverse no-underline transition-colors hover:bg-brand"
             >
               <Icon name="appointment" size="compact" />
               {copy.book}
@@ -149,7 +149,7 @@ function PairPane({ label, path }: { readonly label: string; readonly path: stri
     <div className="relative aspect-square bg-brand-100">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={path} alt={label} className="size-full object-cover" />
-      <span className="absolute inset-x-0 bottom-0 bg-[rgba(46,37,36,.72)] py-1.5 text-center text-[11.5px] font-medium text-white">
+      <span className="absolute inset-x-0 bottom-0 bg-[var(--overlay)] py-1.5 text-center text-[11.5px] font-medium text-ink-inverse">
         {label}
       </span>
     </div>

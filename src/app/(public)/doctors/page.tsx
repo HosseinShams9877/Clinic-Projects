@@ -52,7 +52,7 @@ function DoctorCard({
   readonly copy: typeof PUBLIC_DOCTORS
 }) {
   return (
-    <div className="flex flex-col overflow-hidden rounded-[18px] border border-line bg-white">
+    <div className="flex flex-col overflow-hidden rounded-[18px] border border-line bg-surface">
       <div className="aspect-square bg-brand-100">
         {doctor.avatarUrl === null ? (
           <div className="grid size-full place-items-center text-brand-300">
@@ -74,7 +74,7 @@ function DoctorCard({
           className="group inline-flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-xs font-semibold text-ink no-underline transition-colors hover:border-brand"
         >
           {copy.visit}
-          <span className="grid size-8 place-items-center rounded-full bg-brand-50 text-brand transition-colors group-hover:bg-brand group-hover:text-white">
+          <span className="grid size-8 place-items-center rounded-full bg-brand-50 text-brand transition-colors group-hover:bg-brand group-hover:text-ink-inverse">
             <Icon name="chevronStart" size="compact" />
           </span>
         </Link>

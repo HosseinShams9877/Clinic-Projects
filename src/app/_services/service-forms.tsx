@@ -820,7 +820,7 @@ function Overlay({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 panel:items-center panel:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 panel:items-center panel:p-6"
       onClick={onClose}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose()

@@ -35,7 +35,7 @@ export function CycleActionDialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm text-right" dir="rtl">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm text-right" dir="rtl">
       <div className="w-full max-w-[480px] overflow-hidden rounded-xl bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="text-base font-bold text-ink flex items-center gap-2">

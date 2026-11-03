@@ -67,7 +67,7 @@ export function InternalNotesTab({ customerId, panel, notes }: InternalNotesTabP
         </div>
         <button
           onClick={() => setIsFormOpen(!isFormOpen)}
-          className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
+          className="flex items-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-ink-inverse hover:bg-brand-btn transition-colors"
         >
           {isFormOpen ? 'بستن فرم' : '+ ثبت یادداشت جدید'}
         </button>
@@ -112,7 +112,7 @@ export function InternalNotesTab({ customerId, panel, notes }: InternalNotesTabP
             <button
               type="submit"
               disabled={isSubmitting || !content.trim()}
-              className="rounded-md bg-brand-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-colors hover:bg-brand-700"
+              className="rounded-md bg-brand px-6 py-2 text-sm font-semibold text-ink-inverse disabled:opacity-50 transition-colors hover:bg-brand-btn"
             >
               {isSubmitting ? 'در حال ثبت...' : 'ثبت یادداشت'}
             </button>

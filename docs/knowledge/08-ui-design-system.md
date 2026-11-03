@@ -727,9 +727,12 @@ When generating new UI for this project:
 
 ## 46. Exact core token block
 
-This block is the implementation contract. It is reproduced exactly as it appears
-in the demo's `brand.css`. **It is copied into `src/app/globals.css` without
-modification.**
+This block is the implementation contract as it stood for the reference artifact.
+It is reproduced exactly as it appears in the demo's `brand.css`. The colours and
+shadows it fixes were **superseded in `src/app/globals.css` by ADR-0001**
+(`roadmap/decisions.md`) — the medical blue/white override; this block stays as
+the record of the demo's own values, and every non-colour dimension (spacing,
+radii, font sizes, layout constants) is still copied from it unmodified.
 
 ```css
 :root {
@@ -983,8 +986,9 @@ needing one names it in its own module.
 
 ### 48.7 `THEME_COLOR` is the one colour literal — excepts §45 and rule A1
 
-`src/app/theme.ts` exports `'#f7f2f0'` for `Viewport.themeColor`, the one colour
-literal outside the §46 block. It cannot be a `var()`: Next emits it into `<meta
+`src/app/theme.ts` exports `'#F4F7FB'` for `Viewport.themeColor`, the one colour
+literal outside the §46 block (and, since ADR-0001, the one place the new `--bg`
+is restated). It cannot be a `var()`: Next emits it into `<meta
 name="theme-color">`, which the browser reads before any stylesheet is applied to
 paint the mobile address bar, and a computed-style variable has no value there. The
 file states the constraint it cannot enforce, that the literal must equal `--bg` —
@@ -994,8 +998,10 @@ only by that comment.
 
 ### 48.8 `globals.css` carries tokens beyond the §46 block — excepts §46 and §B
 
-§B's "the §46 token block, verbatim" is true of the first `:root` block, character
-for character; a second block follows it — the fallback stack and base metrics of §1
+§B's "the §46 token block, verbatim" was true of the first `:root` block,
+character for character, until ADR-0001 replaced the colours and shadows within
+it; the non-colour members are still verbatim. A second block follows it — the
+fallback stack and base metrics of §1
 and §3, the layout constants of §7, the modal values of §21, §43's breakpoint,
 `--transition-control`, and the `--z-*` order. Each is quoted from the section its
 comment names, since §46 does not enumerate them and the alternative is a literal

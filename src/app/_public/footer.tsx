@@ -44,7 +44,7 @@ interface FooterProps {
 
 export function PublicFooter({ facts, clinic, nav, year }: FooterProps) {
   return (
-    <footer className="border-t border-line bg-white">
+    <footer className="border-t border-line bg-surface">
       <div className="mx-auto grid w-full max-w-[1200px] gap-8 px-[var(--content-pad)] py-12 panel:grid-cols-[1.5fr_1fr_1fr] panel:px-[var(--content-pad-sm)]">
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-bold text-ink">{facts.aboutTitle}</h3>

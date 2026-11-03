@@ -37,12 +37,12 @@ export function PublicHeader({ brandName, nav, cta, aria }: HeaderProps) {
       className={cx(
         HEADER_HEIGHT,
         'sticky top-0 z-50 flex items-center border-b border-line',
-        'bg-white/92 backdrop-blur-[10px]',
+        'bg-surface/92 backdrop-blur-[10px]',
       )}
     >
       <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-4 px-[var(--content-pad)] panel:px-[var(--content-pad-sm)]">
         <Link href="/" className="flex shrink-0 items-center gap-2.5 no-underline" aria-label={brandName}>
-          <span className="grid size-[30px] place-items-center rounded-md bg-brand text-white">
+          <span className="grid size-[30px] place-items-center rounded-md bg-brand text-ink-inverse">
             <Icon name="home" size="compact" />
           </span>
           <span className="text-[19px] font-extrabold tracking-[var(--ls-heading)] text-ink">
@@ -68,7 +68,7 @@ export function PublicHeader({ brandName, nav, cta, aria }: HeaderProps) {
         <div className="flex items-center gap-2">
           <Link
             href={cta.href}
-            className="hidden rounded-lg bg-brand-btn px-4 py-2 text-[13px] font-semibold text-white no-underline transition-colors hover:bg-brand panel:inline-flex"
+            className="hidden rounded-lg bg-brand-btn px-4 py-2 text-[13px] font-semibold text-ink-inverse no-underline transition-colors hover:bg-brand panel:inline-flex"
           >
             {cta.label}
           </Link>
@@ -100,7 +100,7 @@ export function PublicHeader({ brandName, nav, cta, aria }: HeaderProps) {
             <Link
               href={cta.href}
               onClick={() => setOpen(false)}
-              className="mt-3 inline-flex items-center justify-center rounded-lg bg-brand-btn px-4 py-2.5 text-sm font-semibold text-white no-underline"
+              className="mt-3 inline-flex items-center justify-center rounded-lg bg-brand-btn px-4 py-2.5 text-sm font-semibold text-ink-inverse no-underline"
             >
               {cta.label}
             </Link>

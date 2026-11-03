@@ -87,7 +87,7 @@ export function RecordContactDialog({
   }
   return createPortal(
     <div 
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm text-right" 
+      className="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm text-right"
       dir="rtl"
       onClick={onClose}
     >
@@ -97,7 +97,7 @@ export function RecordContactDialog({
       >
         <div className="flex items-center justify-between border-b border-line px-5 py-4 shrink-0 rounded-t-2xl bg-gradient-to-l from-brand-50 to-surface">
           <div className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-full bg-brand text-white shadow-sm">
+            <span className="grid size-9 place-items-center rounded-full bg-brand text-ink-inverse shadow-sm">
               <Icon name="phone" size="card" />
             </span>
             <div>
@@ -419,7 +419,7 @@ function AbandonCycleDialog({
       >
         <header className="flex items-center justify-between gap-4 border-b border-line p-6 bg-gradient-to-l from-brand-50 to-surface rounded-t-xl">
           <div className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-full bg-danger text-white shadow-sm">
+            <span className="grid size-9 place-items-center rounded-full bg-danger text-ink-inverse shadow-sm">
               <Icon name="remove" size="card" />
             </span>
             <h2 id={titleId} className="text-lg font-bold text-ink">
@@ -492,7 +492,7 @@ function Overlay({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 panel:items-center panel:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 panel:items-center panel:p-6"
       onClick={onClose}
       role="presentation"
     >

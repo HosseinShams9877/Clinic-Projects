@@ -49,7 +49,7 @@ export function ConsultationForm(props: FormProps) {
 
   if (outcome !== null && outcome.ok) {
     return (
-      <div className="flex flex-col gap-4 rounded-lg border border-line bg-white p-6 text-center">
+      <div className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-6 text-center">
         <span className="mx-auto grid size-12 place-items-center rounded-full bg-brand-50 text-brand">
           <Icon name="success" size="action" />
         </span>
@@ -130,7 +130,7 @@ export function ConsultationForm(props: FormProps) {
         <select
           value={service}
           onChange={(event) => setService(event.target.value)}
-          className="w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm text-ink"
+          className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm text-ink"
         >
           <option value="">—</option>
           {props.services.map((row) => (

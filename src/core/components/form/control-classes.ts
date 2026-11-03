@@ -12,8 +12,8 @@
  * `padding: 11px 16px`, white bg, border `#E3D5D0`, radius 10px, font 13px", with
  * placeholder `#817169` and a focus treatment of border `#D9A7A7` plus
  * `box-shadow: 0 0 0 3px #FBF1EE`. Every one of those is a token below:
- * `--line-2` is `#E3D5D0`, `--r-sm` is 10px, `--fs-sm` is 13px, `--ink-3` is
- * `#817169`, `--brand-300` is `#D9A7A7`, `--brand-50` is `#FBF1EE`.
+ * `--line-2` is `#CBD5E1`, `--r-sm` is 10px, `--fs-sm` is 13px, `--ink-3` is
+ * `#64748B`, `--brand-300` is `#93C5FD`, `--brand-50` is `#EFF6FF`.
  *
  * ## The geometry literals
  *
@@ -33,11 +33,11 @@
  * since a class plus a pseudo-class outranks a bare pseudo-class.
  *
  * The §13 ring cannot replace it. `--brand-50` on `--surface` is about 1.1:1 and
- * the border step from `--line-2` to `--brand-300` is about 1.5:1, so a keyboard
+ * the border step from `--line-2` to `--brand-300` is about 1.2:1, so a keyboard
  * user tabbing through a form would have no focus indicator meeting WCAG 2.1
  * SC 1.4.11's 3:1 for non-text contrast — on the one control type where a lost
  * focus ring matters most, because the user is about to type into it. The brand
- * outline is 3.98:1 on white.
+ * outline is 5.2:1 on white.
  *
  * So `focus-visible:` restores it, and only for the input modality that needs it:
  * a pointer focus still gets §13's treatment exactly as written, and a keyboard

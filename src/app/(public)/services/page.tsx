@@ -52,7 +52,7 @@ function ServiceCard({
   readonly copy: typeof PUBLIC_SERVICES
 }) {
   return (
-    <div className="group flex flex-col overflow-hidden rounded-[18px] border border-line bg-white transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-[3px] hover:border-brand-300 hover:shadow-2">
+    <div className="group flex flex-col overflow-hidden rounded-[18px] border border-line bg-surface transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-[3px] hover:border-brand-300 hover:shadow-2">
       <div className="relative aspect-[4/3] bg-brand-100">
         {service.imageUrl === null ? (
           <div className="grid size-full place-items-center text-brand-300">
@@ -62,7 +62,7 @@ function ServiceCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={service.imageUrl} alt={service.name} className="size-full object-cover" />
         )}
-        <span className="absolute bottom-0 left-1/2 grid size-[34px] -translate-x-1/2 translate-y-1/2 place-items-center rounded-full border-[3px] border-white bg-brand-50 text-brand">
+        <span className="absolute bottom-0 left-1/2 grid size-[34px] -translate-x-1/2 translate-y-1/2 place-items-center rounded-full border-[3px] border-surface bg-brand-50 text-brand">
           <Icon name="appointment" size="compact" />
         </span>
       </div>

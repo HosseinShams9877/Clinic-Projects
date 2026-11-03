@@ -60,7 +60,7 @@ export default async function ContactPage() {
           />
         </div>
 
-        <aside className="flex flex-col gap-6 rounded-[18px] border border-line bg-white p-6">
+        <aside className="flex flex-col gap-6 rounded-[18px] border border-line bg-surface p-6">
           <h2 className="text-lg font-bold text-ink">{copy.infoTitle}</h2>
           <div className="flex flex-col gap-4">
             {clinic?.phone === null || clinic?.phone === undefined ? null : (
@@ -73,7 +73,7 @@ export default async function ContactPage() {
           </div>
           <Link
             href={PUBLIC_LAYOUT.bookingCta.href}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-btn px-5 py-3 text-sm font-semibold text-white no-underline transition-colors hover:bg-brand"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-btn px-5 py-3 text-sm font-semibold text-ink-inverse no-underline transition-colors hover:bg-brand"
           >
             <Icon name="appointment" size="compact" />
             {copy.bookCta}

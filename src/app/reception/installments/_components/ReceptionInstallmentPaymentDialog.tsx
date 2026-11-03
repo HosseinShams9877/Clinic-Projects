@@ -62,7 +62,7 @@ export function ReceptionInstallmentPaymentDialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 text-right" dir="rtl">
+    <div className="fixed inset-0 z-[50] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4 text-right" dir="rtl">
       <div className="w-full max-w-[500px] rounded-2xl bg-surface shadow-2xl flex flex-col max-h-[95vh]">
         <div className="flex items-center justify-between border-b border-line px-5 py-3 shrink-0">
           <div className="flex items-center gap-2 font-bold text-base text-ink">

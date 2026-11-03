@@ -391,7 +391,7 @@ function StepIndicator({
           <span
             className={cx(
               'grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-bold',
-              position < index ? 'bg-brand text-white' : position === index ? 'bg-brand-btn text-white' : 'bg-bg text-ink-2',
+              position < index ? 'bg-brand text-ink-inverse' : position === index ? 'bg-brand-btn text-ink-inverse' : 'bg-bg text-ink-2',
             )}
           >
             {position < index ? <Icon name="confirm" size="compact" /> : toPersianDigits(position + 1)}
@@ -427,7 +427,7 @@ function ServiceStep({
             key={service.id}
             className={cx(
               'flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3.5 text-sm transition-colors',
-              serviceId === service.id ? 'border-brand bg-brand-50' : 'border-line bg-white hover:border-line-2',
+              serviceId === service.id ? 'border-brand bg-brand-50' : 'border-line bg-surface hover:border-line-2',
             )}
           >
             <span className="flex flex-col gap-1">
@@ -486,7 +486,7 @@ function DoctorStep({
             key={doctor.id}
             className={cx(
               'flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3.5 text-sm transition-colors',
-              doctorId === doctor.id ? 'border-brand bg-brand-50' : 'border-line bg-white hover:border-line-2',
+              doctorId === doctor.id ? 'border-brand bg-brand-50' : 'border-line bg-surface hover:border-line-2',
             )}
           >
             <span className="font-semibold text-ink">{doctor.name}</span>
@@ -536,7 +536,7 @@ function TimeStep({
                 'flex flex-col items-center gap-1 rounded-lg border py-2.5 text-center transition-colors',
                 localDate === day
                   ? 'border-brand bg-brand-50 text-brand'
-                  : 'border-line bg-white text-ink-2 hover:border-line-2',
+                  : 'border-line bg-surface text-ink-2 hover:border-line-2',
               )}
             >
               <span className="text-[10px] font-medium">{weekdayName(jalaliWeekday(day))}</span>
@@ -561,7 +561,7 @@ function TimeStep({
                   'rounded-lg border py-2.5 text-sm font-medium transition-colors',
                   localTime === slot.time
                     ? 'border-brand bg-brand-50 text-brand'
-                    : 'border-line bg-white text-ink hover:border-line-2',
+                    : 'border-line bg-surface text-ink hover:border-line-2',
                 )}
               >
                 {toPersianDigits(slot.time)}
@@ -720,7 +720,7 @@ function Outcome({
     )
   }
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-line bg-white p-6 text-center">
+    <div className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-6 text-center">
       <span className="mx-auto grid size-12 place-items-center rounded-full bg-brand-50 text-brand">
         <Icon name="success" size="action" />
       </span>

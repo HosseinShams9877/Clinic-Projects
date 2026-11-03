@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { prisma, runInTenantScope } from '@/core/db'
 import { realClock } from '@/core/lib/clock'
 import { cx } from '@/core/lib'
-import { formatMoney, formatNumber, isValidLocalDate } from '@/core/localization'
+import { formatMoney, formatNumber, isValidLocalDate, fromUtcInstant } from '@/core/localization'
 import { isMember } from '@/core/constants'
 import { DEBTS_PAGE } from '@/app/catalog'
 import { DebtsTable } from '@/app/_debts/debts-table'
@@ -47,7 +47,6 @@ export default async function DoctorDebtsPage({ searchParams }: { readonly searc
       const collectedRial = await paymentsThisMonth(tx, session.tenantId, now, settings.utcOffsetMinutes)
       const appointmentIds = myBuckets.overdue30.concat(myBuckets.overdue7, myBuckets.overdue, myBuckets.dueSoon).map((row) => row.appointmentId)
 
-      // 👈 گرفتن اقساط برای تشخیص نوع بدهی
       const installments = await tx.installment.findMany({
         where: { appointmentId: { in: appointmentIds } },
         select: { id: true, appointmentId: true, type: true }
@@ -74,7 +73,6 @@ export default async function DoctorDebtsPage({ searchParams }: { readonly searc
   const pastDue = [...myBuckets.overdue30, ...myBuckets.overdue7, ...myBuckets.overdue]
   const totalRial = allRows.reduce((total, row) => total + row.balance, 0n)
 
-  // 👈 ساخت نگاشت برای نوع بدهی
   const installmentByAppointment = new Map(installments.map(i => [i.appointmentId, i.type]))
   const typedRows = allRows.map(row => ({
     ...row,
@@ -82,7 +80,7 @@ export default async function DoctorDebtsPage({ searchParams }: { readonly searc
   }))
 
   const tabRows = rowsForTab(typedRows, tab, now, offset)
-  const filteredRows = applyFilters(tabRows, search, followUpDate, offset)
+  const filteredRows = applyFilters(tabRows, search, followUpDate)
 
   const page = pageFromParam(params.page)
   const { slice, totalPages } = paginate(filteredRows, page)
@@ -134,7 +132,6 @@ export default async function DoctorDebtsPage({ searchParams }: { readonly searc
         <button type="submit" className="mt-5 shrink-0 rounded-xs border border-brand-300 bg-brand-50 px-4 py-[6px] text-xs font-semibold text-brand-700 hover:bg-brand-100">{DEBTS_PAGE.search.label}</button>
       </form>
 
-      {/* 👈 ارسال ردیف‌های دارای فیلد type */}
       <DebtsTable rows={slice as any} showActions={false} followUpsMap={followUpsMap} panel="doctor" />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
@@ -174,17 +171,20 @@ function compareByNextContact(a: any, b: any, now: Date): number {
   if (!aPast && bPast) return 1
   return aTime - bTime
 }
-function applyFilters(rows: readonly any[], search: string, followUpDate: string | null, utcOffsetMinutes: number): readonly any[] {
+
+// 👈 فیلتر تاریخ بر اساس سررسید (dueLocalDate)
+function applyFilters(rows: readonly any[], search: string, followUpDate: string | null): readonly any[] {
   return rows.filter((row) => {
     if (followUpDate !== null) {
-      if (row.nextContactAt === null) return false
-      if (dayKey(row.nextContactAt, utcOffsetMinutes) !== followUpDate) return false
+      // مقایسه تاریخِ انتخابی تقویم با تاریخِ سررسید (که از قبل به شمسی است)
+      if (row.dueLocalDate !== followUpDate) return false;
     }
     if (search === '') return true
     const haystack = `${row.customerFirstName} ${row.customerLastName ?? ''} ${row.customerMobile}`
     return haystack.toLowerCase().includes(search.toLowerCase())
   })
 }
+
 function tabFromParam(value: string | string[] | undefined): DebtsTab {
   const name = typeof value === 'string' ? value : ''
   return isMember(TAB_VALUES, name) ? name : DEFAULT_TAB

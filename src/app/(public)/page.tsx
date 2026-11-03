@@ -50,11 +50,11 @@ function Hero({ heroImageUrl }: { readonly heroImageUrl?: string | null }) {
   return (
     <section
       className="px-[var(--content-pad)] py-[72px] panel:px-[var(--content-pad-sm)]"
-      style={{ backgroundImage: 'linear-gradient(105deg, #FBF1EE 0%, #F3EBE6 55%, #EEE3DC 100%)' }}
+      style={{ backgroundImage: 'linear-gradient(105deg, var(--brand-50) 0%, var(--bg-alt) 55%, var(--surface-sunken) 100%)' }}
     >
       <div className="mx-auto grid w-full max-w-[1200px] items-center gap-10 panel:grid-cols-2 panel:gap-[40px]">
         <div className="flex flex-col gap-5">
-          <span className="inline-flex w-fit items-center rounded-full bg-white/70 px-3.5 py-1.5 text-xs font-semibold text-brand-700">
+          <span className="inline-flex w-fit items-center rounded-full bg-surface/70 px-3.5 py-1.5 text-xs font-semibold text-brand-700">
             {hero.badge}
           </span>
           <h1 className="text-[42px] font-extrabold leading-[1.45] text-ink">
@@ -65,13 +65,13 @@ function Hero({ heroImageUrl }: { readonly heroImageUrl?: string | null }) {
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href={hero.primaryCta.href}
-              className="inline-flex items-center justify-center rounded-lg bg-brand-btn px-6 py-3 text-sm font-semibold text-white no-underline transition-colors hover:bg-brand"
+              className="inline-flex items-center justify-center rounded-lg bg-brand-btn px-6 py-3 text-sm font-semibold text-ink-inverse no-underline transition-colors hover:bg-brand"
             >
               {hero.primaryCta.label}
             </Link>
             <Link
               href={hero.secondaryCta.href}
-              className="inline-flex items-center justify-center rounded-lg border border-line bg-white px-6 py-3 text-sm font-semibold text-ink no-underline transition-colors hover:border-brand-300"
+              className="inline-flex items-center justify-center rounded-lg border border-line bg-surface px-6 py-3 text-sm font-semibold text-ink no-underline transition-colors hover:border-brand-300"
             >
               {hero.secondaryCta.label}
             </Link>
@@ -103,7 +103,7 @@ function Hero({ heroImageUrl }: { readonly heroImageUrl?: string | null }) {
 function TrustBar() {
   const items: readonly TrustItem[] = PUBLIC_HOME.trust.items
   return (
-    <section className="border-b border-line bg-white px-[var(--content-pad)] py-6 panel:px-[var(--content-pad-sm)]">
+    <section className="border-b border-line bg-surface px-[var(--content-pad)] py-6 panel:px-[var(--content-pad-sm)]">
       <div className="mx-auto grid w-full max-w-[1200px] gap-6 panel:grid-cols-4 panel:gap-0">
         {items.map((item, index) => (
           <div
@@ -154,13 +154,13 @@ function ServiceCard({
   return (
     <Link
       href={`/service/${service.id}`}
-      className="group relative flex flex-col overflow-hidden rounded-[18px] border border-line bg-white no-underline transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-[3px] hover:border-brand-300 hover:shadow-2"
+      className="group relative flex flex-col overflow-hidden rounded-[18px] border border-line bg-surface no-underline transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-[3px] hover:border-brand-300 hover:shadow-2"
     >
       <div className="relative aspect-[4/3] bg-brand-100">
         <div className="grid size-full place-items-center text-brand-300">
           <Icon name="treatment" size="action" />
         </div>
-        <span className="absolute bottom-0 left-1/2 grid size-[34px] -translate-x-1/2 translate-y-1/2 place-items-center rounded-full border-[3px] border-white bg-brand-50 text-brand">
+        <span className="absolute bottom-0 left-1/2 grid size-[34px] -translate-x-1/2 translate-y-1/2 place-items-center rounded-full border-[3px] border-surface bg-brand-50 text-brand">
           <Icon name="appointment" size="compact" />
         </span>
       </div>
@@ -212,7 +212,7 @@ function DoctorCard({
   readonly copy: typeof PUBLIC_HOME.doctors
 }) {
   return (
-    <div className="flex flex-col overflow-hidden rounded-[18px] border border-line bg-white">
+    <div className="flex flex-col overflow-hidden rounded-[18px] border border-line bg-surface">
       <div className="aspect-square bg-brand-100">
         <div className="grid size-full place-items-center text-brand-300">
           <Icon name="doctor" size="action" />
@@ -228,7 +228,7 @@ function DoctorCard({
           className="group inline-flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-xs font-semibold text-ink no-underline transition-colors hover:border-brand"
         >
           {copy.visit}
-          <span className="grid size-8 place-items-center rounded-full bg-brand-50 text-brand transition-colors group-hover:bg-brand group-hover:text-white">
+          <span className="grid size-8 place-items-center rounded-full bg-brand-50 text-brand transition-colors group-hover:bg-brand group-hover:text-ink-inverse">
             <Icon name="chevronStart" size="compact" />
           </span>
         </Link>
@@ -275,7 +275,7 @@ function PairPane({ label, path }: { readonly label: string; readonly path: stri
         sizes="(max-width: 768px) 50vw, 33vw"
         className="object-cover"
       />
-      <span className="absolute inset-x-0 bottom-0 bg-[rgba(46,37,36,.72)] py-1.5 text-center text-[11.5px] font-medium text-white">
+      <span className="absolute inset-x-0 bottom-0 bg-[var(--overlay)] py-1.5 text-center text-[11.5px] font-medium text-ink-inverse">
         {label}
       </span>
     </div>

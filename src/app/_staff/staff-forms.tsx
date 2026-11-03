@@ -63,7 +63,7 @@ function Overlay({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 panel:items-center panel:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 panel:items-center panel:p-6"
       onClick={onClose}
       role="presentation"
     >
@@ -129,18 +129,25 @@ export function NewStaffDialog() {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg"
+        className="inline-size-full max-h-[90dvh] overflow-y-auto overflow-x-hidden rounded-lg bg-surface shadow-3 panel:max-w-lg"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
-            {STAFF_PAGE.invite.title}
-          </h2>
+        <div className="h-1 rounded-t-lg bg-brand" aria-hidden="true" />
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line/40 bg-brand-50 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-full bg-brand-100 text-brand-700">
+              <Icon name="add" size="compact" />
+            </span>
+            <h2 id={titleId} className="text-lg font-bold text-brand-900">
+              {STAFF_PAGE.invite.title}
+            </h2>
+          </div>
           <Button
             size="icon"
             variant="ghost"
             icon="close"
             aria-label={STAFF_PAGE.invite.cancel}
             onClick={() => setOpen(false)}
+            className="hover:bg-brand-200 hover:text-brand-900"
           />
         </header>
         <p className="px-6 pt-6 text-sm text-ink-2">{STAFF_PAGE.invite.lead}</p>

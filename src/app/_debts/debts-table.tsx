@@ -156,7 +156,7 @@ export function DebtsTable({
                         </button>
                         <button
                           onClick={() => setSelectedPaymentRow(row)}
-                          className="rounded-full bg-[#ba6a73] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90 transition-opacity whitespace-nowrap shadow-sm"
+                          className="rounded-full bg-brand px-2.5 py-1 text-[11px] font-semibold text-ink-inverse hover:opacity-90 transition-opacity whitespace-nowrap shadow-sm"
                         >
                           ثبت پرداخت
                         </button>

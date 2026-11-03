@@ -60,7 +60,7 @@ function Overlay({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 panel:items-center panel:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 panel:items-center panel:p-6"
       onClick={onClose}
       role="presentation"
     >
@@ -112,9 +112,14 @@ export function EditStaffModal({
         aria-labelledby={titleId}
         className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
-          <h2 id={titleId} className="text-lg font-bold text-ink">{STAFF_PAGE.edit.title}</h2>
-          <Button size="icon" variant="ghost" icon="close" aria-label={STAFF_PAGE.edit.cancel} onClick={onClose} />
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line/40 bg-brand-50 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-full bg-brand-100 text-brand-700">
+              <Icon name="customers" size="compact" />
+            </span>
+            <h2 id={titleId} className="text-lg font-bold text-brand-900">{STAFF_PAGE.edit.title}</h2>
+          </div>
+          <Button size="icon" variant="ghost" icon="close" aria-label={STAFF_PAGE.edit.cancel} onClick={onClose} className="hover:bg-brand-200 hover:text-brand-900" />
         </header>
         <p className="px-6 pt-6 text-sm text-ink-2">{STAFF_PAGE.edit.lead}</p>
         <form id={EDIT_FORM_ID} className="flex flex-col gap-4 p-6" onSubmit={submit}>
@@ -170,11 +175,16 @@ export function ChangePasswordModal({
   return (
     <Overlay onClose={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg">
-        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
-            {`${STAFF_PAGE.password.title} — ${membership.user.firstName} ${membership.user.lastName}`}
-          </h2>
-          <Button size="icon" variant="ghost" icon="close" aria-label={STAFF_PAGE.password.cancel} onClick={onClose} />
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line/40 bg-brand-50 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-full bg-brand-100 text-brand-700">
+              <Icon name="lock" size="compact" />
+            </span>
+            <h2 id={titleId} className="text-lg font-bold text-brand-900">
+              {`${STAFF_PAGE.password.title} — ${membership.user.firstName} ${membership.user.lastName}`}
+            </h2>
+          </div>
+          <Button size="icon" variant="ghost" icon="close" aria-label={STAFF_PAGE.password.cancel} onClick={onClose} className="hover:bg-brand-200 hover:text-brand-900" />
         </header>
         <p className="px-6 pt-6 text-sm text-ink-2">{STAFF_PAGE.password.lead}</p>
         <form id={PASSWORD_FORM_ID} className="flex flex-col gap-4 p-6" onSubmit={submit}>
@@ -253,11 +263,16 @@ export function StaffAvatarModal({
   return (
     <Overlay onClose={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg">
-        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
-            {`${STAFF_PAGE.avatar.title} — ${membership.user.firstName} ${membership.user.lastName}`}
-          </h2>
-          <Button size="icon" variant="ghost" icon="close" aria-label={STAFF_PAGE.avatar.cancel} onClick={onClose} />
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line/40 bg-brand-50 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-full bg-brand-100 text-brand-700">
+              <Icon name="image" size="compact" />
+            </span>
+            <h2 id={titleId} className="text-lg font-bold text-brand-900">
+              {`${STAFF_PAGE.avatar.title} — ${membership.user.firstName} ${membership.user.lastName}`}
+            </h2>
+          </div>
+          <Button size="icon" variant="ghost" icon="close" aria-label={STAFF_PAGE.avatar.cancel} onClick={onClose} className="hover:bg-brand-200 hover:text-brand-900" />
         </header>
         <p className="px-6 pt-6 text-sm text-ink-2">{STAFF_PAGE.avatar.lead}</p>
         <form id={AVATAR_FORM_ID} className="flex flex-col gap-4 p-6" onSubmit={submit}>
@@ -334,11 +349,16 @@ export function PermissionModal({
   return (
     <Overlay onClose={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-lg">
-        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
-            {`${membership.user.firstName} ${membership.user.lastName}`}
-          </h2>
-          <Button size="icon" variant="ghost" icon="close" aria-label={STAFF_PAGE.invite.cancel} onClick={onClose} />
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line/40 bg-brand-50 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-full bg-brand-100 text-brand-700">
+              <Icon name="shield" size="compact" />
+            </span>
+            <h2 id={titleId} className="text-lg font-bold text-brand-900">
+              {`${membership.user.firstName} ${membership.user.lastName}`}
+            </h2>
+          </div>
+          <Button size="icon" variant="ghost" icon="close" aria-label={STAFF_PAGE.invite.cancel} onClick={onClose} className="hover:bg-brand-200 hover:text-brand-900" />
         </header>
         <div className="flex flex-col gap-3 p-6">
           <p className="text-sm font-semibold text-ink">
@@ -485,11 +505,16 @@ export function WorkingHoursModal({
   return (
     <Overlay onClose={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="inline-size-full max-h-[90dvh] overflow-y-auto rounded-lg bg-surface shadow-3 panel:max-w-2xl">
-        <header className="flex items-center justify-between gap-4 border-b border-line p-6">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
-            {`${ADMIN_STAFF.workingHours.title} — ${doctorName}`}
-          </h2>
-          <Button size="icon" variant="ghost" icon="close" aria-label={ADMIN_STAFF.workingHours.close} onClick={onClose} />
+                <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line/40 bg-brand-50 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-full bg-brand-100 text-brand-700">
+              <Icon name="add" size="compact" />
+            </span>
+            <h2 id={titleId} className="text-lg font-bold text-brand-900">
+              {STAFF_PAGE.invite.title}
+            </h2>
+          </div>
+          <Button size="icon" variant="ghost" icon="close" aria-label={STAFF_PAGE.invite.cancel} onClick={onClose} className="hover:bg-brand-200 hover:text-brand-900" />
         </header>
         <p className="px-6 pt-6 text-sm text-ink-2">{ADMIN_STAFF.workingHours.lead}</p>
 

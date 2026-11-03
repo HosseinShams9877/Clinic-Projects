@@ -129,7 +129,7 @@ export function DebtRowView({ row, today, serviceName, doctorName }: DebtRowView
             </button>
             <button
               onClick={() => setIsPaymentOpen(true)}
-              className="rounded-full bg-[#ba6a73] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity whitespace-nowrap shadow-sm"
+              className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-ink-inverse hover:opacity-90 transition-opacity whitespace-nowrap shadow-sm"
             >
               ثبت پرداخت
             </button>
