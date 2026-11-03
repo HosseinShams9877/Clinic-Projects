@@ -16,6 +16,8 @@ export type DebtsMessageKey =
 export interface LastFollowUp {
   readonly at: Date
   readonly note: string | null
+  readonly promiseDate: string | null
+  readonly promiseTime: string | null
 }
 
 /** One row of the debtor list — an appointment that carries a balance. */
@@ -45,6 +47,9 @@ export interface DebtRow {
   readonly installmentAmount: bigint
   /** 👈 شناسه قسط باز مربوط به این بدهی (اگه قسطی باشه)، وگرنه null */
   readonly installmentId: string | null
+  readonly lastFollowerName: string | null
+  readonly lastActionResult: string | null
+  readonly lastPromiseDate: string | null
 }
 
 /** The four buckets, with the rows each one holds. */

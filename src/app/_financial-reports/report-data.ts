@@ -29,6 +29,7 @@ export interface FinancialReportData {
   readonly summary: FinancialSummaryReport
   /** خط‌های پرداختِ نوبت‌های دیده‌شده — برای دیالوگِ «جزئیات پرداخت». */
   readonly paymentLines: readonly PaymentLine[]
+  readonly followUps: readonly any[]
 }
 
 /**
@@ -69,7 +70,7 @@ export async function loadFinancialReportData(args: {
     settings.utcOffsetMinutes,
   )
 
-  const [summary, paymentLines] = await Promise.all([
+  const [summary, paymentLines, allFollowUps] = await Promise.all([
     financialSummary({
       tx,
       tenantId: ctx.tenantId,
@@ -81,6 +82,16 @@ export async function loadFinancialReportData(args: {
       tx,
       ctx,
       appointmentIds: Array.from(new Set(allRows.map((row) => row.appointmentId))),
+    }),
+    tx.debtFollowUp.findMany({
+      where: {
+        tenantId: ctx.tenantId,
+        appointmentId: { in: allRows.map((row) => row.appointmentId) },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        createdBy: { select: { firstName: true, lastName: true } },
+      },
     }),
   ])
 
@@ -114,5 +125,6 @@ export async function loadFinancialReportData(args: {
     awaitingResultCount,
     summary,
     paymentLines,
+    followUps: allFollowUps,
   }
 }

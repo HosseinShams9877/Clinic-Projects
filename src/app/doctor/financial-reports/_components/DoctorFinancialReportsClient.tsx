@@ -17,6 +17,7 @@ export function DoctorFinancialReportsClient({
   awaitingResultCount,
   summary,
   paymentLines,
+  followUps = [],
   basePath,
   q,
   bucket,
@@ -30,6 +31,7 @@ export function DoctorFinancialReportsClient({
   summary: FinancialSummaryReport
   /** 👈 خط‌های پرداخت — برای دیالوگِ «جزئیات پرداخت». */
   paymentLines: readonly PaymentLine[]
+  followUps?: readonly any[]
   basePath: string
   q: string
   bucket: string
@@ -189,7 +191,13 @@ export function DoctorFinancialReportsClient({
         </div>
       </section>
 
-      <DebtDetailsDialog isOpen={!!selectedRow} onClose={() => setSelectedRow(null)} row={selectedRow} paymentLines={paymentLines} />
+      <DebtDetailsDialog 
+        isOpen={!!selectedRow} 
+        onClose={() => setSelectedRow(null)} 
+        row={selectedRow} 
+        paymentLines={paymentLines} 
+        followUps={followUps} 
+      />
     </div>
   )
 }

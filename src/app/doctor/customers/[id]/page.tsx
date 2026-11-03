@@ -468,6 +468,13 @@ function FollowUpsList({ rows }: { readonly rows: any[] }) {
             Object.entries(replacements).forEach(([eng, fa]) => {
               finalText = finalText.replace(new RegExp(eng, 'g'), fa)
             })
+
+            // 👈 استخراج تاریخ وعده پرداخت از متن
+            const match = finalText.match(/\[وعده: (.*?)\]/)
+            const promiseDate = match ? match[1] : '—'
+            // 👈 پاک کردن عبارت وعده از متن نتیجه
+            finalText = finalText.replace(/\[وعده:.*?\]/g, '').trim()
+
             const parts = finalText.split(' - ')
             const resultPart = parts[0] || ''
             const notePart = parts.slice(1).join(' - ')
@@ -484,7 +491,7 @@ function FollowUpsList({ rows }: { readonly rows: any[] }) {
                   <span className="font-semibold">{resultPart}</span>
                   {notePart && <span className="block text-xs text-ink-3 mt-1">{notePart}</span>}
                 </td>
-                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">—</td>
+                <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">{promiseDate}</td>
                 <td className="px-3 py-3 text-ink-2 tabular-nums whitespace-nowrap">
                   {row.nextContactAt ? formatDate(dateToLocalDate(row.nextContactAt), 'short') : '—'}
                 </td>

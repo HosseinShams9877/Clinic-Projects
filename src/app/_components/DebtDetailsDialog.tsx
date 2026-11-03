@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '@/core/components/icons'
 import { dateToLocalDate, formatDate, formatMoney, toPersianDigits } from '@/core/localization'
@@ -13,7 +13,6 @@ function useIsClient() {
   return useSyncExternalStore(() => () => {}, () => true, () => false)
 }
 
-/** 👈 برچسبِ مرحله‌ی یک خطِ پرداخت — «قسط ۲ از ۴»، «چک»، یا نوعِ خودِ پرداخت. */
 function stageLabel(stage: PaymentLineStage, labels: { readonly stageLabel: (current: string, total: string) => string; readonly cheque: string }): string {
   switch (stage.kind) {
     case 'INSTALLMENT':
@@ -29,15 +28,19 @@ export function DebtDetailsDialog({
   isOpen,
   onClose,
   row,
-  /** 👈 خط‌های پرداختِ این نوبت — از صفحه‌های گزارشِ مالی پاس داده می‌شود. */
   paymentLines,
+  // 👈 پراپ جدید برای دریافت لیست پیگیری‌ها
+  followUps = [],
 }: {
   isOpen: boolean
   onClose: () => void
   row: DebtRow | null
   paymentLines?: readonly PaymentLine[] | null
+  followUps?: readonly any[]
 }) {
   const isClient = useIsClient()
+  // 👈 استیت برای نمایش/مخفی کردن لیست پیگیری‌ها
+  const [showFollowUps, setShowFollowUps] = useState(false)
 
   useEffect(() => {
     if (!isClient || !isOpen) return
@@ -50,19 +53,19 @@ export function DebtDetailsDialog({
   const c = ADMIN_DEBTS.detailsDialog
   const totalAmount = row.installmentSequence > 0 ? (row.installmentAmount * BigInt(row.totalInstallments)) : row.charged
   const remainingInstallments = row.totalInstallments - row.paidInstallments
-  // 👈 خط‌های پرداختِ همین نوبت — صفحه‌های گزارشِ مالی آن‌ها را از قبل خوانده‌اند.
   const lines = (paymentLines ?? []).filter((line) => line.appointmentId === row.appointmentId)
+
+  // 👈 فیلتر کردن پیگیری‌های مربوط به همین نوبت
+  const rowFollowUps = followUps.filter(f => f.appointmentId === row.appointmentId)
 
   return createPortal(
     <div className="fixed inset-0 z-[50] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4 text-right" dir="rtl">
       
-      {/* کانتینر اصلی با استایل گردی و overflow */}
       <div 
         className="w-full max-w-[500px] bg-surface shadow-3 border border-line/50 flex flex-col max-h-[90vh]"
         style={{ borderRadius: '24px', overflow: 'hidden' }}
       >
         
-        {/* هدر پررنگ با گردی بالایی */}
         <div 
           className="flex items-center justify-between border-b border-line/40 bg-brand-100 px-5 py-4 shrink-0 !rounded-t-[24px]"
         >
@@ -130,7 +133,7 @@ export function DebtDetailsDialog({
              </table>
            </div>
 
-           {/* 👈 تفکیکِ اقساط و چک‌های پرداخت‌شده — جدولِ خط‌های پرداخت */}
+           {/* 👈 خط‌های پرداخت */}
            <div className="flex flex-col gap-2">
              <div className="flex items-center gap-2 px-1 text-sm font-bold text-ink">
                <Icon name="invoice" size="compact" />
@@ -167,9 +170,58 @@ export function DebtDetailsDialog({
                </div>
              )}
            </div>
+
+           {/* 👈 دکمه جزئیات پیگیری‌ها */}
+           <div className="flex justify-center mt-2">
+             <button
+               onClick={() => setShowFollowUps(!showFollowUps)}
+               className="flex items-center gap-2 rounded-xl border border-line-2 px-4 py-2 text-xs font-semibold text-ink-2 bg-surface hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+             >
+               <Icon name="clock" size="compact" />
+               {showFollowUps ? 'بستن تاریخچه پیگیری' : 'نمایش جزئیات پیگیری‌ها'}
+             </button>
+           </div>
+
+           {/* 👈 نمایش لیست پیگیری‌ها */}
+           {showFollowUps && (
+             <div className="flex flex-col gap-2 mt-2">
+               {rowFollowUps.length === 0 ? (
+                 <p className="text-center text-xs text-ink-3 py-4">هیچ پیگیری‌ای برای این نوبت ثبت نشده است.</p>
+               ) : (
+                 <div className="overflow-hidden rounded-xl border border-line/50 bg-surface">
+                   <table className="w-full text-xs text-right">
+                     <thead>
+                       <tr className="border-b border-line/50 bg-surface-2 text-ink-3">
+                         <th className="px-2 py-2 font-semibold text-start">تاریخ</th>
+                         <th className="px-2 py-2 font-semibold text-start">مسئول</th>
+                         <th className="px-2 py-2 font-semibold text-start">نتیجه / یادداشت</th>
+                         <th className="px-2 py-2 font-semibold text-start">وعده پرداخت</th>
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y divide-line/50">
+                       {rowFollowUps.map((f: any) => {
+                         // استخراج تاریخ وعده از متن note
+                         const match = f.note?.match(/\[وعده: (.*?)\]/)
+                         const promiseDate = match ? match[1] : '—'
+                         const cleanNote = f.note ? f.note.replace(/\[وعده:.*?\]/g, '').trim() : ''
+                         
+                         return (
+                           <tr key={f.id}>
+                             <td className="px-2 py-2 text-ink-3 tabular-nums whitespace-nowrap">{formatDate(dateToLocalDate(f.createdAt), 'short')}</td>
+                             <td className="px-2 py-2 text-ink-2">{f.createdBy ? `${f.createdBy.firstName} ${f.createdBy.lastName || ''}` : 'سیستم'}</td>
+                             <td className="px-2 py-2 text-ink">{cleanNote}</td>
+                             <td className="px-2 py-2 text-warn font-semibold tabular-nums whitespace-nowrap">{promiseDate}</td>
+                           </tr>
+                         )
+                       })}
+                     </tbody>
+                   </table>
+                 </div>
+               )}
+             </div>
+           )}
         </div>
 
-        {/* فوتر با گردی پایینی */}
         <div 
           className="flex items-center justify-end gap-2 border-t border-line/40 px-5 py-4 bg-surface-2 shrink-0 !rounded-b-[24px]"
         >

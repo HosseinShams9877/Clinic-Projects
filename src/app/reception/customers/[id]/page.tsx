@@ -472,13 +472,20 @@ function FollowUpsList({ rows }: { readonly rows: any[] }) {
             let finalText = row.note || ''
             const replacements: Record<string, string> = { PROMISE_TO_PAY: 'وعده پرداخت', NO_ANSWER: 'تماس شد؛ پاسخ نداد', SMS_SENT: 'پیامک ارسال شد', DISCOUNT_REQUEST: 'درخواست تخفیف', PROMISE_TOMORROW: 'قول پرداخت تا فردا', AWAITING_REVIEW: 'در انتظار بررسی', INSTALLMENT_REQUEST: 'درخواست تقسیط' }
             Object.entries(replacements).forEach(([eng, fa]) => { finalText = finalText.replace(new RegExp(eng, 'g'), fa) })
+
+            // 👈 استخراج تاریخ وعده پرداخت از متن
+            const match = finalText.match(/\[وعده: (.*?)\]/)
+            const promiseDate = match ? match[1] : '—'
+            // 👈 پاک کردن عبارت وعده از متن نتیجه
+            finalText = finalText.replace(/\[وعده:.*?\]/g, '').trim()
+
             const parts = finalText.split(' - ')
             return (
               <tr key={row.id} className="border-b border-line last:border-b-0">
                 <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">{formatDate(dateToLocalDate(row.createdAt), 'short')}</td>
                 <td className="px-3 py-3 text-ink-2">{row.createdBy ? `${row.createdBy.firstName} ${row.createdBy.lastName ?? ''}` : 'سیستم'}</td>
                 <td className="px-3 py-3 text-ink whitespace-pre-wrap"><span className="font-semibold">{parts[0]}</span>{parts.slice(1).join(' - ') && <span className="mt-1 block text-xs text-ink-3">{parts.slice(1).join(' - ')}</span>}</td>
-                <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">—</td>
+                <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">{promiseDate}</td>
                 <td className="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">{row.nextContactAt ? formatDate(dateToLocalDate(row.nextContactAt), 'short') : '—'}</td>
               </tr>
             )

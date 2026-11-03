@@ -488,7 +488,12 @@ export async function recordFollowUpWithDetailsAction(
     }
     const resultText = resultLabels[input.result] || input.result
 
-    const finalNote = input.note ? `${resultText} - ${input.note}` : resultText
+    // 👈 اضافه کردن تاریخ وعده پرداخت به متن پیگیری
+    let finalNote = input.note ? `${resultText} - ${input.note}` : resultText
+    if (input.promiseDate) {
+      finalNote += ` [وعده: ${input.promiseDate}]`
+    }
+
     const nextContactDate = await asInstant(tx, tenantId, input.nextFollowUpDate)
 
     await recordFollowUp({

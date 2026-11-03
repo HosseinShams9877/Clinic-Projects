@@ -54,6 +54,15 @@ const APPOINTMENT_SELECT = {
       dueAt: true,
     }
   },
+  followUps: {
+    orderBy: { createdAt: 'desc' },
+    take: 1,
+    select: {
+      createdAt: true,
+      note: true,
+      createdBy: { select: { firstName: true, lastName: true } },
+    },
+  },
 } as const
 
 type AppointmentRow = {
@@ -90,6 +99,11 @@ type AppointmentRow = {
     readonly type: string
     readonly note: string | null
     readonly dueAt: Date
+  }[]
+  readonly followUps: readonly {
+    readonly createdAt: Date
+    readonly note: string | null
+    readonly createdBy: { readonly firstName: string; readonly lastName: string | null } | null
   }[]
 }
 
@@ -199,6 +213,11 @@ async function tenantDebts(
       graceDays: settings.debtGraceDays,
     })
 
+    // 👈 استخراج اطلاعات آخرین پیگیری
+    const lastFu = row.followUps && row.followUps[0]
+    const followerName = lastFu?.createdBy ? `${lastFu.createdBy.firstName} ${lastFu.createdBy.lastName || ''}`.trim() : null
+    const resultText = lastFu?.note ? lastFu.note.split(' - ')[0] : null
+
     buckets[bucketKey(bucketOf(now, effectiveDue))].push({
       appointmentId: row.id,
       customerId: row.customerId,
@@ -214,7 +233,7 @@ async function tenantDebts(
       paid,
       balance,
       dueLocalDate: dueLocalDate(effectiveDue, settings.utcOffsetMinutes),
-      lastFollowUp: row.debtFollowUpAt === null ? null : { at: row.debtFollowUpAt, note: row.debtFollowUpNote },
+      lastFollowUp: row.debtFollowUpAt === null ? null : { at: row.debtFollowUpAt, note: row.debtFollowUpNote, promiseDate: null, promiseTime: null },
       nextContactAt: row.debtNextContactAt,
       dueDateOverride: row.debtDueDateOverride,
       bucket: bucketOf(now, effectiveDue),
@@ -224,6 +243,10 @@ async function tenantDebts(
       installmentSequence,
       installmentAmount,
       installmentId,
+      // 👈 فیلدهای جدید
+      lastFollowerName: followerName,
+      lastActionResult: resultText ?? null,
+      lastPromiseDate: null,
     })
   }
 

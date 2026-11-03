@@ -19,6 +19,7 @@ export function ReceptionFinancialReportsClient({
   awaitingResultCount,
   summary,
   paymentLines,
+  followUps = [],
   basePath,
   q,
   doctorId,
@@ -34,6 +35,7 @@ export function ReceptionFinancialReportsClient({
   summary: FinancialSummaryReport
   /** 👈 خط‌های پرداخت — برای دیالوگِ «جزئیات پرداخت». */
   paymentLines: readonly PaymentLine[]
+  followUps?: readonly any[]
   basePath: string
   q: string
   doctorId: string
@@ -219,11 +221,13 @@ export function ReceptionFinancialReportsClient({
                          <span className="size-1.5 rounded-full bg-danger"></span> {row.daysOverdue > 0 ? `${row.daysOverdue} روز گذشته` : 'در انتظار'}
                        </span>
                     </td>
-                    <td className="px-4 py-4 text-ink-2">—</td>
+                    <td className="px-4 py-4 text-ink-2">{row.lastFollowerName ?? '—'}</td>
                     <td className="px-4 py-4 text-ink-2 text-xs">{row.lastFollowUp ? 'پیگیری شده' : '—'}</td>
-                    <td className="px-4 py-4 text-ink-2 text-xs">—</td>
+                    <td className="px-4 py-4 text-ink-2 text-xs">{row.lastActionResult ?? '—'}</td>
                     <td className="px-4 py-4">
-                       <span className="rounded-pill bg-warn-bg px-2 py-1 text-xs font-semibold text-warn">—</span>
+                       <span className="rounded-pill bg-warn-bg px-2 py-1 text-xs font-semibold text-warn">
+                         {row.nextContactAt ? new Date(row.nextContactAt).toLocaleDateString('fa-IR') : '—'}
+                       </span>
                     </td>
                     <td className="px-4 py-4">
                        <button onClick={() => setSelectedRow(row)} className="flex items-center gap-1 rounded-lg border border-line-2 px-2 py-1 text-xs text-ink-2 hover:bg-surface-2">
@@ -243,6 +247,7 @@ export function ReceptionFinancialReportsClient({
         onClose={() => setSelectedRow(null)}
         row={selectedRow}
         paymentLines={paymentLines}
+        followUps={followUps}
       />
     </div>
   )

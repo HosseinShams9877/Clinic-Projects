@@ -42,6 +42,7 @@ export default async function AdminFinancialReportsPage({
       awaitingResultCount={data.awaitingResultCount}
       summary={data.summary}
       paymentLines={data.paymentLines}
+      followUps={data.followUps}
       basePath="/admin/financial-reports"
       q={q}
       doctorId={doctorId}

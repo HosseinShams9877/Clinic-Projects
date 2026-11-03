@@ -41,6 +41,7 @@ export default async function DoctorFinancialReportsPage({
       awaitingResultCount={data.awaitingResultCount}
       summary={data.summary}
       paymentLines={data.paymentLines}
+      followUps={data.followUps}
       basePath="/doctor/financial-reports"
       q={q}
       bucket={bucket}

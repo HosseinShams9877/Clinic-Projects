@@ -42,6 +42,7 @@ export default async function ReceptionFinancialReportsPage({
       awaitingResultCount={data.awaitingResultCount}
       summary={data.summary}
       paymentLines={data.paymentLines}
+      followUps={data.followUps}
       basePath="/reception/financial-reports"
       q={q}
       doctorId={doctorId}
